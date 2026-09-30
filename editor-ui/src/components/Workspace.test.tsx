@@ -249,6 +249,13 @@ describe('the top bar', () => {
     expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
   });
 
+  it('explains why a scene without steps has nothing to preview', async () => {
+    setupEditor({ version: 1, title: 'T', scenes: [{ id: 'blank' }] });
+    render(<TopBar />);
+    await userEvent.click(screen.getByRole('button', { name: /Preview/ }));
+    expect(useEditor.getState().toasts.at(-1)?.message).toMatch(/add a step first/);
+  });
+
   it('switches themes', async () => {
     render(<TopBar />);
     await userEvent.click(screen.getByRole('button', { name: 'Switch to the light theme' }));

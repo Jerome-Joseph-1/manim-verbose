@@ -2,7 +2,7 @@ import { canRedo, canUndo } from '../doc/history';
 import { findScene, setItemField } from '../doc/ops';
 import { autosaver } from '../state/autosave';
 import {
-  apply, currentSceneId, endEditBurst, frameStepIndex, openModal, redo, select, setTheme, undo, useEditor, type SaveState,
+  apply, currentSceneId, endEditBurst, frameStepIndex, openModal, redo, select, setTheme, toast, undo, useEditor, type SaveState,
 } from '../state/store';
 import { exportRunning, useExport } from './ExportModal';
 import { Icon } from './Icon';
@@ -60,7 +60,10 @@ export function TopBar() {
     const sceneId = currentSceneId(s);
     if (!doc || !sceneId) return;
     const steps = findScene(doc, sceneId)?.steps ?? [];
-    if (steps.length === 0) return;
+    if (steps.length === 0) {
+      toast('A preview plays the steps of a scene, and this one has none yet: add a step first');
+      return;
+    }
     if (s.selection.kind === 'step' && s.selection.id) {
       const index = steps.findIndex((st) => st.id === s.selection.id);
       if (index >= 0) return openPreview({ sceneId, start: index, end: index });
