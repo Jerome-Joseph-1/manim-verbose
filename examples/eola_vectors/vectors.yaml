@@ -1,52 +1,38 @@
 version: 1
 title: Vectors, what even are they? (a recreation of the visuals)
-settings:
-  background: BLACK
+settings: {background: BLACK}
 scenes:
 - id: opening
   title: Title card and opening quote
   objects:
-  - id: rec_title
-    type: text
-    place:
-      at: [0, 2]
-    text: Vectors, what even are they?
-    font_size: 60
+  - {id: rec_title, type: text, text: 'Vectors, what even are they?', font_size: 60, place: [0, 2]}
   - id: rec_sub
     type: text
-    color: GREY_A
-    place:
-      next_to: rec_title
-      buff: 0.35
     text: Essence of linear algebra, chapter 1
     font_size: 36
+    color: GREY_A
+    place: {next_to: rec_title, buff: 0.35}
   - id: rec_note
     type: text
-    color: BLUE_B
-    place:
-      next_to: rec_sub
-      buff: 0.9
     text: |-
       A recreation of the visuals of the 3Blue1Brown video,
       made entirely from a manim scene file
     font_size: 30
+    color: BLUE_B
+    place: {next_to: rec_sub, buff: 0.9}
   - id: rec_credit
     type: text
-    color: GREY_B
-    place:
-      next_to: rec_note
-      buff: 0.5
     text: 'Original video and ideas: 3Blue1Brown (Grant Sanderson)'
     font_size: 26
+    color: GREY_B
+    place: {next_to: rec_note, buff: 0.5}
   - id: rec_captions
     type: text
-    color: GREY_B
-    place:
-      next_to: rec_credit
-      buff: 0.3
     text: Captions written for this recreation stand in for the narration
     font_size: 22
     italic: true
+    color: GREY_B
+    place: {next_to: rec_credit, buff: 0.3}
   - id: weyl
     type: quote
     text: |-
@@ -54,2150 +40,1173 @@ scenes:
       is an act of violence.
     author: Hermann Weyl
   steps:
-  - id: opening_1
-    do: show
-    run_time: 2
-    target: rec_title
-    style: write
-  - id: opening_2
-    do: show
-    run_time: 1
-    target: rec_sub
-    style: fade_up
+  - {id: opening_1, do: show, target: rec_title, style: write, run_time: 2}
+  - {id: opening_2, do: show, target: rec_sub, style: fade_up, run_time: 1}
   - id: opening_3
     do: show
-    run_time: 2
     target: [rec_note, rec_credit, rec_captions]
     style: fade
     lag: 0.4
-  - id: opening_4
-    do: wait
-    duration: 8
-  - id: opening_5
-    do: clear
-    run_time: 1.5
-  - id: opening_6
-    do: show
-    run_time: 4
-    target: weyl
-    style: write
-  - id: opening_7
-    do: wait
-    duration: 10
-  - id: opening_8
-    do: clear
-    run_time: 1.5
+    run_time: 2
+  - {id: opening_4, do: wait, duration: 8}
+  - {id: opening_5, do: clear, run_time: 1.5}
+  - {id: opening_6, do: show, target: weyl, style: write, run_time: 4}
+  - {id: opening_7, do: wait, duration: 10}
+  - {id: opening_8, do: clear, run_time: 1.5}
 - id: physics_view
   title: Three views of a vector; the physics student
   objects:
-  - id: q_title
-    type: text
-    place:
-      edge: top
-      buff: 0.5
-    text: What is a vector?
-  - id: phys_lbl
-    type: text
-    place:
-      at: [-4.7, 1.7]
-    text: Physics student
-    font_size: 36
-  - id: cs_lbl
-    type: text
-    place:
-      at: [0, 1.7]
-    text: Computer science student
-    font_size: 36
-  - id: math_lbl
-    type: text
-    place:
-      at: [4.7, 1.7]
-    text: Mathematician
-    font_size: 36
-  - id: phys_icon
-    type: vector
-    color: YELLOW
-    tip: [-3.9, 0.6]
-    tail: [-5.5, -1]
+  - {id: q_title, type: text, text: 'What is a vector?', place: {edge: top, buff: 0.5}}
+  - {id: phys_lbl, type: text, text: Physics student, font_size: 36, place: [-4.7, 1.7]}
+  - {id: cs_lbl, type: text, text: Computer science student, font_size: 36, place: [0, 1.7]}
+  - {id: math_lbl, type: text, text: Mathematician, font_size: 36, place: [4.7, 1.7]}
+  - {id: phys_icon, type: vector, tip: [-3.9, 0.6], tail: [-5.5, -1], color: YELLOW}
   - id: cs_icon
     type: matrix
-    place:
-      at: [0, -0.2]
     entries: [['2{,}600'], ['300{,}000']]
     font_size: 36
+    place: [0, -0.2]
   - id: math_icon
     type: tex
-    place:
-      at: [4.7, -0.2]
     tex: \vec{\mathbf{v}} + \vec{\mathbf{w}} \qquad 2\vec{\mathbf{v}}
     font_size: 44
-  - id: arrow
-    type: vector
-    color: YELLOW
-    tip: [2, 0]
-    tail: [-2, 0]
-  - id: len_brace
-    type: brace
-    target: arrow
-    label: \text{length}
-    buff: 0.15
+    place: [4.7, -0.2]
+  - {id: arrow, type: vector, tip: [2, 0], tail: [-2, 0], color: YELLOW}
+  - {id: len_brace, type: brace, target: arrow, label: '\text{length}', buff: 0.15}
   - id: dir_lbl
     type: text
-    place:
-      next_to: arrow
-      side: right
-      buff: 0.35
     text: direction
     font_size: 32
-  - id: copy_a
-    type: vector
-    color: YELLOW
-    tip: [-2, 2.4]
-    tail: [-6, 2.4]
-  - id: copy_b
-    type: vector
-    color: YELLOW
-    tip: [6, 1.6]
-    tail: [2, 1.6]
-  - id: copy_c
-    type: vector
-    color: YELLOW
-    tip: [-1, -2]
-    tail: [-5, -2]
-  - id: copy_d
-    type: vector
-    color: YELLOW
-    tip: [5.5, -1.7]
-    tail: [1.5, -1.7]
+    place: {next_to: arrow, side: right, buff: 0.35}
+  - {id: copy_a, type: vector, tip: [-2, 2.4], tail: [-6, 2.4], color: YELLOW}
+  - {id: copy_b, type: vector, tip: [6, 1.6], tail: [2, 1.6], color: YELLOW}
+  - {id: copy_c, type: vector, tip: [-1, -2], tail: [-5, -2], color: YELLOW}
+  - {id: copy_d, type: vector, tip: [5.5, -1.7], tail: [1.5, -1.7], color: YELLOW}
   steps:
   - id: physics_view_1
     do: show
-    caption: Linear algebra is built, from the ground up, on vectors.
-    run_time: 1.5
     target: q_title
     style: write
-  - id: physics_view_2
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: Linear algebra is built, from the ground up, on vectors.
+  - {id: physics_view_2, do: wait, duration: 3.5}
   - id: physics_view_3
     do: show
-    caption: Yet there are three quite different ways to picture one.
-    run_time: 2.5
     target: [phys_lbl, cs_lbl, math_lbl]
     style: fade
     lag: 0.6
-  - id: physics_view_4
-    do: wait
-    duration: 3
+    run_time: 2.5
+    caption: Yet there are three quite different ways to picture one.
+  - {id: physics_view_4, do: wait, duration: 3}
   - id: physics_view_5
     do: show
-    caption: 'Physics student: an arrow, with a length and a direction.'
-    run_time: 1.5
     target: phys_icon
     style: grow
-  - id: physics_view_6
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: 'Physics student: an arrow, with a length and a direction.'
+  - {id: physics_view_6, do: wait, duration: 3.5}
   - id: physics_view_7
     do: show
-    caption: 'Computer science student: numbers listed in a set order.'
-    run_time: 1.5
     target: cs_icon
     style: write
-  - id: physics_view_8
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: 'Computer science student: numbers listed in a set order.'
+  - {id: physics_view_8, do: wait, duration: 3.5}
   - id: physics_view_9
     do: show
-    caption: 'Mathematician: anything you can add together and scale.'
-    run_time: 1.5
     target: math_icon
     style: write
-  - id: physics_view_10
-    do: wait
-    duration: 4
+    run_time: 1.5
+    caption: 'Mathematician: anything you can add together and scale.'
+  - {id: physics_view_10, do: wait, duration: 4}
   - id: physics_view_11
     do: together
-    caption: We'll look at each in turn, beginning with physics.
     steps:
     - id: physics_view_12
       do: hide
-      run_time: 1.5
-      target:
-      - q_title
-      - cs_lbl
-      - cs_icon
-      - math_lbl
-      - math_icon
-      - phys_icon
+      target: [q_title, cs_lbl, cs_icon, math_lbl, math_icon, phys_icon]
       style: fade
-    - id: physics_view_13
-      do: move
       run_time: 1.5
-      target: phys_lbl
-      to:
-        at: [0, 3.3]
-  - id: physics_view_14
-    do: wait
-    duration: 3
+    - {id: physics_view_13, do: move, target: phys_lbl, to: [0, 3.3], run_time: 1.5}
+    caption: We'll look at each in turn, beginning with physics.
+  - {id: physics_view_14, do: wait, duration: 3}
   - id: physics_view_15
     do: show
-    caption: In physics, a vector is drawn as an arrow.
-    run_time: 1.5
     target: arrow
     style: grow
-  - id: physics_view_16
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: In physics, a vector is drawn as an arrow.
+  - {id: physics_view_16, do: wait, duration: 3}
   - id: physics_view_17
     do: show
-    caption: 'Two facts settle which arrow it is: how long it is...'
-    run_time: 1.5
     target: len_brace
-  - id: physics_view_18
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: 'Two facts settle which arrow it is: how long it is...'
+  - {id: physics_view_18, do: wait, duration: 3}
   - id: physics_view_19
     do: together
-    caption: '...and which way it points.'
     steps:
-    - id: physics_view_20
-      do: show
-      run_time: 1.5
-      target: dir_lbl
-      style: write
-    - id: physics_view_21
-      do: highlight
-      run_time: 1.5
-      target: arrow
-  - id: physics_view_22
-    do: wait
-    duration: 3
-  - id: physics_view_23
-    do: hide
-    run_time: 1
-    target: [len_brace, dir_lbl]
-    style: fade
+    - {id: physics_view_20, do: show, target: dir_lbl, style: write, run_time: 1.5}
+    - {id: physics_view_21, do: highlight, target: arrow, run_time: 1.5}
+    caption: '...and which way it points.'
+  - {id: physics_view_22, do: wait, duration: 3}
+  - {id: physics_view_23, do: hide, target: [len_brace, dir_lbl], style: fade, run_time: 1}
   - id: physics_view_24
     do: move
-    caption: Slide it somewhere else without turning or stretching it...
-    run_time: 1.5
     target: arrow
     by: [-2.5, 2]
-  - id: physics_view_25
-    do: move
     run_time: 1.5
-    target: arrow
-    by: [4.5, -3.5]
+    caption: Slide it somewhere else without turning or stretching it...
+  - {id: physics_view_25, do: move, target: arrow, by: [4.5, -3.5], run_time: 1.5}
   - id: physics_view_26
     do: move
-    caption: '...and, as far as physics cares, nothing has changed.'
-    run_time: 1.5
     target: arrow
     by: [-2, 1.5]
-  - id: physics_view_27
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: '...and, as far as physics cares, nothing has changed.'
+  - {id: physics_view_27, do: wait, duration: 3}
   - id: physics_view_28
     do: show
-    caption: 'Equal length, equal direction: every one of these is the same vector.'
-    run_time: 2
     target: [copy_a, copy_b, copy_c, copy_d]
     style: grow
     lag: 0.3
-  - id: physics_view_29
-    do: wait
-    duration: 4
+    run_time: 2
+    caption: 'Equal length, equal direction: every one of these is the same vector.'
+  - {id: physics_view_29, do: wait, duration: 4}
   - id: physics_view_30
     do: wait
-    caption: Arrows confined to a flat plane are 2D vectors; in space, 3D.
     duration: 4.5
-  - id: physics_view_31
-    do: clear
-    run_time: 1.5
+    caption: Arrows confined to a flat plane are 2D vectors; in space, 3D.
+  - {id: physics_view_31, do: clear, run_time: 1.5}
 - id: cs_view
   title: The computer science student
   objects:
   - id: cs_head
     type: text
-    place:
-      edge: top
-      buff: 0.5
     text: Computer science student
     font_size: 40
+    place: {edge: top, buff: 0.5}
   - id: house_body
     type: square
-    color: TEAL_B
-    place:
-      at: [-4.4, -0.6]
     fill: TEAL_E
     fill_opacity: 0.6
+    color: TEAL_B
+    place: [-4.4, -0.6]
   - id: house_roof
     type: polygon
-    color: RED_B
     points: [[-5.7, 0.4], [-3.1, 0.4], [-4.4, 1.7]]
     fill: RED_E
     fill_opacity: 0.6
+    color: RED_B
   - id: house_door
     type: rectangle
-    color: GREY_A
-    place:
-      at: [-4.4, -1.15]
     width: 0.5
     height: 0.9
     fill: GREY_BROWN
     fill_opacity: 0.8
-  - id: house
-    type: group
-    members: [house_body, house_roof, house_door]
-  - id: feat_area
-    type: text
-    place:
-      at: [2.2, 0.8]
-    text: 'Floor area: 2,600 sq ft'
-    font_size: 32
+    color: GREY_A
+    place: [-4.4, -1.15]
+  - {id: house, type: group, members: [house_body, house_roof, house_door]}
+  - {id: feat_area, type: text, text: 'Floor area: 2,600 sq ft', font_size: 32, place: [2.2, 0.8]}
   - id: feat_price
     type: text
-    place:
-      next_to: feat_area
-      buff: 0.45
     text: 'Price: $300,000'
     font_size: 32
-  - id: features
-    type: group
-    members: [feat_area, feat_price]
+    place: {next_to: feat_area, buff: 0.45}
+  - {id: features, type: group, members: [feat_area, feat_price]}
   - id: hvec
     type: matrix
-    place:
-      at: [1.1, 0.1]
     entries: [['2{,}600 \text{ ft}^2'], ['\$300{,}000']]
+    place: [1.1, 0.1]
   - id: lbl_area
     type: text
-    color: GREY_A
-    place:
-      next_to: hvec
-      side: right
-      buff: 0.5
-      shift: [0, 0.42]
     text: floor area
     font_size: 28
+    color: GREY_A
+    place: {next_to: hvec, side: right, buff: 0.5, shift: [0, 0.42]}
   - id: lbl_price
     type: text
-    color: GREY_A
-    place:
-      next_to: hvec
-      side: right
-      buff: 0.5
-      shift: [0, -0.42]
     text: price
     font_size: 28
-  - id: dim_brace
-    type: brace
-    target: hvec
-    side: left
-    label: \text{2 entries}
-    buff: 0.15
+    color: GREY_A
+    place: {next_to: hvec, side: right, buff: 0.5, shift: [0, -0.42]}
+  - {id: dim_brace, type: brace, target: hvec, side: left, label: '\text{2 entries}', buff: 0.15}
   steps:
   - id: cs_view_1
     do: show
-    caption: For the computer scientist, a vector is a list of numbers.
-    run_time: 1.5
     target: cs_head
     style: write
-  - id: cs_view_2
-    do: wait
-    duration: 4
+    run_time: 1.5
+    caption: For the computer scientist, a vector is a list of numbers.
+  - {id: cs_view_2, do: wait, duration: 4}
   - id: cs_view_3
     do: show
-    caption: Suppose you're studying houses, and record two facts about each.
-    run_time: 2
     target: house
     style: draw
-  - id: cs_view_4
-    do: wait
-    duration: 3.5
+    run_time: 2
+    caption: Suppose you're studying houses, and record two facts about each.
+  - {id: cs_view_4, do: wait, duration: 3.5}
   - id: cs_view_5
     do: show
-    caption: How much floor space it has...
-    run_time: 1.5
     target: feat_area
     style: write
-  - id: cs_view_6
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: How much floor space it has...
+  - {id: cs_view_6, do: wait, duration: 2}
   - id: cs_view_7
     do: show
-    caption: '...and what it sells for.'
-    run_time: 1.5
     target: feat_price
     style: write
-  - id: cs_view_8
-    do: wait
-    duration: 2
-  - id: cs_view_9
-    do: add
-    target: features
+    run_time: 1.5
+    caption: '...and what it sells for.'
+  - {id: cs_view_8, do: wait, duration: 2}
   - id: cs_view_10
     do: transform
-    caption: Then every house is summed up by two numbers.
-    run_time: 2
     target: features
     into: hvec
     style: morph
-  - id: cs_view_11
-    do: show
-    run_time: 1
-    target: [lbl_area, lbl_price]
-    style: fade
-  - id: cs_view_12
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: Then every house is summed up by two numbers.
+  - {id: cs_view_11, do: show, target: [lbl_area, lbl_price], style: fade, run_time: 1}
+  - {id: cs_view_12, do: wait, duration: 3}
   - id: cs_view_13
     do: highlight
-    caption: In this view, the list itself is the vector.
-    run_time: 1.5
     target: hvec
-  - id: cs_view_14
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: In this view, the list itself is the vector.
+  - {id: cs_view_14, do: wait, duration: 3}
   - id: cs_view_15
     do: show
-    caption: It has two entries, so it counts as two-dimensional.
-    run_time: 1.5
     target: dim_brace
-  - id: cs_view_16
-    do: wait
-    duration: 4
+    run_time: 1.5
+    caption: It has two entries, so it counts as two-dimensional.
+  - {id: cs_view_16, do: wait, duration: 4}
   - id: cs_view_17
     do: wait
-    caption: Here, "vector" is really just a grander name for a list.
     duration: 4
-  - id: cs_view_18
-    do: hide
-    run_time: 1
-    target: dim_brace
-    style: fade
+    caption: Here, "vector" is really just a grander name for a list.
+  - {id: cs_view_18, do: hide, target: dim_brace, style: fade, run_time: 1}
   - id: cs_view_19
     do: change
-    caption: Swap the entries and it describes a very strange house.
-    run_time: 2
     target: hvec
-    set:
-      entries: [['\$300{,}000'], ['2{,}600 \text{ ft}^2']]
-  - id: cs_view_20
-    do: wait
-    duration: 3.5
+    set: {entries: [['\$300{,}000'], ['2{,}600 \text{ ft}^2']]}
+    run_time: 2
+    caption: Swap the entries and it describes a very strange house.
+  - {id: cs_view_20, do: wait, duration: 3.5}
   - id: cs_view_21
     do: change
-    caption: So the order of the numbers matters.
-    run_time: 1.5
     target: hvec
-    set:
-      entries: [['2{,}600 \text{ ft}^2'], ['\$300{,}000']]
-  - id: cs_view_22
-    do: wait
-    duration: 4
-  - id: cs_view_23
-    do: clear
+    set: {entries: [['2{,}600 \text{ ft}^2'], ['\$300{,}000']]}
     run_time: 1.5
+    caption: So the order of the numbers matters.
+  - {id: cs_view_22, do: wait, duration: 4}
+  - {id: cs_view_23, do: clear, run_time: 1.5}
 - id: math_view
   title: The mathematician
   objects:
-  - id: m_head
-    type: text
-    place:
-      edge: top
-      buff: 0.5
-    text: Mathematician
-    font_size: 40
+  - {id: m_head, type: text, text: Mathematician, font_size: 40, place: {edge: top, buff: 0.5}}
   - id: add_tex
     type: tex
-    place:
-      at: [-3.2, 1.6]
     tex: \vec{\mathbf{v}} + \vec{\mathbf{w}}
     font_size: 60
-  - id: scale_tex
-    type: tex
-    place:
-      at: [3.2, 1.6]
-    tex: 2 \cdot \vec{\mathbf{v}}
-    font_size: 60
+    place: [-3.2, 1.6]
+  - {id: scale_tex, type: tex, tex: '2 \cdot \vec{\mathbf{v}}', font_size: 60, place: [3.2, 1.6]}
   - id: add_word
     type: text
-    color: GREY_A
-    place:
-      next_to: add_tex
-      buff: 0.35
     text: adding
     font_size: 30
+    color: GREY_A
+    place: {next_to: add_tex, buff: 0.35}
   - id: scale_word
     type: text
-    color: GREY_A
-    place:
-      next_to: scale_tex
-      buff: 0.35
     text: multiplying by a number
     font_size: 30
-  - id: ex_arrow
-    type: vector
-    color: YELLOW
-    tip: [-3.8, -0.7]
-    tail: [-5.4, -2.3]
-  - id: ex_list
-    type: matrix
-    place:
-      at: [0, -1.5]
-    entries: [[3], [1]]
-    font_size: 36
+    color: GREY_A
+    place: {next_to: scale_tex, buff: 0.35}
+  - {id: ex_arrow, type: vector, tip: [-3.8, -0.7], tail: [-5.4, -2.3], color: YELLOW}
+  - {id: ex_list, type: matrix, entries: [[3], [1]], font_size: 36, place: [0, -1.5]}
   - id: ex_axes
     type: axes
-    place:
-      at: [4.6, -1.5]
     x_range: [-3, 3, 1]
     y_range: [-1, 1, 1]
     width: 3.2
     height: 1.4
     numbers: false
-  - id: ex_graph
-    type: graph
-    color: BLUE
-    on: ex_axes
-    function: sin(2*x)
+    place: [4.6, -1.5]
+  - {id: ex_graph, type: graph, on: ex_axes, function: sin(2*x), color: BLUE}
   steps:
   - id: math_view_1
     do: show
-    caption: The mathematician tries to capture both views at once.
-    run_time: 1.5
     target: m_head
     style: write
-  - id: math_view_2
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: The mathematician tries to capture both views at once.
+  - {id: math_view_2, do: wait, duration: 3.5}
   - id: math_view_3
     do: show
-    caption: 'What matters is only what you can do with vectors:'
-    run_time: 2
     target: [add_tex, add_word]
     style: write
-  - id: math_view_4
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: 'What matters is only what you can do with vectors:'
+  - {id: math_view_4, do: wait, duration: 3}
   - id: math_view_5
     do: show
-    caption: add two of them, and multiply one by a number.
-    run_time: 2
     target: [scale_tex, scale_word]
     style: write
-  - id: math_view_6
-    do: wait
-    duration: 3.5
+    run_time: 2
+    caption: add two of them, and multiply one by a number.
+  - {id: math_view_6, do: wait, duration: 3.5}
   - id: math_view_7
     do: show
-    caption: Arrows allow both. So do lists of numbers.
-    run_time: 2
     target: [ex_arrow, ex_list]
     lag: 0.5
-  - id: math_view_8
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: Arrows allow both. So do lists of numbers.
+  - {id: math_view_8, do: wait, duration: 3}
   - id: math_view_9
     do: show
-    caption: So do stranger things, which turn up later in the series.
-    run_time: 2
     target: [ex_axes, ex_graph]
     style: draw
     lag: 0.5
-  - id: math_view_10
-    do: wait
-    duration: 4
+    run_time: 2
+    caption: So do stranger things, which turn up later in the series.
+  - {id: math_view_10, do: wait, duration: 4}
   - id: math_view_11
     do: wait
-    caption: That abstract view can wait. First, connect the other two.
     duration: 4.5
-  - id: math_view_12
-    do: clear
-    run_time: 1.5
+    caption: That abstract view can wait. First, connect the other two.
+  - {id: math_view_12, do: clear, run_time: 1.5}
 - id: coordinate_plane
   title: A coordinate system
   objects:
-  - id: plane
-    type: number_plane
-    z: -1
-  - id: x_axis
-    type: number_line
-    x_range: [-7, 7, 1]
-    numbers: false
-  - id: y_axis
-    type: number_line
-    rotate: 90
-    x_range: [-4, 4, 1]
-    numbers: false
-  - id: x_name
-    type: text
-    color: GREEN
-    place:
-      at: [6.2, 0.4]
-    text: x-axis
-    font_size: 30
-  - id: y_name
-    type: text
-    color: RED
-    place:
-      at: [0.9, 3.55]
-    text: y-axis
-    font_size: 30
-  - id: origin_dot
-    type: dot
-    color: WHITE
-    z: 2
-    point: [0, 0]
-    radius: 0.09
-  - id: origin_lbl
-    type: text
-    place:
-      at: [-0.85, -0.45]
-    text: origin
-    font_size: 30
-  - id: unit_seg
-    type: line
-    color: YELLOW
-    z: 1
-    start: [0, 0]
-    end: [1, 0]
-    thickness: 6
-  - id: unit_brace
-    type: brace
-    target: unit_seg
-    label: '1'
-    buff: 0.2
-  - id: v
-    type: vector
-    color: YELLOW
-    z: 1
-    on: plane
-    tip: [-2, 3]
+  - {id: plane, type: number_plane, z: -1}
+  - {id: x_axis, type: number_line, x_range: [-7, 7, 1], numbers: false}
+  - {id: y_axis, type: number_line, x_range: [-4, 4, 1], numbers: false, rotate: 90}
+  - {id: x_name, type: text, text: x-axis, font_size: 30, color: GREEN, place: [6.2, 0.4]}
+  - {id: y_name, type: text, text: y-axis, font_size: 30, color: RED, place: [0.9, 3.55]}
+  - {id: origin_dot, type: dot, point: [0, 0], radius: 0.09, color: WHITE, z: 2}
+  - {id: origin_lbl, type: text, text: origin, font_size: 30, place: [-0.85, -0.45]}
+  - {id: unit_seg, type: line, start: [0, 0], end: [1, 0], thickness: 6, color: YELLOW, z: 1}
+  - {id: unit_brace, type: brace, target: unit_seg, label: '1', buff: 0.2}
+  - {id: v, type: vector, on: plane, tip: [-2, 3], color: YELLOW, z: 1}
   steps:
   - id: coordinate_plane_1
     do: show
-    caption: From here on, vectors will live in a coordinate system.
-    run_time: 2
     target: x_axis
     style: draw
-  - id: coordinate_plane_2
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: From here on, vectors will live in a coordinate system.
+  - {id: coordinate_plane_2, do: wait, duration: 3}
   - id: coordinate_plane_3
     do: show
-    caption: 'One line runs across: the x-axis.'
-    run_time: 1
     target: x_name
     style: write
-  - id: coordinate_plane_4
-    do: wait
-    duration: 3
+    run_time: 1
+    caption: 'One line runs across: the x-axis.'
+  - {id: coordinate_plane_4, do: wait, duration: 3}
   - id: coordinate_plane_5
     do: together
-    caption: 'Another runs straight up: the y-axis.'
     steps:
-    - id: coordinate_plane_6
-      do: show
-      run_time: 2
-      target: y_axis
-      style: draw
-    - id: coordinate_plane_7
-      do: show
-      run_time: 1
-      target: y_name
-      style: write
-  - id: coordinate_plane_8
-    do: wait
-    duration: 2
+    - {id: coordinate_plane_6, do: show, target: y_axis, style: draw, run_time: 2}
+    - {id: coordinate_plane_7, do: show, target: y_name, style: write, run_time: 1}
+    caption: 'Another runs straight up: the y-axis.'
+  - {id: coordinate_plane_8, do: wait, duration: 2}
   - id: coordinate_plane_9
     do: show
-    caption: They meet at the origin, the centre of it all.
-    run_time: 1
     target: origin_dot
     style: pop
-  - id: coordinate_plane_10
-    do: show
     run_time: 1
-    target: origin_lbl
-    style: write
-  - id: coordinate_plane_11
-    do: highlight
-    run_time: 1.5
-    target: origin_dot
-    style: flash
-  - id: coordinate_plane_12
-    do: wait
-    duration: 2
+    caption: They meet at the origin, the centre of it all.
+  - {id: coordinate_plane_10, do: show, target: origin_lbl, style: write, run_time: 1}
+  - {id: coordinate_plane_11, do: highlight, target: origin_dot, style: flash, run_time: 1.5}
+  - {id: coordinate_plane_12, do: wait, duration: 2}
   - id: coordinate_plane_13
     do: together
-    caption: Tick marks along each axis are one unit apart.
     steps:
-    - id: coordinate_plane_14
-      do: show
-      run_time: 1.5
-      target: unit_seg
-      style: draw
-    - id: coordinate_plane_15
-      do: show
-      run_time: 1.5
-      target: unit_brace
-  - id: coordinate_plane_16
-    do: wait
-    duration: 3.5
+    - {id: coordinate_plane_14, do: show, target: unit_seg, style: draw, run_time: 1.5}
+    - {id: coordinate_plane_15, do: show, target: unit_brace, run_time: 1.5}
+    caption: Tick marks along each axis are one unit apart.
+  - {id: coordinate_plane_16, do: wait, duration: 3.5}
   - id: coordinate_plane_17
     do: wait
-    caption: You choose how long a unit is, then stick with it.
     duration: 4
+    caption: You choose how long a unit is, then stick with it.
   - id: coordinate_plane_18
     do: hide
-    run_time: 1
     target: [unit_seg, unit_brace, origin_lbl]
     style: fade
+    run_time: 1
   - id: coordinate_plane_19
     do: show
-    caption: A grid line through every tick makes positions easy to read.
-    run_time: 3
     target: plane
     style: draw
-  - id: coordinate_plane_20
-    do: wait
-    duration: 3
+    run_time: 3
+    caption: A grid line through every tick makes positions easy to read.
+  - {id: coordinate_plane_20, do: wait, duration: 3}
   - id: coordinate_plane_21
     do: show
-    caption: Now draw a vector here, starting from the origin.
-    run_time: 2
     target: v
     style: grow
-  - id: coordinate_plane_22
-    do: wait
-    duration: 3.5
+    run_time: 2
+    caption: Now draw a vector here, starting from the origin.
+  - {id: coordinate_plane_22, do: wait, duration: 3.5}
   - id: coordinate_plane_23
     do: wait
-    caption: Unlike the physicist's arrows, this one's tail stays put at the origin.
     duration: 4.5
-  - id: coordinate_plane_24
-    do: hide
-    run_time: 1
-    target: [x_name, y_name]
-    style: fade
+    caption: Unlike the physicist's arrows, this one's tail stays put at the origin.
+  - {id: coordinate_plane_24, do: hide, target: [x_name, y_name], style: fade, run_time: 1}
 - id: coordinates
   title: Coordinates as instructions
   objects:
-  - id: plane
-    type: number_plane
-    z: -1
-    shown: true
-  - id: x_axis
-    type: number_line
-    shown: true
-    x_range: [-7, 7, 1]
-    numbers: false
-  - id: y_axis
-    type: number_line
-    shown: true
-    rotate: 90
-    x_range: [-4, 4, 1]
-    numbers: false
-  - id: origin_dot
-    type: dot
-    color: WHITE
-    z: 2
-    shown: true
-    point: [0, 0]
-    radius: 0.09
-  - id: v
-    type: vector
-    color: YELLOW
-    z: 1
-    shown: true
-    on: plane
-    tip: [-2, 3]
-  - id: coords
-    type: matrix
-    place:
-      at: [-3.5, 3]
-    entries: [[-2], [3]]
-    row_colors: [GREEN, RED]
+  - {id: plane, type: number_plane, z: -1, shown: true}
+  - {id: x_axis, type: number_line, x_range: [-7, 7, 1], numbers: false, shown: true}
+  - {id: y_axis, type: number_line, x_range: [-4, 4, 1], numbers: false, shown: true, rotate: 90}
+  - {id: origin_dot, type: dot, point: [0, 0], radius: 0.09, color: WHITE, z: 2, shown: true}
+  - {id: v, type: vector, on: plane, tip: [-2, 3], color: YELLOW, z: 1, shown: true}
+  - {id: coords, type: matrix, entries: [[-2], [3]], row_colors: [GREEN, RED], place: [-3.5, 3]}
   - id: x_step
     type: line
-    color: GREEN
-    z: 1
     on: plane
     start: [0, 0]
     end: [-2, 0]
     arrow: true
-  - id: y_step
-    type: line
-    color: RED
-    z: 1
-    on: plane
-    start: [-2, 0]
-    end: [-2, 3]
-    arrow: true
-  - id: x_num
-    type: tex
     color: GREEN
-    place:
-      at: [-1, -0.45]
-    tex: '-2'
-    font_size: 40
-  - id: y_num
-    type: tex
-    color: RED
-    place:
-      at: [-2.4, 1.5]
-    tex: '3'
-    font_size: 40
+    z: 1
+  - {id: y_step, type: line, on: plane, start: [-2, 0], end: [-2, 3], arrow: true, color: RED, z: 1}
+  - {id: x_num, type: tex, tex: '-2', font_size: 40, color: GREEN, place: [-1, -0.45]}
+  - {id: y_num, type: tex, tex: '3', font_size: 40, color: RED, place: [-2.4, 1.5]}
   steps:
   - id: coordinates_1
     do: show
-    caption: This vector's coordinates are the numbers -2 and 3.
-    run_time: 1.5
     target: coords
     style: write
-  - id: coordinates_2
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: This vector's coordinates are the numbers -2 and 3.
+  - {id: coordinates_2, do: wait, duration: 3.5}
   - id: coordinates_3
     do: highlight
-    caption: They are a recipe for getting from the tail to the tip.
-    run_time: 1.5
     target: coords
-  - id: coordinates_4
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: They are a recipe for getting from the tail to the tip.
+  - {id: coordinates_4, do: wait, duration: 3.5}
   - id: coordinates_5
     do: wait
-    caption: Stacking them in a column keeps vectors apart from points.
     duration: 4.5
+    caption: Stacking them in a column keeps vectors apart from points.
   - id: coordinates_6
     do: show
-    caption: The top entry is a distance along the x-axis.
-    run_time: 1.5
     target: x_step
     style: draw
-  - id: coordinates_7
-    do: show
-    run_time: 1
-    target: x_num
-    style: write
-  - id: coordinates_8
-    do: wait
-    duration: 2
-  - id: coordinates_9
-    do: wait
-    caption: 'It''s negative, so head left: two units.'
-    duration: 4
+    run_time: 1.5
+    caption: The top entry is a distance along the x-axis.
+  - {id: coordinates_7, do: show, target: x_num, style: write, run_time: 1}
+  - {id: coordinates_8, do: wait, duration: 2}
+  - {id: coordinates_9, do: wait, duration: 4, caption: 'It''s negative, so head left: two units.'}
   - id: coordinates_10
     do: show
-    caption: 'The bottom entry: then travel parallel to the y-axis.'
-    run_time: 1.5
     target: y_step
     style: draw
-  - id: coordinates_11
-    do: show
-    run_time: 1
-    target: y_num
-    style: write
-  - id: coordinates_12
-    do: wait
-    duration: 2
-  - id: coordinates_13
-    do: wait
-    caption: 'It''s positive, so head up: three units.'
-    duration: 4
+    run_time: 1.5
+    caption: 'The bottom entry: then travel parallel to the y-axis.'
+  - {id: coordinates_11, do: show, target: y_num, style: write, run_time: 1}
+  - {id: coordinates_12, do: wait, duration: 2}
+  - {id: coordinates_13, do: wait, duration: 4, caption: 'It''s positive, so head up: three units.'}
   - id: coordinates_14
     do: highlight
-    caption: The trip ends right at the tip of the arrow.
-    run_time: 1.5
     target: v
-  - id: coordinates_15
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: The trip ends right at the tip of the arrow.
+  - {id: coordinates_15, do: wait, duration: 3.5}
   - id: coordinates_16
     do: hide
-    caption: Any pair of numbers picks out a single vector...
-    run_time: 1
     target: [x_step, y_step, x_num, y_num]
     style: fade
+    run_time: 1
+    caption: Any pair of numbers picks out a single vector...
   - id: coordinates_17
     do: together
     steps:
-    - id: coordinates_18
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [3, 1]
+    - {id: coordinates_18, do: change, target: v, set: {tip: [3, 1]}, run_time: 2}
     - id: coordinates_19
       do: change
-      run_time: 2
       target: coords
-      set:
-        entries: [[3], [1]]
-        place: [4.2, 2]
-  - id: coordinates_20
-    do: wait
-    duration: 2
+      set: {entries: [[3], [1]], place: [4.2, 2]}
+      run_time: 2
+  - {id: coordinates_20, do: wait, duration: 2}
   - id: coordinates_21
     do: together
-    caption: '...and any vector hands back a single pair.'
     steps:
-    - id: coordinates_22
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [4, -1]
+    - {id: coordinates_22, do: change, target: v, set: {tip: [4, -1]}, run_time: 2}
     - id: coordinates_23
       do: change
-      run_time: 2
       target: coords
-      set:
-        entries: [[4], [-1]]
-        place: [5.2, -1.7]
-  - id: coordinates_24
-    do: wait
-    duration: 2
+      set: {entries: [[4], [-1]], place: [5.2, -1.7]}
+      run_time: 2
+    caption: '...and any vector hands back a single pair.'
+  - {id: coordinates_24, do: wait, duration: 2}
   - id: coordinates_25
     do: together
-    caption: Move the tip anywhere, and the numbers follow it.
     steps:
-    - id: coordinates_26
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [-4, -2]
+    - {id: coordinates_26, do: change, target: v, set: {tip: [-4, -2]}, run_time: 2}
     - id: coordinates_27
       do: change
-      run_time: 2
       target: coords
-      set:
-        entries: [[-4], [-2]]
-        place: [-5.2, -1.2]
-  - id: coordinates_28
-    do: wait
-    duration: 2
+      set: {entries: [[-4], [-2]], place: [-5.2, -1.2]}
+      run_time: 2
+    caption: Move the tip anywhere, and the numbers follow it.
+  - {id: coordinates_28, do: wait, duration: 2}
   - id: coordinates_29
     do: together
-    caption: Pairs of numbers and 2D arrows match up one to one.
     steps:
-    - id: coordinates_30
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [-2, 3]
+    - {id: coordinates_30, do: change, target: v, set: {tip: [-2, 3]}, run_time: 2}
     - id: coordinates_31
       do: change
-      run_time: 2
       target: coords
-      set:
-        entries: [[-2], [3]]
-        place: [-3.5, 3]
-  - id: coordinates_32
-    do: wait
-    duration: 4
-  - id: coordinates_33
-    do: clear
-    caption: ''
-    run_time: 1.5
+      set: {entries: [[-2], [3]], place: [-3.5, 3]}
+      run_time: 2
+    caption: Pairs of numbers and 2D arrows match up one to one.
+  - {id: coordinates_32, do: wait, duration: 4}
+  - {id: coordinates_33, do: clear, run_time: 1.5, caption: ''}
 - id: three_d
   title: Three dimensions
   objects:
-  - id: floor
-    type: number_plane
-    x_range: [-4, 4, 1]
-    faded: true
-  - id: axes3
-    type: axes_3d
-    x_range: [-4, 4, 1]
-    y_range: [-4, 4, 1]
-    z_range: [-4, 4, 1]
-  - id: xs
-    type: line
-    color: GREEN
-    on: axes3
-    start: [0, 0, 0]
-    end: [2, 0, 0]
-    arrow: true
-  - id: ys
-    type: line
-    color: RED
-    on: axes3
-    start: [2, 0, 0]
-    end: [2, 1, 0]
-    arrow: true
-  - id: zs
-    type: line
-    color: BLUE
-    on: axes3
-    start: [2, 1, 0]
-    end: [2, 1, 3]
-    arrow: true
-  - id: v3
-    type: vector
-    color: YELLOW
-    on: axes3
-    tip: [2, 1, 3]
-    tail: [0, 0, 0]
+  - {id: floor, type: number_plane, x_range: [-4, 4, 1], faded: true}
+  - {id: axes3, type: axes_3d, x_range: [-4, 4, 1], y_range: [-4, 4, 1], z_range: [-4, 4, 1]}
+  - {id: xs, type: line, on: axes3, start: [0, 0, 0], end: [2, 0, 0], arrow: true, color: GREEN}
+  - {id: ys, type: line, on: axes3, start: [2, 0, 0], end: [2, 1, 0], arrow: true, color: RED}
+  - {id: zs, type: line, on: axes3, start: [2, 1, 0], end: [2, 1, 3], arrow: true, color: BLUE}
+  - {id: v3, type: vector, on: axes3, tip: [2, 1, 3], tail: [0, 0, 0], color: YELLOW}
   steps:
   - id: three_d_1
     do: show
-    caption: So far, everything has lived in a flat plane.
-    run_time: 2.5
     target: [floor, axes3]
     style: draw
-  - id: three_d_2
-    do: wait
-    duration: 3
+    run_time: 2.5
+    caption: So far, everything has lived in a flat plane.
+  - {id: three_d_2, do: wait, duration: 3}
   - id: three_d_3
     do: camera
-    caption: A new axis, z, stands at right angles to the other two.
-    run_time: 3.5
     orientation: [-30, 70]
-  - id: three_d_4
-    do: wait
-    duration: 3
+    run_time: 3.5
+    caption: A new axis, z, stands at right angles to the other two.
+  - {id: three_d_4, do: wait, duration: 3}
   - id: three_d_5
     do: wait
-    caption: Now a vector needs three numbers, for example 2, 1 and 3.
     duration: 4.5
+    caption: Now a vector needs three numbers, for example 2, 1 and 3.
   - id: three_d_6
     do: show
-    caption: '2: two units along the x-axis...'
-    run_time: 1.5
     target: xs
     style: draw
-  - id: three_d_7
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: '2: two units along the x-axis...'
+  - {id: three_d_7, do: wait, duration: 2}
   - id: three_d_8
     do: show
-    caption: '1: one unit parallel to the y-axis...'
-    run_time: 1.5
     target: ys
     style: draw
-  - id: three_d_9
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: '1: one unit parallel to the y-axis...'
+  - {id: three_d_9, do: wait, duration: 2}
   - id: three_d_10
     do: show
-    caption: '3: three units up, parallel to the z-axis.'
-    run_time: 1.5
     target: zs
     style: draw
-  - id: three_d_11
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: '3: three units up, parallel to the z-axis.'
+  - {id: three_d_11, do: wait, duration: 2}
   - id: three_d_12
     do: show
-    caption: The vector [2, 1, 3] ends where those moves end.
-    run_time: 2
     target: v3
     style: grow
-  - id: three_d_13
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: The vector [2, 1, 3] ends where those moves end.
+  - {id: three_d_13, do: wait, duration: 3}
   - id: three_d_14
     do: camera
-    caption: Every list of three numbers gives one arrow in space...
-    run_time: 6
     orientation: [20, 70]
+    run_time: 6
+    caption: Every list of three numbers gives one arrow in space...
   - id: three_d_15
     do: wait
-    caption: '...and every arrow in space gives back one such list.'
     duration: 4.5
-  - id: three_d_16
-    do: hide
-    run_time: 1
-    target: [xs, ys, zs]
-    style: fade
+    caption: '...and every arrow in space gives back one such list.'
+  - {id: three_d_16, do: hide, target: [xs, ys, zs], style: fade, run_time: 1}
   - id: three_d_17
     do: change
+    target: v3
+    set: {tip: [-3, 2, 1]}
+    run_time: 2
     caption: Change the numbers, and you get a different arrow.
-    run_time: 2
-    target: v3
-    set:
-      tip: [-3, 2, 1]
-  - id: three_d_18
-    do: wait
-    duration: 2
-  - id: three_d_19
-    do: change
-    run_time: 2
-    target: v3
-    set:
-      tip: [1, -3, 2]
+  - {id: three_d_18, do: wait, duration: 2}
+  - {id: three_d_19, do: change, target: v3, set: {tip: [1, -3, 2]}, run_time: 2}
   - id: three_d_20
     do: camera
-    caption: A third coordinate is all it takes to reach into space.
-    run_time: 5
     orientation: [-40, 75]
-  - id: three_d_21
-    do: wait
-    duration: 1.5
-  - id: three_d_22
-    do: clear
-    caption: ''
-    run_time: 1.5
+    run_time: 5
+    caption: A third coordinate is all it takes to reach into space.
+  - {id: three_d_21, do: wait, duration: 1.5}
+  - {id: three_d_22, do: clear, run_time: 1.5, caption: ''}
 - id: addition
   title: Adding vectors, and why tip to tail
   objects:
-  - id: plane
-    type: number_plane
-    z: -1
+  - {id: plane, type: number_plane, z: -1}
   - id: op_title
     type: text
-    z: 2
-    place:
-      edge: top_left
-      buff: 0.4
     text: Vector addition
     font_size: 40
-  - id: op_bg
-    type: box
-    color: BLACK
-    z: 1
-    target: op_title
-    fill_opacity: 0.85
+    z: 2
+    place: {edge: top_left, buff: 0.4}
+  - {id: op_bg, type: box, target: op_title, fill_opacity: 0.85, color: BLACK, z: 1}
   - id: v
     type: vector
-    color: YELLOW
     on: plane
     tip: [1, 2]
     label: \vec{\mathbf{v}}
     label_side: left
+    color: YELLOW
   - id: w
     type: vector
-    color: PINK
     on: plane
     tip: [3, -1]
     label: \vec{\mathbf{w}}
     label_side: up
+    color: PINK
   - id: s
     type: vector
-    color: ORANGE
     on: plane
     tip: [4, 1]
     label: \vec{\mathbf{v}} + \vec{\mathbf{w}}
-  - id: walker
-    type: dot
-    color: WHITE
-    z: 3
-    point: [0, 0]
-    radius: 0.12
-  - id: nline
-    type: number_line
-    place:
-      at: [0, -0.8]
-    x_range: [-1, 8, 1]
+    color: ORANGE
+  - {id: walker, type: dot, point: [0, 0], radius: 0.12, color: WHITE, z: 3}
+  - {id: nline, type: number_line, x_range: [-1, 8, 1], place: [0, -0.8]}
   - id: a2
     type: vector
-    color: YELLOW
     tip: [-1.5, -0.3]
     tail: [-3.5, -0.3]
     label: '2'
     label_side: up
+    color: YELLOW
   - id: a5
     type: vector
-    color: PINK
     tip: [3.5, -0.3]
     tail: [-1.5, -0.3]
     label: '5'
     label_side: up
+    color: PINK
   - id: a7
     type: vector
-    color: ORANGE
     tip: [3.5, 1.2]
     tail: [-3.5, 1.2]
     label: '7'
     label_side: up
-  - id: eq27
-    type: tex
-    place:
-      at: [0, 2.9]
-    tex: 2 + 5 = 7
-    font_size: 60
+    color: ORANGE
+  - {id: eq27, type: tex, tex: 2 + 5 = 7, font_size: 60, place: [0, 2.9]}
   steps:
   - id: addition_1
     do: show
-    caption: Two operations run through all of linear algebra.
-    run_time: 2.5
     target: plane
     style: draw
-  - id: addition_2
-    do: wait
-    duration: 1.5
+    run_time: 2.5
+    caption: Two operations run through all of linear algebra.
+  - {id: addition_2, do: wait, duration: 1.5}
   - id: addition_3
     do: show
-    caption: The first is vector addition.
-    run_time: 1.5
     target: [op_bg, op_title]
     style: fade
-  - id: addition_4
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: The first is vector addition.
+  - {id: addition_4, do: wait, duration: 2}
   - id: addition_5
     do: show
-    caption: Here are two vectors, v and w.
-    run_time: 1.5
     target: v
     style: grow
-  - id: addition_6
-    do: show
     run_time: 1.5
-    target: w
-    style: grow
-  - id: addition_7
-    do: wait
-    duration: 2
+    caption: Here are two vectors, v and w.
+  - {id: addition_6, do: show, target: w, style: grow, run_time: 1.5}
+  - {id: addition_7, do: wait, duration: 2}
   - id: addition_8
     do: move
-    caption: Shift w so that it starts where v ends.
-    run_time: 2
     target: w
     by: [1, 2]
-  - id: addition_9
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: Shift w so that it starts where v ends.
+  - {id: addition_9, do: wait, duration: 3}
   - id: addition_10
     do: show
-    caption: The arrow from v's start to w's new end is the sum.
-    run_time: 2
     target: s
     style: grow
-  - id: addition_11
-    do: wait
-    duration: 3
-  - id: addition_12
-    do: highlight
-    caption: We call it v + w.
-    run_time: 1.5
-    target: s
-  - id: addition_13
-    do: wait
-    duration: 2
+    run_time: 2
+    caption: The arrow from v's start to w's new end is the sum.
+  - {id: addition_11, do: wait, duration: 3}
+  - {id: addition_12, do: highlight, target: s, run_time: 1.5, caption: We call it v + w.}
+  - {id: addition_13, do: wait, duration: 2}
   - id: addition_14
     do: together
-    caption: The same recipe works for any pair of vectors.
     steps:
-    - id: addition_15
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [-2, 1]
-    - id: addition_16
-      do: change
-      run_time: 2
-      target: w
-      set:
-        tail: [-2, 1]
-        tip: [1, 3]
-    - id: addition_17
-      do: change
-      run_time: 2
-      target: s
-      set:
-        tip: [1, 3]
-  - id: addition_18
-    do: wait
-    duration: 3
+    - {id: addition_15, do: change, target: v, set: {tip: [-2, 1]}, run_time: 2}
+    - {id: addition_16, do: change, target: w, set: {tail: [-2, 1], tip: [1, 3]}, run_time: 2}
+    - {id: addition_17, do: change, target: s, set: {tip: [1, 3]}, run_time: 2}
+    caption: The same recipe works for any pair of vectors.
+  - {id: addition_18, do: wait, duration: 3}
   - id: addition_19
     do: together
     steps:
-    - id: addition_20
-      do: change
-      run_time: 2
-      target: v
-      set:
-        tip: [1, 2]
-    - id: addition_21
-      do: change
-      run_time: 2
-      target: w
-      set:
-        tail: [1, 2]
-        tip: [4, 1]
-    - id: addition_22
-      do: change
-      run_time: 2
-      target: s
-      set:
-        tip: [4, 1]
-  - id: addition_23
-    do: wait
-    caption: But why should addition work like this?
-    duration: 4
+    - {id: addition_20, do: change, target: v, set: {tip: [1, 2]}, run_time: 2}
+    - {id: addition_21, do: change, target: w, set: {tail: [1, 2], tip: [4, 1]}, run_time: 2}
+    - {id: addition_22, do: change, target: s, set: {tip: [4, 1]}, run_time: 2}
+  - {id: addition_23, do: wait, duration: 4, caption: 'But why should addition work like this?'}
   - id: addition_24
     do: show
-    caption: 'Picture each vector as a trip: go this far, in this direction.'
-    run_time: 1
     target: walker
     style: pop
-  - id: addition_25
-    do: wait
-    duration: 4
+    run_time: 1
+    caption: 'Picture each vector as a trip: go this far, in this direction.'
+  - {id: addition_25, do: wait, duration: 4}
   - id: addition_26
     do: move
-    caption: Make the trip v...
-    run_time: 1.5
     target: walker
-    to:
-      at: [1, 2]
-  - id: addition_27
-    do: wait
-    duration: 1.5
+    to: [1, 2]
+    run_time: 1.5
+    caption: Make the trip v...
+  - {id: addition_27, do: wait, duration: 1.5}
   - id: addition_28
     do: move
-    caption: '...then the trip w...'
-    run_time: 1.5
     target: walker
-    to:
-      at: [4, 1]
-  - id: addition_29
-    do: wait
-    duration: 1.5
+    to: [4, 1]
+    run_time: 1.5
+    caption: '...then the trip w...'
+  - {id: addition_29, do: wait, duration: 1.5}
   - id: addition_30
     do: highlight
-    caption: '...lands you where the single trip v + w does.'
-    run_time: 1.5
     target: s
     style: flash
-  - id: addition_31
-    do: wait
-    duration: 4
-  - id: addition_32
-    do: clear
     run_time: 1.5
+    caption: '...lands you where the single trip v + w does.'
+  - {id: addition_31, do: wait, duration: 4}
+  - {id: addition_32, do: clear, run_time: 1.5}
   - id: addition_33
     do: show
-    caption: Numbers on a number line add in just the same way.
-    run_time: 2
     target: nline
     style: draw
-  - id: addition_34
-    do: wait
-    duration: 2
+    run_time: 2
+    caption: Numbers on a number line add in just the same way.
+  - {id: addition_34, do: wait, duration: 2}
   - id: addition_35
     do: show
-    caption: Move 2 to the right...
-    run_time: 1.5
     target: a2
     style: grow
-  - id: addition_36
-    do: wait
-    duration: 1.5
-  - id: addition_37
-    do: show
-    caption: '...then 5 more...'
-    run_time: 2
-    target: a5
-    style: grow
-  - id: addition_38
-    do: wait
+    run_time: 1.5
+    caption: Move 2 to the right...
+  - {id: addition_36, do: wait, duration: 1.5}
+  - {id: addition_37, do: show, target: a5, style: grow, run_time: 2, caption: '...then 5 more...'}
+  - {id: addition_38, do: wait}
   - id: addition_39
     do: show
-    caption: '...and you are 7 from where you began.'
-    run_time: 2
     target: a7
     style: grow
-  - id: addition_40
-    do: show
-    run_time: 1.5
-    target: eq27
-    style: write
-  - id: addition_41
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: '...and you are 7 from where you began.'
+  - {id: addition_40, do: show, target: eq27, style: write, run_time: 1.5}
+  - {id: addition_41, do: wait, duration: 3}
   - id: addition_42
     do: wait
-    caption: Vector addition carries that idea off the line, into the plane.
     duration: 4.5
-  - id: addition_43
-    do: clear
-    run_time: 1.5
+    caption: Vector addition carries that idea off the line, into the plane.
+  - {id: addition_43, do: clear, run_time: 1.5}
 - id: addition_numbers
   title: Adding vectors with coordinates
   objects:
-  - id: plane
-    type: number_plane
-    z: -1
+  - {id: plane, type: number_plane, z: -1}
   - id: v
     type: vector
-    color: YELLOW
     on: plane
     tip: [1, 2]
     label: \vec{\mathbf{v}}
     label_side: left
-  - id: w
-    type: vector
-    color: PINK
-    on: plane
-    tip: [4, 1]
-    tail: [1, 2]
+    color: YELLOW
+  - {id: w, type: vector, on: plane, tip: [4, 1], tail: [1, 2], color: PINK}
   - id: s
     type: vector
-    color: ORANGE
     on: plane
     tip: [4, 1]
     label: \vec{\mathbf{v}} + \vec{\mathbf{w}}
-  - id: vx
-    type: line
-    color: GREEN
-    z: 1
-    on: plane
-    start: [0, 0]
-    end: [1, 0]
-    arrow: true
-  - id: vy
-    type: line
-    color: RED
-    z: 1
-    on: plane
-    start: [1, 0]
-    end: [1, 2]
-    arrow: true
-  - id: wx
-    type: line
-    color: GREEN
-    z: 1
-    on: plane
-    start: [1, 2]
-    end: [4, 2]
-    arrow: true
-  - id: wy
-    type: line
-    color: RED
-    z: 1
-    on: plane
-    start: [4, 2]
-    end: [4, 1]
-    arrow: true
-  - id: e_v
-    type: matrix
-    z: 2
-    entries: [[1], [2]]
-    font_size: 36
-    row_colors: [GREEN, RED]
-  - id: e_plus
-    type: tex
-    z: 2
-    tex: +
-    font_size: 40
-  - id: e_w
-    type: matrix
-    z: 2
-    entries: [[3], [-1]]
-    font_size: 36
-    row_colors: [GREEN, RED]
-  - id: e_eq1
-    type: tex
-    z: 2
-    tex: '='
-    font_size: 40
+    color: ORANGE
+  - {id: vx, type: line, on: plane, start: [0, 0], end: [1, 0], arrow: true, color: GREEN, z: 1}
+  - {id: vy, type: line, on: plane, start: [1, 0], end: [1, 2], arrow: true, color: RED, z: 1}
+  - {id: wx, type: line, on: plane, start: [1, 2], end: [4, 2], arrow: true, color: GREEN, z: 1}
+  - {id: wy, type: line, on: plane, start: [4, 2], end: [4, 1], arrow: true, color: RED, z: 1}
+  - {id: e_v, type: matrix, entries: [[1], [2]], font_size: 36, row_colors: [GREEN, RED], z: 2}
+  - {id: e_plus, type: tex, tex: +, font_size: 40, z: 2}
+  - {id: e_w, type: matrix, entries: [[3], [-1]], font_size: 36, row_colors: [GREEN, RED], z: 2}
+  - {id: e_eq1, type: tex, tex: '=', font_size: 40, z: 2}
   - id: e_mid
     type: matrix
-    z: 2
     entries: [[1 + 3], [2 + (-1)]]
     font_size: 36
     row_colors: [GREEN, RED]
-  - id: e_eq2
-    type: tex
     z: 2
-    tex: '='
-    font_size: 40
-  - id: e_res
-    type: matrix
-    z: 2
-    entries: [[4], [1]]
-    font_size: 36
-    row_colors: [GREEN, RED]
+  - {id: e_eq2, type: tex, tex: '=', font_size: 40, z: 2}
+  - {id: e_res, type: matrix, entries: [[4], [1]], font_size: 36, row_colors: [GREEN, RED], z: 2}
   - id: eq_row
     type: group
-    place:
-      edge: top_left
-      buff: 0.4
-    members:
-    - e_v
-    - e_plus
-    - e_w
-    - e_eq1
-    - e_mid
-    - e_eq2
-    - e_res
+    members: [e_v, e_plus, e_w, e_eq1, e_mid, e_eq2, e_res]
     arrange: row
     buff: 0.2
-  - id: eq_bg
-    type: box
-    color: BLACK
-    z: 1
-    target: eq_row
-    fill_opacity: 0.85
+    place: {edge: top_left, buff: 0.4}
+  - {id: eq_bg, type: box, target: eq_row, fill_opacity: 0.85, color: BLACK, z: 1}
   - id: gen
     type: tex
-    z: 2
-    place:
-      at: [-3.6, -1.6]
-    tex: \begin{bmatrix} x_1 \\ y_1 \end{bmatrix} + \begin{bmatrix} x_2 \\ y_2 \end{bmatrix} = \begin{bmatrix}
-      x_1 + x_2 \\ y_1 + y_2 \end{bmatrix}
+    tex: \begin{bmatrix} x_1 \\ y_1 \end{bmatrix} + \begin{bmatrix} x_2 \\ y_2 \end{bmatrix} = \begin{bmatrix} x_1 + x_2 \\ y_1 + y_2 \end{bmatrix}
     font_size: 36
-    colors:
-      x_1: GREEN
-      x_2: GREEN
-      y_1: RED
-      y_2: RED
-  - id: gen_bg
-    type: box
-    color: BLACK
-    z: 1
-    target: gen
-    fill_opacity: 0.85
+    colors: {x_1: GREEN, x_2: GREEN, y_1: RED, y_2: RED}
+    z: 2
+    place: [-3.6, -1.6]
+  - {id: gen_bg, type: box, target: gen, fill_opacity: 0.85, color: BLACK, z: 1}
   steps:
   - id: addition_numbers_1
     do: show
-    caption: What does adding vectors look like in coordinates?
-    run_time: 1.5
     target: plane
     style: fade
-  - id: addition_numbers_2
-    do: show
-    run_time: 2
-    target: [v, w]
-    style: grow
-    lag: 0.5
-  - id: addition_numbers_3
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: What does adding vectors look like in coordinates?
+  - {id: addition_numbers_2, do: show, target: [v, w], style: grow, lag: 0.5, run_time: 2}
+  - {id: addition_numbers_3, do: wait, duration: 2}
   - id: addition_numbers_4
     do: show
-    caption: Let v be [1, 2], and let w be [3, -1].
-    run_time: 1.5
     target: [eq_bg, e_v, e_plus, e_w]
     style: fade
-  - id: addition_numbers_5
-    do: wait
-    duration: 4
+    run_time: 1.5
+    caption: Let v be [1, 2], and let w be [3, -1].
+  - {id: addition_numbers_5, do: wait, duration: 4}
   - id: addition_numbers_6
     do: show
-    caption: 'To follow v: one unit right, then two units up.'
-    run_time: 2
     target: [vx, vy]
     style: draw
     lag: 1
-  - id: addition_numbers_7
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: 'To follow v: one unit right, then two units up.'
+  - {id: addition_numbers_7, do: wait, duration: 3}
   - id: addition_numbers_8
     do: show
-    caption: 'To follow w: three units right, then one unit down.'
-    run_time: 2
     target: [wx, wy]
     style: draw
     lag: 1
-  - id: addition_numbers_9
-    do: wait
-    duration: 3
+    run_time: 2
+    caption: 'To follow w: three units right, then one unit down.'
+  - {id: addition_numbers_9, do: wait, duration: 3}
   - id: addition_numbers_10
     do: together
-    caption: Gather the sideways moves, and the up-and-down moves.
     steps:
-    - id: addition_numbers_11
-      do: move
-      run_time: 2
-      target: wx
-      by: [0, -2]
-    - id: addition_numbers_12
-      do: move
-      run_time: 2
-      target: vy
-      by: [3, 0]
-  - id: addition_numbers_13
-    do: wait
-    duration: 3.5
+    - {id: addition_numbers_11, do: move, target: wx, by: [0, -2], run_time: 2}
+    - {id: addition_numbers_12, do: move, target: vy, by: [3, 0], run_time: 2}
+    caption: Gather the sideways moves, and the up-and-down moves.
+  - {id: addition_numbers_13, do: wait, duration: 3.5}
   - id: addition_numbers_14
     do: show
-    caption: Sideways, 1 then 3. Vertically, 2 then -1.
-    run_time: 2
     target: [e_eq1, e_mid]
     style: write
-  - id: addition_numbers_15
-    do: wait
-    duration: 4
+    run_time: 2
+    caption: Sideways, 1 then 3. Vertically, 2 then -1.
+  - {id: addition_numbers_15, do: wait, duration: 4}
   - id: addition_numbers_16
     do: show
-    caption: 'Altogether: 4 across and 1 up.'
-    run_time: 1.5
     target: [e_eq2, e_res]
     style: write
-  - id: addition_numbers_17
-    do: show
     run_time: 1.5
-    target: s
-    style: grow
-  - id: addition_numbers_18
-    do: wait
-    duration: 2
+    caption: 'Altogether: 4 across and 1 up.'
+  - {id: addition_numbers_17, do: show, target: s, style: grow, run_time: 1.5}
+  - {id: addition_numbers_18, do: wait, duration: 2}
   - id: addition_numbers_19
     do: highlight
-    caption: So v + w has coordinates [4, 1].
-    run_time: 1.5
     target: e_res
-  - id: addition_numbers_20
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: So v + w has coordinates [4, 1].
+  - {id: addition_numbers_20, do: wait, duration: 3.5}
   - id: addition_numbers_21
     do: show
-    caption: In general, add the first entries, then add the second entries.
-    run_time: 2
     target: [gen_bg, gen]
     style: fade
-  - id: addition_numbers_22
-    do: wait
-    duration: 4
+    run_time: 2
+    caption: In general, add the first entries, then add the second entries.
+  - {id: addition_numbers_22, do: wait, duration: 4}
   - id: addition_numbers_23
     do: highlight
-    caption: The x-coordinates combine into the new x...
-    run_time: 1.5
     target: gen
     part: x_1 + x_2
     color: GREEN
-  - id: addition_numbers_24
-    do: wait
-    duration: 2
+    run_time: 1.5
+    caption: The x-coordinates combine into the new x...
+  - {id: addition_numbers_24, do: wait, duration: 2}
   - id: addition_numbers_25
     do: highlight
-    caption: '...and the y-coordinates into the new y.'
-    run_time: 1.5
     target: gen
     part: y_1 + y_2
     color: RED
-  - id: addition_numbers_26
-    do: wait
-    duration: 3
-  - id: addition_numbers_27
-    do: clear
     run_time: 1.5
+    caption: '...and the y-coordinates into the new y.'
+  - {id: addition_numbers_26, do: wait, duration: 3}
+  - {id: addition_numbers_27, do: clear, run_time: 1.5}
 - id: scaling
   title: Scaling, and what a scalar is
   objects:
-  - id: plane
-    type: number_plane
-    z: -1
+  - {id: plane, type: number_plane, z: -1}
   - id: v
     type: vector
-    color: YELLOW
     on: plane
     tip: [3, 1]
     label: \vec{\mathbf{v}}
     label_side: down
+    color: YELLOW
   - id: v2
     type: vector
-    color: YELLOW
-    z: 1
     on: plane
     tip: [6, 2]
     label: 2\vec{\mathbf{v}}
     label_side: up
-  - id: v3
-    type: vector
     color: YELLOW
     z: 1
+  - id: v3
+    type: vector
     on: plane
     tip: [1, 0.3333]
     label: \tfrac{1}{3}\vec{\mathbf{v}}
     label_side: up
-  - id: v4
-    type: vector
     color: YELLOW
     z: 1
+  - id: v4
+    type: vector
     on: plane
     tip: [-5.4, -1.8]
     label: -1.8\vec{\mathbf{v}}
     label_side: left
-  - id: scal_word
-    type: text
     color: YELLOW
-    z: 2
-    text: Scalars
-    font_size: 44
-  - id: s_2
-    type: tex
-    z: 2
-    tex: '2'
-    font_size: 44
-  - id: s_third
-    type: tex
-    z: 2
-    tex: \tfrac{1}{3}
-    font_size: 44
-  - id: s_neg
-    type: tex
-    z: 2
-    tex: '-1.8'
-    font_size: 44
-  - id: scal_nums
-    type: group
-    members: [s_2, s_third, s_neg]
-    arrange: row
-    buff: 0.7
+    z: 1
+  - {id: scal_word, type: text, text: Scalars, font_size: 44, color: YELLOW, z: 2}
+  - {id: s_2, type: tex, tex: '2', font_size: 44, z: 2}
+  - {id: s_third, type: tex, tex: '\tfrac{1}{3}', font_size: 44, z: 2}
+  - {id: s_neg, type: tex, tex: '-1.8', font_size: 44, z: 2}
+  - {id: scal_nums, type: group, members: [s_2, s_third, s_neg], arrange: row, buff: 0.7}
   - id: scal_all
     type: group
-    place:
-      at: [-4.6, 2.7]
     members: [scal_word, scal_nums]
     arrange: column
     buff: 0.3
-  - id: scal_bg
-    type: box
-    color: BLACK
-    z: 1
-    target: scal_all
-    fill_opacity: 0.85
-  - id: n_2
-    type: tex
-    z: 2
-    tex: 2 \cdot
-    font_size: 40
-  - id: n_v
-    type: matrix
-    z: 2
-    entries: [[3], [1]]
-    font_size: 36
-    row_colors: [GREEN, RED]
-  - id: n_eq
-    type: tex
-    z: 2
-    tex: '='
-    font_size: 40
-  - id: n_res
-    type: matrix
-    z: 2
-    entries: [[6], [2]]
-    font_size: 36
-    row_colors: [GREEN, RED]
+    place: [-4.6, 2.7]
+  - {id: scal_bg, type: box, target: scal_all, fill_opacity: 0.85, color: BLACK, z: 1}
+  - {id: n_2, type: tex, tex: 2 \cdot, font_size: 40, z: 2}
+  - {id: n_v, type: matrix, entries: [[3], [1]], font_size: 36, row_colors: [GREEN, RED], z: 2}
+  - {id: n_eq, type: tex, tex: '=', font_size: 40, z: 2}
+  - {id: n_res, type: matrix, entries: [[6], [2]], font_size: 36, row_colors: [GREEN, RED], z: 2}
   - id: n_row
     type: group
-    place:
-      edge: top_left
-      buff: 0.5
     members: [n_2, n_v, n_eq, n_res]
     arrange: row
     buff: 0.2
-  - id: n_bg
-    type: box
-    color: BLACK
-    z: 1
-    target: n_row
-    fill_opacity: 0.85
+    place: {edge: top_left, buff: 0.5}
+  - {id: n_bg, type: box, target: n_row, fill_opacity: 0.85, color: BLACK, z: 1}
   steps:
   - id: scaling_1
     do: show
-    caption: 'The second operation: multiplying a vector by a number.'
-    run_time: 2
     target: plane
     style: draw
-  - id: scaling_2
-    do: show
-    run_time: 1.5
-    target: v
-    style: grow
-  - id: scaling_3
-    do: wait
-    duration: 2
+    run_time: 2
+    caption: 'The second operation: multiplying a vector by a number.'
+  - {id: scaling_2, do: show, target: v, style: grow, run_time: 1.5}
+  - {id: scaling_3, do: wait, duration: 2}
   - id: scaling_4
     do: together
-    caption: Multiply by 2, and the arrow grows to twice its length.
     steps:
-    - id: scaling_5
-      do: transform
-      run_time: 2
-      target: v
-      into: v2
-      keep: true
-    - id: scaling_6
-      do: change
-      run_time: 2
-      target: v
-      set:
-        opacity: 0.35
-  - id: scaling_7
-    do: wait
-    duration: 4
+    - {id: scaling_5, do: transform, target: v, into: v2, keep: true, run_time: 2}
+    - {id: scaling_6, do: change, target: v, set: {opacity: 0.35}, run_time: 2}
+    caption: Multiply by 2, and the arrow grows to twice its length.
+  - {id: scaling_7, do: wait, duration: 4}
   - id: scaling_8
     do: together
     steps:
-    - id: scaling_9
-      do: hide
-      run_time: 1
-      target: v2
-      style: fade
-    - id: scaling_10
-      do: change
-      run_time: 1
-      target: v
-      set:
-        opacity: 1
+    - {id: scaling_9, do: hide, target: v2, style: fade, run_time: 1}
+    - {id: scaling_10, do: change, target: v, set: {opacity: 1}, run_time: 1}
   - id: scaling_11
     do: together
-    caption: Multiply by 1/3, and it shrinks to a third as long.
     steps:
-    - id: scaling_12
-      do: transform
-      run_time: 2
-      target: v
-      into: v3
-      keep: true
-    - id: scaling_13
-      do: change
-      run_time: 2
-      target: v
-      set:
-        opacity: 0.35
-  - id: scaling_14
-    do: wait
-    duration: 4
+    - {id: scaling_12, do: transform, target: v, into: v3, keep: true, run_time: 2}
+    - {id: scaling_13, do: change, target: v, set: {opacity: 0.35}, run_time: 2}
+    caption: Multiply by 1/3, and it shrinks to a third as long.
+  - {id: scaling_14, do: wait, duration: 4}
   - id: scaling_15
     do: together
     steps:
-    - id: scaling_16
-      do: hide
-      run_time: 1
-      target: v3
-      style: fade
-    - id: scaling_17
-      do: change
-      run_time: 1
-      target: v
-      set:
-        opacity: 1
+    - {id: scaling_16, do: hide, target: v3, style: fade, run_time: 1}
+    - {id: scaling_17, do: change, target: v, set: {opacity: 1}, run_time: 1}
   - id: scaling_18
     do: together
-    caption: 'Multiply by -1.8: it turns to face the other way...'
     steps:
-    - id: scaling_19
-      do: transform
-      run_time: 2.5
-      target: v
-      into: v4
-      keep: true
-    - id: scaling_20
-      do: change
-      run_time: 2.5
-      target: v
-      set:
-        opacity: 0.35
-  - id: scaling_21
-    do: wait
-    duration: 1.5
-  - id: scaling_22
-    do: wait
-    caption: '...and ends up 1.8 times as long.'
-    duration: 4
+    - {id: scaling_19, do: transform, target: v, into: v4, keep: true, run_time: 2.5}
+    - {id: scaling_20, do: change, target: v, set: {opacity: 0.35}, run_time: 2.5}
+    caption: 'Multiply by -1.8: it turns to face the other way...'
+  - {id: scaling_21, do: wait, duration: 1.5}
+  - {id: scaling_22, do: wait, duration: 4, caption: '...and ends up 1.8 times as long.'}
   - id: scaling_23
     do: show
-    caption: 'Stretching, shrinking, reversing: together, these are called scaling.'
-    run_time: 1.5
     target: [v2, v3]
     style: fade
-  - id: scaling_24
-    do: wait
-    duration: 4
+    run_time: 1.5
+    caption: 'Stretching, shrinking, reversing: together, these are called scaling.'
+  - {id: scaling_24, do: wait, duration: 4}
   - id: scaling_25
     do: show
-    caption: Numbers used this way, like 2, 1/3 and -1.8...
-    run_time: 2
     target: [scal_bg, scal_nums]
     style: fade
     lag: 0.3
-  - id: scaling_26
-    do: wait
-    duration: 2
+    run_time: 2
+    caption: Numbers used this way, like 2, 1/3 and -1.8...
+  - {id: scaling_26, do: wait, duration: 2}
   - id: scaling_27
     do: show
-    caption: '...go by the name scalars.'
-    run_time: 1.5
     target: scal_word
     style: write
-  - id: scaling_28
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: '...go by the name scalars.'
+  - {id: scaling_28, do: wait, duration: 3}
   - id: scaling_29
     do: highlight
-    caption: Scaling vectors is most of what numbers do in linear algebra...
-    run_time: 1.5
     target: scal_word
-  - id: scaling_30
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: Scaling vectors is most of what numbers do in linear algebra...
+  - {id: scaling_30, do: wait, duration: 3.5}
   - id: scaling_31
     do: wait
-    caption: '...so "scalar" ends up meaning much the same as "number".'
     duration: 4.5
+    caption: '...so "scalar" ends up meaning much the same as "number".'
   - id: scaling_32
     do: together
     steps:
     - id: scaling_33
       do: hide
-      run_time: 1.5
-      target:
-      - scal_bg
-      - scal_word
-      - scal_nums
-      - v3
-      - v4
+      target: [scal_bg, scal_word, scal_nums, v3, v4]
       style: fade
-    - id: scaling_34
-      do: change
       run_time: 1.5
-      target: v
-      set:
-        opacity: 1
+    - {id: scaling_34, do: change, target: v, set: {opacity: 1}, run_time: 1.5}
   - id: scaling_35
     do: show
-    caption: 'In coordinates: 2 times [3, 1] is [6, 2].'
-    run_time: 2
-    target:
-    - n_bg
-    - n_2
-    - n_v
-    - n_eq
-    - n_res
+    target: [n_bg, n_2, n_v, n_eq, n_res]
     style: fade
-  - id: scaling_36
-    do: wait
-    duration: 4
+    run_time: 2
+    caption: 'In coordinates: 2 times [3, 1] is [6, 2].'
+  - {id: scaling_36, do: wait, duration: 4}
   - id: scaling_37
     do: wait
-    caption: Every coordinate is multiplied by the same scalar.
     duration: 4
+    caption: Every coordinate is multiplied by the same scalar.
   - id: scaling_38
     do: together
-    caption: In general, 2 times [x, y] is [2x, 2y].
     steps:
-    - id: scaling_39
-      do: change
-      run_time: 2
-      target: n_v
-      set:
-        entries: [[x], [y]]
-    - id: scaling_40
-      do: change
-      run_time: 2
-      target: n_res
-      set:
-        entries: [[2x], [2y]]
-  - id: scaling_41
-    do: wait
-    duration: 4
-  - id: scaling_42
-    do: clear
-    caption: ''
-    run_time: 1.5
+    - {id: scaling_39, do: change, target: n_v, set: {entries: [[x], [y]]}, run_time: 2}
+    - {id: scaling_40, do: change, target: n_res, set: {entries: [[2x], [2y]]}, run_time: 2}
+    caption: In general, 2 times [x, y] is [2x, 2y].
+  - {id: scaling_41, do: wait, duration: 4}
+  - {id: scaling_42, do: clear, run_time: 1.5, caption: ''}
 - id: wrap_up
   title: Moving between the views, and what's next
   objects:
   - id: w_list
     type: matrix
-    place:
-      at: [-4.6, 0.4]
     entries: [[2], [1]]
     font_size: 48
     row_colors: [GREEN, RED]
-  - id: w_plane
-    type: number_plane
-    place:
-      at: [3.6, 0.4]
-    x_range: [-3, 3, 1]
-    y_range: [-2, 2, 1]
-  - id: w_vec
-    type: vector
-    color: YELLOW
-    on: w_plane
-    tip: [2, 1]
-  - id: to_pic
-    type: line
-    color: GREY_A
-    start: [-3.5, 1]
-    end: [-0.1, 1]
-    arrow: true
-  - id: to_num
-    type: line
-    color: GREY_A
-    start: [-0.1, -0.2]
-    end: [-3.5, -0.2]
-    arrow: true
+    place: [-4.6, 0.4]
+  - {id: w_plane, type: number_plane, x_range: [-3, 3, 1], y_range: [-2, 2, 1], place: [3.6, 0.4]}
+  - {id: w_vec, type: vector, on: w_plane, tip: [2, 1], color: YELLOW}
+  - {id: to_pic, type: line, start: [-3.5, 1], end: [-0.1, 1], arrow: true, color: GREY_A}
+  - {id: to_num, type: line, start: [-0.1, -0.2], end: [-3.5, -0.2], arrow: true, color: GREY_A}
   - id: lbl_data
     type: text
-    color: GREY_A
-    place:
-      next_to: to_pic
-      side: up
-      buff: 0.2
     text: data analysis
     font_size: 26
+    color: GREY_A
+    place: {next_to: to_pic, side: up, buff: 0.2}
   - id: lbl_phys
     type: text
-    color: GREY_A
-    place:
-      next_to: to_num
-      buff: 0.2
     text: physics, graphics
     font_size: 26
-  - id: d1
-    type: vector
-    color: WHITE
-    on: w_plane
-    tip: [0.6, 0.3]
-    thickness: 2
-  - id: d2
-    type: vector
-    color: WHITE
-    on: w_plane
-    tip: [1.1, 0.7]
-    thickness: 2
-  - id: d3
-    type: vector
-    color: WHITE
-    on: w_plane
-    tip: [1.5, 0.6]
-    thickness: 2
-  - id: d4
-    type: vector
-    color: WHITE
-    on: w_plane
-    tip: [2.4, 1.5]
-    thickness: 2
-  - id: d5
-    type: vector
-    color: WHITE
-    on: w_plane
-    tip: [2.7, 1.2]
-    thickness: 2
-  - id: data
-    type: group
-    members:
-    - d1
-    - d2
-    - d3
-    - d4
-    - d5
-  - id: next_title
-    type: text
-    place:
-      at: [0, 2.4]
-    text: Coming up next
-    font_size: 44
+    color: GREY_A
+    place: {next_to: to_num, buff: 0.2}
+  - {id: d1, type: vector, on: w_plane, tip: [0.6, 0.3], thickness: 2, color: WHITE}
+  - {id: d2, type: vector, on: w_plane, tip: [1.1, 0.7], thickness: 2, color: WHITE}
+  - {id: d3, type: vector, on: w_plane, tip: [1.5, 0.6], thickness: 2, color: WHITE}
+  - {id: d4, type: vector, on: w_plane, tip: [2.4, 1.5], thickness: 2, color: WHITE}
+  - {id: d5, type: vector, on: w_plane, tip: [2.7, 1.2], thickness: 2, color: WHITE}
+  - {id: data, type: group, members: [d1, d2, d3, d4, d5]}
+  - {id: next_title, type: text, text: Coming up next, font_size: 44, place: [0, 2.4]}
   - id: next_list
     type: bullets
-    place:
-      next_to: next_title
-      buff: 0.6
     items: [Linear combinations, Span, Basis vectors]
+    place: {next_to: next_title, buff: 0.6}
   - id: end_credit
     type: text
-    color: GREY_B
-    place:
-      at: [0, -2.3]
     text: Visuals recreated from 3Blue1Brown's Essence of linear algebra, chapter 1
     font_size: 24
+    color: GREY_B
+    place: [0, -2.3]
   steps:
   - id: wrap_up_1
     do: show
-    caption: So which view is the right one?
-    run_time: 1.5
     target: w_list
     style: write
-  - id: wrap_up_2
-    do: show
-    run_time: 2.5
-    target: [w_plane, w_vec]
-    style: draw
-    lag: 0.5
-  - id: wrap_up_3
-    do: wait
-    duration: 1.5
+    run_time: 1.5
+    caption: So which view is the right one?
+  - {id: wrap_up_2, do: show, target: [w_plane, w_vec], style: draw, lag: 0.5, run_time: 2.5}
+  - {id: wrap_up_3, do: wait, duration: 1.5}
   - id: wrap_up_4
     do: wait
-    caption: Neither. The payoff comes from switching between them freely.
     duration: 4.5
+    caption: Neither. The payoff comes from switching between them freely.
   - id: wrap_up_5
     do: show
-    caption: A data analyst can picture lists of numbers as arrows...
-    run_time: 1.5
     target: [to_pic, lbl_data]
     style: fade
-  - id: wrap_up_6
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: A data analyst can picture lists of numbers as arrows...
+  - {id: wrap_up_6, do: wait, duration: 3}
   - id: wrap_up_7
     do: show
-    caption: '...where a pattern hiding in many lists can jump out.'
-    run_time: 2.5
     target: data
     style: grow
     lag: 0.3
-  - id: wrap_up_8
-    do: wait
-    duration: 3.5
+    run_time: 2.5
+    caption: '...where a pattern hiding in many lists can jump out.'
+  - {id: wrap_up_8, do: wait, duration: 3.5}
   - id: wrap_up_9
     do: show
-    caption: Going the other way, physics and graphics describe space with numbers...
-    run_time: 1.5
     target: [to_num, lbl_phys]
     style: fade
-  - id: wrap_up_10
-    do: wait
-    duration: 3.5
+    run_time: 1.5
+    caption: Going the other way, physics and graphics describe space with numbers...
+  - {id: wrap_up_10, do: wait, duration: 3.5}
   - id: wrap_up_11
     do: highlight
-    caption: '...which a computer can then crunch.'
-    run_time: 1.5
     target: w_list
-  - id: wrap_up_12
-    do: wait
-    duration: 3
+    run_time: 1.5
+    caption: '...which a computer can then crunch.'
+  - {id: wrap_up_12, do: wait, duration: 3}
   - id: wrap_up_13
     do: highlight
-    caption: 'This very video was made that way: arrows, to numbers, to pixels.'
-    run_time: 1.5
     target: w_vec
-  - id: wrap_up_14
-    do: wait
-    duration: 4
-  - id: wrap_up_15
-    do: clear
     run_time: 1.5
+    caption: 'This very video was made that way: arrows, to numbers, to pixels.'
+  - {id: wrap_up_14, do: wait, duration: 4}
+  - {id: wrap_up_15, do: clear, run_time: 1.5}
   - id: wrap_up_16
     do: show
-    caption: 'Next, more about what adding and scaling can build:'
-    run_time: 1.5
     target: next_title
     style: write
-  - id: wrap_up_17
-    do: show
-    run_time: 2.5
-    target: next_list
-    style: fade
-    lag: 0.5
+    run_time: 1.5
+    caption: 'Next, more about what adding and scaling can build:'
+  - {id: wrap_up_17, do: show, target: next_list, style: fade, lag: 0.5, run_time: 2.5}
   - id: wrap_up_18
     do: wait
+    duration: 4.5
     caption: linear combinations, span, and basis vectors.
-    duration: 4.5
-  - id: wrap_up_19
-    do: show
-    caption: ''
-    run_time: 1.5
-    target: end_credit
-    style: fade
-  - id: wrap_up_20
-    do: wait
-    duration: 4.5
-  - id: wrap_up_21
-    do: clear
-    run_time: 2
+  - {id: wrap_up_19, do: show, target: end_credit, style: fade, run_time: 1.5, caption: ''}
+  - {id: wrap_up_20, do: wait, duration: 4.5}
+  - {id: wrap_up_21, do: clear, run_time: 2}
