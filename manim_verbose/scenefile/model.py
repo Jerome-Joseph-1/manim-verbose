@@ -48,10 +48,25 @@ def _widget(name: str, **extra: Any) -> dict[str, Any]:
     return {"x-widget": name, **extra}
 
 
+MAX_RANGE_STEPS = 500
+
+
+def check_range(value: list[float]) -> list[float]:
+    """A range has to be drawable: low to high, in steps which are positive and not too many."""
+    if len(value) >= 2 and not value[0] < value[1]:
+        raise ValueError("A range goes from the smaller number to the larger, as in [-5, 5]")
+    if len(value) == 3:
+        if not value[2] > 0:
+            raise ValueError("The step of a range has to be more than 0, as in [-5, 5, 1]")
+        if (value[1] - value[0]) / value[2] > MAX_RANGE_STEPS:
+            raise ValueError(f"That range has more than {MAX_RANGE_STEPS} steps: make the step larger")
+    return value
+
+
 Id = Annotated[str, Field(pattern=ID_PATTERN, max_length=64)]
 Point = Annotated[list[float], Field(min_length=2, max_length=3, json_schema_extra=_widget("point"))]
 Point2 = Annotated[list[float], Field(min_length=2, max_length=2, json_schema_extra=_widget("point"))]
-Range = Annotated[list[float], Field(min_length=2, max_length=3, json_schema_extra=_widget("range"))]
+Range = Annotated[list[float], AfterValidator(check_range), Field(min_length=2, max_length=3, json_schema_extra=_widget("range"))]
 TexString = Annotated[str, Field(json_schema_extra=_widget("tex"))]
 MultilineString = Annotated[str, Field(json_schema_extra=_widget("multiline"))]
 
@@ -102,7 +117,8 @@ Color = Annotated[str, AfterValidator(check_color), Field(json_schema_extra=_wid
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # nan and inf aren't positions or sizes anything can be drawn at
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 # Placement
