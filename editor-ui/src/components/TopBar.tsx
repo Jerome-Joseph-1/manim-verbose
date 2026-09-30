@@ -144,7 +144,13 @@ export function ConflictBanner() {
         <strong>The file was changed somewhere else</strong> (in another tab, or on disk) since you opened it. Which version do you want to keep?
       </span>
       <div className="actions">
-        <button type="button" className="btn btn-sm" onClick={() => autosaver()?.takeTheirs()}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={conflict.document === null}
+          title={conflict.document === null ? "The other version can't be read as a scene file" : undefined}
+          onClick={() => autosaver()?.takeTheirs()}
+        >
           Load their version
         </button>
         <button type="button" className="btn btn-sm btn-primary" onClick={() => void autosaver()?.keepMine()}>

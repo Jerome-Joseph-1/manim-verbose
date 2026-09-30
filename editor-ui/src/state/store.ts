@@ -74,7 +74,8 @@ export interface EditorState {
   saveProblems: Problem[];
   /** Problems from the last render of each scene, such as LaTeX which didn't compile. */
   renderProblems: Record<string, Problem[]>;
-  conflict: { document: Document; revision: number } | null;
+  /** The other version after a 409; its document is null when the file can't be read. */
+  conflict: { document: Document | null; revision: number } | null;
   timelines: Record<string, Timeline>;
   /** The objects in the still showing now, for hit testing and the "not on screen" hints. */
   still: StillInfo | null;

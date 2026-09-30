@@ -115,12 +115,18 @@ textarea {
 /* App frame */
 
 .app {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 
+.app > .topbar,
+.app > .banner {
+  flex: none;
+}
+
 .workspace {
+  flex: 1;
   display: grid;
   grid-template-columns: 300px minmax(380px, 1fr) 360px;
   min-height: 0;
@@ -502,9 +508,13 @@ textarea {
   opacity: 0;
 }
 
+.row .row-actions {
+  display: none;
+}
+
 .row:hover .row-actions,
-.row:focus-within .row-actions,
-.row.selected .row-actions {
+.row:focus-within .row-actions {
+  display: flex;
   opacity: 1;
 }
 
@@ -572,9 +582,11 @@ textarea {
 
 .step-card {
   display: grid;
-  grid-template-columns: 22px 1fr auto;
-  gap: 2px 8px;
-  padding: 7px 6px 7px 6px;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 6px 6px;
+  min-height: 36px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--panel-2);
@@ -603,12 +615,11 @@ textarea {
 }
 
 .step-index {
-  grid-row: span 2;
-  align-self: start;
+  grid-column: 1;
+  grid-row: 1;
   font-size: 12px;
   color: var(--text-faint);
   text-align: right;
-  padding-top: 2px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -634,8 +645,14 @@ textarea {
   white-space: nowrap;
 }
 
-.step-meta {
+.step-title {
   grid-column: 2;
+  grid-row: 1;
+}
+
+.step-meta {
+  grid-column: 2 / span 2;
+  grid-row: 2;
   display: flex;
   gap: 8px;
   font-size: 12px;
@@ -653,24 +670,25 @@ textarea {
 }
 
 .step-duration {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: 12px;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  flex: none;
 }
 
 .step-actions {
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 1 / span 2;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 0;
-  opacity: 0;
 }
 
 .step-card:hover .step-actions,
-.step-card:focus-within .step-actions,
-.step-card.selected .step-actions {
-  opacity: 1;
+.step-card:focus-within .step-actions {
+  display: flex;
 }
 
 .drag-handle {

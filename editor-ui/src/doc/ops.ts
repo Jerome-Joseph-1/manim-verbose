@@ -165,7 +165,7 @@ export function duplicateScene(doc: Document, sceneId: string) {
   const taken = stepIds(doc);
   for (const step of copy.steps ?? []) reassignStepIds(step, id, taken);
   const next = produce(doc, (draft) => {
-    draft.scenes.splice(index + 1, 0, ordered(copy, ['id']) as Draft<Scene>);
+    draft.scenes.splice(index + 1, 0, copy as Draft<Scene>);
   });
   return { doc: next, sceneId: id };
 }

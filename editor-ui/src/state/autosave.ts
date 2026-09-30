@@ -111,10 +111,11 @@ export class Autosaver {
     } catch (error) {
       if (!(error instanceof ApiError)) throw error;
       if (error.status === 409) {
-        const body = error.body as { document?: Document; revision?: number } | null;
+        // Their document is null when the file on disk can't be read any more
+        const body = error.body as { document?: Document | null; revision?: number } | null;
         useEditor.setState({
           saveState: 'conflict',
-          conflict: { document: body?.document ?? doc, revision: body?.revision ?? baseRevision },
+          conflict: { document: body?.document ?? null, revision: body?.revision ?? baseRevision },
         });
       } else if (error.status === 422) {
         useEditor.setState({
@@ -145,7 +146,7 @@ export class Autosaver {
   /** After a conflict: load the other version (this is undoable). */
   takeTheirs(): void {
     const { conflict } = useEditor.getState();
-    if (!conflict) return;
+    if (!conflict?.document) return;
     adoptServerDocument(conflict.document, conflict.revision);
     const scene = currentSceneId();
     if (scene) void this.refreshTimeline(scene);

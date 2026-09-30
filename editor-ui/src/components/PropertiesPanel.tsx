@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { DocOpError, findObject, findScene, findStep, renameItem, setItemField, type ItemRef } from '../doc/ops';
 import { formatLoc } from '../doc/paths';
 import { onScreenAfter } from '../doc/screen';
-import type { Document, Json, Problem, Scene } from '../doc/types';
+import { fieldOf, type Document, type Json, type Problem, type Scene } from '../doc/types';
 import {
   documentFields, objectFields, objectKind, sceneFields, stepFields, stepKind, type FieldGroup, type FieldSpec, type SchemaIndex,
 } from '../lib/schema';
@@ -21,7 +21,7 @@ import { Field, FieldProblems } from './form/Field';
 import { Icon, categoryIcon, stepIcon } from './Icon';
 
 const GROUP_TITLES: Record<FieldGroup, string> = {
-  identity: 'Name',
+  identity: '',
   main: '',
   caption: 'Caption',
   position: 'Position and size',
@@ -101,28 +101,22 @@ export function PropertiesPanel() {
   const body = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!focusRequest || !body.current) return;
-    const key = formatLoc(focusRequest.field);
+    if (!focusRequest || !body.current) return undefined;
     const root = body.current;
-    // The deepest input for the field, else the closest enclosing one
-    requestAnimationFrame(() => {
-      let loc = focusRequest.field;
-      let target: HTMLElement | null = null;
-      while (!target) {
-        const k = formatLoc(loc);
-        target = k ? root.querySelector<HTMLElement>(`[data-field="${CSS.escape(k)}"]`) : null;
-        if (!target && loc.length === 0) break;
-        loc = loc.slice(0, -1);
+    // The input for the field itself, else for the closest field enclosing it
+    const frame = requestAnimationFrame(() => {
+      for (let loc = focusRequest.field; loc.length > 0; loc = loc.slice(0, -1)) {
+        const key = formatLoc(loc).replace(/["\\]/g, '\\$&');
+        const target = root.querySelector<HTMLElement>(`[data-field="${key}"]`);
+        const focusable = target && (target.matches('input, select, textarea, button') ? target : target.querySelector<HTMLElement>('input, select, textarea, button'));
+        if (focusable) {
+          focusable.scrollIntoView({ block: 'center' });
+          focusable.focus();
+          return;
+        }
       }
-      const focusable = target && (target.matches('input, select, textarea, button') ? target : target.querySelector<HTMLElement>('input, select, textarea, button'));
-      if (focusable) {
-        focusable.scrollIntoView({ block: 'center' });
-        focusable.focus();
-      } else {
-        root.scrollTop = 0;
-      }
-      void key;
     });
+    return () => cancelAnimationFrame(frame);
   }, [focusRequest]);
 
   if (!doc || !schema) return <aside className="properties" aria-label="Properties" />;
@@ -294,7 +288,7 @@ function SceneProperties({ doc, schema, scene, problems }: { doc: Document; sche
       <div className="props-body" data-item-kind="scene" data-item-id={scene.id}>
         <FieldProblems problems={own} />
         {sceneFields(schema).map((f) => (
-          <Field key={f.name} spec={f} path={[f.name]} value={scene[f.name]} />
+          <Field key={f.name} spec={f} path={[f.name]} value={fieldOf(scene, f.name)} />
         ))}
       </div>
     </FormContext.Provider>
@@ -308,7 +302,7 @@ function DocumentProperties({ doc, schema, problems }: { doc: Document; schema: 
       <ItemHeader icon="settings" title="Video settings" description="Settings for the whole video: its title, size, frame rate, background and captions." />
       <div className="props-body" data-item-kind="document">
         {documentFields(schema).map((f) => (
-          <Field key={f.name} spec={f} path={[f.name]} value={doc[f.name]} />
+          <Field key={f.name} spec={f} path={[f.name]} value={fieldOf(doc, f.name)} />
         ))}
       </div>
     </FormContext.Provider>

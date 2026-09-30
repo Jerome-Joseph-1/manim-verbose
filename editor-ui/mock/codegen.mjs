@@ -140,30 +140,31 @@ export function documentCode(doc, sceneId) {
   return `${lines.join('\n')}\n`;
 }
 
+// The same templates as manim_verbose/editor/catalog.py: no ids, and references left as ""
 const OBJECT_TEMPLATES = {
-  text: { text: 'Hello' },
+  text: { text: 'Some text' },
   tex: { tex: 'e^{i\\pi} + 1 = 0' },
   title: { text: 'A title' },
-  quote: { text: 'Mathematics is the art of giving the same name to different things.', author: 'Henri Poincaré' },
-  bullets: { items: ['First point', 'Second point'] },
+  quote: { text: 'Imagination is more important than knowledge.', author: 'Albert Einstein' },
+  bullets: { items: ['The first point', 'The second point'] },
   matrix: { entries: [[1, 0], [0, 1]] },
   number_plane: {},
   axes: {},
   axes_3d: {},
   number_line: {},
   graph: { on: '', function: 'sin(x)' },
-  dot: { point: [0, 0] },
+  dot: { point: [1, 1] },
   vector: { tip: [2, 1] },
   line: { start: [-2, 0], end: [2, 0] },
   polygon: { points: [[-1, -1], [1, -1], [0, 1]] },
   circle: { radius: 1 },
   rectangle: { width: 3, height: 2 },
   square: { side: 2 },
-  brace: { target: '' },
+  brace: { target: '', side: 'down' },
   box: { target: '' },
   image: { path: 'picture.png' },
   svg: { path: 'drawing.svg' },
-  group: { members: [] },
+  group: { members: ['', ''], arrange: 'row' },
 };
 
 const STEP_TEMPLATES = {
@@ -182,29 +183,39 @@ const STEP_TEMPLATES = {
   together: { steps: [{ do: 'show', target: '' }, { do: 'show', target: '' }] },
 };
 
-function firstParagraph(text) {
-  return String(text ?? '').split(/\n\s*\n/)[0].replace(/\s*\n\s*/g, ' ').trim();
+/** A docstring as prose: lines joined within a paragraph, paragraphs kept apart. */
+function describe(text) {
+  return String(text ?? '')
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s*\n\s*/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** Kinds in the order of the schema's union, as the real catalog lists them. */
+function kinds(container, defs) {
+  return container.items.oneOf.map((v) => defs[v.$ref.replace('#/$defs/', '')]);
 }
 
 export function catalog(schema) {
   const defs = schema.$defs;
   const scene = defs.SceneSpec.properties;
-  const objects = Object.entries(scene.objects.items.discriminator.mapping).map(([type, ref]) => {
-    const def = defs[ref.replace('#/$defs/', '')];
+  const objects = kinds(scene.objects, defs).map((def) => {
+    const type = def.properties.type.const;
     return {
       type,
       label: def['x-label'] ?? type,
       category: def['x-category'] ?? 'Other',
-      description: firstParagraph(def.description),
+      description: describe(def.description),
       template: { type, ...(OBJECT_TEMPLATES[type] ?? {}) },
     };
   });
-  const steps = Object.entries(scene.steps.items.discriminator.mapping).map(([name, ref]) => {
-    const def = defs[ref.replace('#/$defs/', '')];
+  const steps = kinds(scene.steps, defs).map((def) => {
+    const name = def.properties.do.const;
     return {
       do: name,
       label: def['x-label'] ?? name,
-      description: firstParagraph(def.description),
+      description: describe(def.description),
       template: { do: name, ...(STEP_TEMPLATES[name] ?? {}) },
     };
   });

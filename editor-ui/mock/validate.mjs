@@ -2,7 +2,6 @@
 // a document against it, then makes the whole document checks the models can't, wording
 // problems the way the real validator does. Good enough to exercise the editor.
 
-const ID_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 export const COLOR_NAMES = new Set([
   ...['BLUE', 'TEAL', 'GREEN', 'YELLOW', 'GOLD', 'RED', 'MAROON', 'PURPLE', 'GREY', 'GRAY'].flatMap((c) => [c, ...'ABCDE'.split('').map((l) => `${c}_${l}`)]),

@@ -173,6 +173,10 @@ export function Field({ spec, path, value, selfId, currentCentre }: FieldProps) 
   );
 }
 
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
 /** The item's name: renamed on Enter or leaving the field, with every reference updated. */
 function IdField({ spec, value, inputId, dataField, problems, helpId, problemsId }: { spec: FieldSpec; value: Json | undefined; inputId: string; dataField: string; problems: Problem[]; helpId: string; problemsId: string }) {
   const ctx = useForm();
@@ -222,7 +226,7 @@ function IdField({ spec, value, inputId, dataField, problems, helpId, problemsId
       />
       {error ? <div className="local-error" role="alert">{error}</div> : null}
       <p className="field-help" id={helpId}>
-        {spec.description ?? 'Other parts of the video refer to it by this name.'} Renaming updates every use.
+        {sentence(spec.description ?? 'Other parts of the video refer to it by this name')} Renaming updates every use.
       </p>
       <FieldProblems problems={problems} id={problemsId} />
     </div>

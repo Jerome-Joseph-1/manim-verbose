@@ -1,56 +1,21 @@
-// Documents the mock server can start from. `demo` is a small populated lesson; `empty` is
-// what a brand new file looks like; `eola` is the ten minute example video
-// (examples/eola_vectors/vectors.yaml, converted by scripts/convert_fixture.py), for
-// checking the editor stays quick with a big document.
+// Documents the mock server can start from, each a JSON file in fixtures/ (the end to end
+// tests load the same files into the real server):
+//   demo    a small lesson in two scenes (the default)
+//   empty   what a brand new file looks like
+//   eola    the ten minute example video (examples/eola_vectors/vectors.yaml, converted by
+//           scripts/convert_fixture.py), for checking the editor stays quick with a big one
+//   broken  a file which can't be read at all (GET /api/document gives document: null)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const load = (name) => () => JSON.parse(fs.readFileSync(path.join(here, 'fixtures', `${name}.json`), 'utf8'));
 
 export const FIXTURES = {
-  empty: () => ({
-    version: 1,
-    title: 'Untitled',
-    scenes: [{ id: 'scene_1' }],
-  }),
-
-  demo: () => ({
-    version: 1,
-    title: 'Pythagoras',
-    scenes: [
-      {
-        id: 'intro',
-        title: 'The theorem',
-        objects: [
-          { id: 'title', type: 'title', text: 'Pythagoras' },
-          { id: 'tri', type: 'polygon', points: [[-2, -1.5], [1, -1.5], [1, 0.5]], color: 'BLUE' },
-          { id: 'eq', type: 'tex', tex: 'a^2 + b^2 = c^2', place: { at: [3.5, -1] } },
-          { id: 'note', type: 'text', text: 'For right triangles', font_size: 32, place: { next_to: 'eq', side: 'down' } },
-        ],
-        steps: [
-          { id: 'intro_1', do: 'show', target: 'title' },
-          { id: 'intro_2', do: 'show', target: 'tri', caption: 'Take a right triangle' },
-          { id: 'intro_3', do: 'show', target: ['eq', 'note'], caption: 'The oldest theorem you know' },
-          { id: 'intro_4', do: 'highlight', target: 'eq', part: 'c^2' },
-        ],
-      },
-      {
-        id: 'proof',
-        title: 'A proof',
-        objects: [
-          { id: 'square', type: 'square', side: 3, color: 'YELLOW', fill_opacity: 0.2 },
-          { id: 'label', type: 'tex', tex: 'c^2', place: { next_to: 'square', side: 'right' } },
-        ],
-        steps: [
-          { id: 'proof_1', do: 'show', target: 'square' },
-          { id: 'proof_2', do: 'show', target: 'label' },
-        ],
-      },
-    ],
-  }),
-
-  eola: () => JSON.parse(fs.readFileSync(path.join(here, 'fixtures/eola_vectors.json'), 'utf8')),
+  empty: () => ({ version: 1, title: 'Untitled', scenes: [{ id: 'scene_1' }] }),
+  demo: load('demo'),
+  eola: load('eola_vectors'),
 };
 
 export const DEFAULT_FIXTURE = 'demo';

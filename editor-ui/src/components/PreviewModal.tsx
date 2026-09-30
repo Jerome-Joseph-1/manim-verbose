@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { api, ApiError, isAbortError } from '../lib/api';
-import { relocateProblems, sceneOnly } from '../lib/render';
 import { findScene } from '../doc/ops';
 import type { Problem } from '../doc/types';
 import { currentDoc, useEditor } from '../state/store';
@@ -47,7 +46,7 @@ function Preview({ request }: { request: PreviewRequest }) {
     if (!document) return undefined;
     const abort = new AbortController();
     api
-      .clip({ document: sceneOnly(document, request.sceneId), scene_id: request.sceneId, start_step: request.start, end_step: request.end }, abort.signal)
+      .clip({ document, scene_id: request.sceneId, start_step: request.start, end_step: request.end }, abort.signal)
       .then((r) => setState({ phase: 'ready', url: r.video_url }))
       .catch((error: unknown) => {
         if (isAbortError(error)) return;
@@ -55,7 +54,7 @@ function Preview({ request }: { request: PreviewRequest }) {
           setState({
             phase: 'failed',
             message: error.status === 422 ? "The preview couldn't be made, because of these problems:" : error.message,
-            problems: relocateProblems(error.problems, document, request.sceneId),
+            problems: error.problems,
           });
         } else {
           setState({ phase: 'failed', message: 'The preview failed.', problems: [] });

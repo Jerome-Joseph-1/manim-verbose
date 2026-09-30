@@ -135,13 +135,18 @@ export function deref(index: Pick<SchemaIndex, 'defs'>, schema: JsonSchema): Jso
   return node;
 }
 
+/** The kinds of a tagged union, in the order the schema lists them (as the catalog does). */
 function kindsFrom(defs: Record<string, JsonSchema>, container: JsonSchema | undefined, tag: string): KindInfo[] {
   const mapping = container?.items?.discriminator?.mapping ?? {};
-  return Object.entries(mapping).map(([name, ref]) => {
-    const def = defs[defName(ref)] ?? {};
+  const byRef = new Map(Object.entries(mapping).map(([name, ref]) => [defName(ref), name]));
+  const ordered = (container?.items?.oneOf ?? []).map((v) => defName(v.$ref ?? '')).filter((d) => byRef.has(d));
+  const refs = ordered.length === byRef.size ? ordered : [...byRef.keys()];
+  return refs.map((ref) => {
+    const name = byRef.get(ref)!;
+    const def = defs[ref] ?? {};
     return {
       name,
-      defName: defName(ref),
+      defName: ref,
       label: typeof def['x-label'] === 'string' ? def['x-label'] : humanize(name),
       category: typeof def['x-category'] === 'string' ? def['x-category'] : tag,
       description: firstParagraph(def.description ?? ''),
@@ -243,7 +248,7 @@ function groupFor(name: string, owner: 'object' | 'step' | 'other'): FieldGroup 
   if (name === 'id') return 'identity';
   if (owner === 'object') {
     if (['place', 'scale', 'rotate'].includes(name)) return 'position';
-    if (['color', 'opacity', 'z', 'shown'].includes(name)) return 'style';
+    if (['color', 'opacity', 'z', 'shown', 'fixed', 'backdrop'].includes(name)) return 'style';
   }
   if (owner === 'step') {
     if (name === 'caption') return 'caption';
@@ -422,6 +427,23 @@ function pick(schema: JsonSchema, keys: string[]): Partial<JsonSchema> {
 
 const HIDDEN = new Set(['type', 'do', 'version']);
 
+/**
+ * Defaults the models make with `default_factory`, which pydantic leaves out of the json
+ * schema (see model.py). Shown as what a field is when left out.
+ */
+const FACTORY_DEFAULTS: Record<string, Json> = {
+  'NumberPlaneObject.x_range': [-8, 8, 1],
+  'NumberPlaneObject.y_range': [-4, 4, 1],
+  'AxesObject.x_range': [-6, 6, 1],
+  'AxesObject.y_range': [-3, 3, 1],
+  'Axes3DObject.x_range': [-5, 5, 1],
+  'Axes3DObject.y_range': [-5, 5, 1],
+  'Axes3DObject.z_range': [-3, 3, 1],
+  'NumberLineObject.x_range': [-5, 5, 1],
+  'VectorObject.tail': [0, 0],
+  'Settings.resolution': [1920, 1080],
+};
+
 const GROUP_ORDER: FieldGroup[] = ['identity', 'main', 'caption', 'position', 'style', 'timing'];
 
 /** The fields of a model, in the order the panel shows them. */
@@ -429,7 +451,12 @@ export function fieldsOf(index: SchemaIndex, model: JsonSchema, owner: 'object' 
   const required = new Set(model.required ?? []);
   const fields = Object.entries(model.properties ?? {})
     .filter(([name]) => !HIDDEN.has(name))
-    .map(([name, prop]) => fieldSpec(index, name, prop, required.has(name), owner));
+    .map(([name, prop]) => {
+      const spec = fieldSpec(index, name, prop, required.has(name), owner);
+      const factory = FACTORY_DEFAULTS[`${model.title ?? ''}.${name}`];
+      if (spec.default === undefined && factory !== undefined) spec.default = factory;
+      return spec;
+    });
   // Stable sort by group keeps the schema's order within each group
   return fields
     .map((f, i) => ({ f, i }))

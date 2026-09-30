@@ -16,6 +16,8 @@ export type Side = 'up' | 'down' | 'left' | 'right';
 
 export interface Placement {
   at?: number[] | null;
+  /** A coordinate system `at` is given in; frame units when left out. */
+  on?: string | null;
   edge?: Edge | null;
   next_to?: string | null;
   side?: Side;
@@ -42,7 +44,6 @@ export interface Scene {
   background?: string | null;
   objects?: SceneObject[];
   steps?: Step[];
-  [field: string]: Json | undefined;
 }
 
 export interface Document {
@@ -50,7 +51,11 @@ export interface Document {
   title?: string;
   settings?: JsonObject;
   scenes: Scene[];
-  [field: string]: Json | undefined;
+}
+
+/** Any field of a scene or document by name, for the generic form code. */
+export function fieldOf(item: Scene | Document, name: string): Json | undefined {
+  return (item as unknown as Record<string, Json | undefined>)[name];
 }
 
 /** A path into the document as data, as in a problem's `loc`. */

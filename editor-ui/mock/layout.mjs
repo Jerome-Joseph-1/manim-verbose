@@ -336,8 +336,16 @@ function escapeXml(text) {
 
 function shortLabel(obj) {
   const content = obj.text ?? obj.tex ?? (Array.isArray(obj.items) ? obj.items[0] : null) ?? obj.function ?? obj.path ?? null;
-  const text = content ? `${obj.id}: ${String(content).split('\n')[0]}` : `${obj.id} (${obj.type.replace(/_/g, ' ')})`;
+  const text = content ? String(content).split('\n')[0] : `${obj.id} (${obj.type.replace(/_/g, ' ')})`;
   return text.length > 42 ? `${text.slice(0, 40)}…` : text;
+}
+
+/** A label centred in a box, squeezed to fit its width when it would overflow. */
+function fittedText(label, x, y, w, h, color, opacity) {
+  const fontPx = Math.max(9, Math.min(28, h * 0.55));
+  const natural = label.length * fontPx * 0.56;
+  const fit = natural > w * 0.92 ? ` textLength="${(w * 0.92).toFixed(1)}" lengthAdjust="spacingAndGlyphs"` : '';
+  return `<text x="${x}" y="${y}" fill="${color}" font-family="DejaVu Sans, Arial, sans-serif" font-size="${fontPx.toFixed(1)}" text-anchor="middle" dominant-baseline="central" opacity="${opacity}"${fit}>${escapeXml(label)}</text>`;
 }
 
 /**
@@ -416,8 +424,7 @@ export function renderStill(doc, scene, stepIndex, width) {
     } else {
       const rx = obj.type === 'rectangle' || obj.type === 'square' || obj.type === 'box' ? 2 : 8;
       parts.push(`<rect x="${px0}" y="${py0}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" fill-opacity="${obj.type === 'box' ? 0 : fillOpacity}" stroke="${color}" stroke-width="${obj.type === 'text' || obj.type === 'tex' || obj.type === 'title' ? 1.5 : 3}" stroke-dasharray="${obj.type === 'brace' ? '6 4' : ''}" opacity="${opacity}"/>`);
-      const fontPx = Math.max(10, Math.min(28, h * 0.45));
-      parts.push(`<text x="${(px0 + px1) / 2}" y="${(py0 + py1) / 2}" fill="${color}" font-family="DejaVu Sans, Arial, sans-serif" font-size="${fontPx}" text-anchor="middle" dominant-baseline="central" opacity="${opacity}">${escapeXml(shortLabel(obj))}</text>`);
+      parts.push(fittedText(shortLabel(obj), (px0 + px1) / 2, (py0 + py1) / 2, w, h, color, opacity));
     }
   }
   if (state.caption) {

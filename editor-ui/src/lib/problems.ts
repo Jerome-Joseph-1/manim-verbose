@@ -133,6 +133,18 @@ function compareLoc(a: Loc, b: Loc): number {
   return a.length - b.length;
 }
 
+/** Fields of a request (not of the document), which problems about the request name. */
+const REQUEST_FIELDS = new Set(['document', 'scene_id', 'step_index', 'width', 'start_step', 'end_step', 'quality', 'base_revision']);
+
+/**
+ * A problem with a request rather than with the document in it (an unknown scene, a step
+ * index out of range): not something to show beside a field.
+ */
+export function isRequestProblem(problem: Problem): boolean {
+  const first = problem.loc?.[0];
+  return typeof first === 'string' && REQUEST_FIELDS.has(first);
+}
+
 /** The data-field attribute value an input for this field carries, for focusing it. */
 export function fieldKey(field: Loc): string {
   return formatLoc(field);

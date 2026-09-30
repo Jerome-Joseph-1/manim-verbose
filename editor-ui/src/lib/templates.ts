@@ -27,21 +27,33 @@ function objectsOfTypes(scene: Scene, types: string[] | null | undefined, exclud
   return (scene.objects ?? []).filter((o) => o.id !== exclude && (!types || types.includes(o.type))).map((o) => o.id);
 }
 
-/** Fill a new object's empty references from what is in the scene. */
+/**
+ * Fill a new object's empty references ("" in the catalog's templates) from what is in the
+ * scene: the selected object if it is of a kind that fits, else the latest one that does.
+ * A list of references ("members": ["", ""]) gets as many different objects as it has
+ * places, as far as the scene has them; places left over are dropped.
+ */
 export function fillObjectTemplate(schema: SchemaIndex, template: Template, ctx: AddContext): Template {
   const out: Template = structuredClone(template);
   const type = String(out.type);
   const selected = ctx.selectedObjectId;
   for (const field of objectFields(schema, type)) {
-    if (!field.required || !isEmptyRef(out[field.name])) continue;
-    if (field.kind === 'object-ref') {
+    const value = out[field.name];
+    if (field.kind === 'object-ref' && (value === '' || (field.required && value === undefined))) {
       const candidates = objectsOfTypes(ctx.scene, field.refTypes);
       const pick = selected && candidates.includes(selected) ? selected : candidates.at(-1);
       if (pick) out[field.name] = pick;
-    } else if (field.kind === 'ref-list') {
+      else if (!field.required) delete out[field.name];
+    } else if (field.kind === 'ref-list' && (Array.isArray(value) || (field.required && value === undefined))) {
+      const list = Array.isArray(value) ? value : [''];
       const candidates = objectsOfTypes(ctx.scene, field.refTypes);
-      const pick = selected && candidates.includes(selected) ? selected : candidates[0];
-      if (pick) out[field.name] = [pick];
+      const ordered = selected && candidates.includes(selected) ? [selected, ...candidates.filter((c) => c !== selected)] : candidates;
+      const taken = new Set(list.filter((v): v is string => typeof v === 'string' && v !== ''));
+      const free = ordered.filter((c) => !taken.has(c));
+      const filled = list
+        .map((v) => (v === '' ? (free.shift() ?? null) : v))
+        .filter((v): v is Json => v !== null);
+      out[field.name] = filled;
     }
   }
   return out;

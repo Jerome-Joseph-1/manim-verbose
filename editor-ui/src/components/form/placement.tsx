@@ -63,7 +63,7 @@ export function PlacementWidget({
     if (next === 'edge') return write({ ...keep, edge: 'top', ...(buff !== undefined ? { buff } : {}) });
     if (next === 'next_to') {
       const first = refOptions(schema, scene, null, selfId)[0];
-      return write({ ...keep, next_to: first?.id ?? '', side: 'down', ...(buff !== undefined ? { buff } : {}) });
+      return write({ ...keep, next_to: first?.id ?? '', ...(buff !== undefined ? { buff } : {}) });
     }
     const at = currentCentre ? [Math.round(currentCentre[0] * 100) / 100, Math.round(currentCentre[1] * 100) / 100] : [0, 0];
     return write({ at });

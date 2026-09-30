@@ -112,7 +112,7 @@ function SceneRow({ scene, index, count, current, selected, duration }: { scene:
       style={style}
       className={`row${current ? ' selected' : ''}${sortable.isDragging ? ' dragging' : ''}`}
       data-scene-id={scene.id}
-      onPointerDown={sortable.listeners?.onPointerDown}
+      onPointerDown={sortable.listeners?.onPointerDown as React.PointerEventHandler | undefined}
     >
       <button
         type="button"
@@ -134,7 +134,7 @@ function SceneRow({ scene, index, count, current, selected, duration }: { scene:
         {duration !== undefined ? <span className="row-sub">{formatDuration(duration)}</span> : null}
       </button>
       <div className="row-actions">
-        <button type="button" className="icon-btn drag-handle" aria-label={`Reorder scene ${scene.title || scene.id}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown}>
+        <button type="button" className="icon-btn drag-handle" aria-label={`Reorder scene ${scene.title || scene.id}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown as React.KeyboardEventHandler | undefined}>
           <Icon name="grip" />
         </button>
         <button type="button" className="icon-btn" aria-label={`Rename scene ${scene.title || scene.id}`} title="Rename" onClick={() => requestFocus({ kind: 'scene', sceneId: scene.id }, ['title'])}>
@@ -321,7 +321,7 @@ const StepCard = memo(function StepCard({
       data-step-id={step.id ?? undefined}
       data-testid="step-card"
       onClick={selectMe}
-      onPointerDown={sortable.listeners?.onPointerDown}
+      onPointerDown={sortable.listeners?.onPointerDown as React.PointerEventHandler | undefined}
     >
       <span className="step-index" aria-hidden="true">
         {index + 1}
@@ -354,12 +354,16 @@ const StepCard = memo(function StepCard({
         <span className="targets">{summary}</span>
         {severity ? <span className={`problem-dot ${severity}`} title={severity === 'error' ? 'Has a problem' : 'Has a warning'} /> : null}
       </button>
-      <span className="step-meta">
-        {caption !== null ? <span className="step-caption">“{caption || 'clears the caption'}”</span> : <span />}
-        <span className="step-duration" style={{ marginLeft: 'auto' }}>{timing ? `${timing.duration.toFixed(1)} s` : ''}</span>
+      <span className="step-duration" title="How long this step takes">
+        {timing ? `${timing.duration.toFixed(1)} s` : ''}
       </span>
+      {caption !== null ? (
+        <span className="step-meta">
+          <span className="step-caption">“{caption || 'clears the caption'}”</span>
+        </span>
+      ) : null}
       <span className="step-actions" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="icon-btn drag-handle" aria-label={`Move step ${index + 1}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown}>
+        <button type="button" className="icon-btn drag-handle" aria-label={`Move step ${index + 1}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown as React.KeyboardEventHandler | undefined}>
           <Icon name="grip" />
         </button>
         <button type="button" className="icon-btn" aria-label={`Duplicate step ${index + 1}`} title="Duplicate" onClick={() => step.id && duplicateStepById(sceneId, step.id)}>
