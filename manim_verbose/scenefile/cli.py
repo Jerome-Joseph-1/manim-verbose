@@ -206,11 +206,16 @@ def cmd_info(args) -> int:
         duration = render.scene_duration(doc, scene.id)
         total += duration
         print(f"{scene.id}  {_clock(duration)}  {len(scene.objects)} objects, {len(scene.steps)} steps"
-              + (f"  ({scene.title})" if scene.title else ""))
+              + _carried_note(scene) + (f"  ({scene.title})" if scene.title else ""))
         for timing, step in zip(timings, scene.steps):
             print(f"    {_clock(timing.start)}  {timing.duration:5.1f}s  {step.do:<12} {step.id}")
     print(f"total  {_clock(total)}")
     return 0
+
+
+def _carried_note(scene) -> str:
+    """For info: the objects a scene carries over from the scene before, if any."""
+    return f", carrying {', '.join(scene.carry)}" if scene.carry else ""
 
 
 def cmd_code(args) -> int:

@@ -10,9 +10,28 @@ DocScene provides:
     self.obj(id, mob) -> mob             registers a mobject under its scene file id
     with self.step(step_id, caption=None)  marks a step: its start and end time, caption
                                          changes, and where a still or a clip stops
+    self.keep_beside(mob, next_to, anchor=, side=, buff=, shift=) -> mob
+    self.follow(mob, target, anchor=, side=) / self.stop_following(*mobs)
+                                         an object which stays beside another, see "Following"
+    self.changed(old, new, ...) -> new   the object a change step built takes the old one's place
+    self.transformed_as(old, new, on=) -> new
+                                         a new look, transformed the way the old one has been
+    with self.carried_from(scene_id):    objects brought over from the scene before, see carry.py
+    self.apply_now(*animations)          animations played out at once, taking no time
 and the machinery render.py drives: stopping after a given step to capture a still with
 the pixel bounding box of every registered object on screen, rendering only a range of
 steps, and reporting progress.
+
+Following. An object placed beside another with `follow` keeps to the point of it it was
+placed against, the tip or tail of a vector, the start or end of a line or arc, or for the
+whole object the middle of the side it is beside, for as long as both are on screen. It
+keeps its offset from that point exactly (it is moved by as much as the point moves, once a
+frame, after the animations of that frame), so it stays beside its target through moves,
+changes, matrices and transforms, played alone or together with anything else, and while it
+is being drawn or faded in itself. While either of the two is off screen the follower stays
+where it is: a hidden target moving, or coming back as it was after being transformed into
+something else, doesn't drag it along; once both are on screen again it catches up. Moving
+the follower some other way (a move, a matrix) ends its following.
 
 Import manimlib through manim_verbose.manim_import, never directly (see there for why).
 
@@ -35,7 +54,7 @@ from manim_verbose.manim_import import import_manim
 
 import_manim()
 
-from manimlib.animation.animation import Animation
+from manimlib.animation.animation import Animation, prepare_animation
 from manimlib.animation.composition import AnimationGroup
 from manimlib.animation.creation import DrawBorderThenFill, ShowCreation, ShowIncreasingSubsets
 from manimlib.animation.fading import FadeIn, FadeOut, FadeTransform, VFadeIn
@@ -46,20 +65,29 @@ from manimlib.animation.transform_matching_parts import TransformMatchingParts
 from manimlib.camera.camera import Camera
 from manimlib.camera.camera_frame import CameraFrame
 from manimlib.config import manim_config
-from manimlib.constants import BLACK, DOWN, FRAME_HEIGHT, FRAME_WIDTH, OUT, UP, WHITE, YELLOW
-from manimlib.mobject.geometry import Arrow, Line, Rectangle
-from manimlib.mobject.mobject import Group, Mobject
+from manimlib.constants import BLACK, DOWN, FRAME_HEIGHT, FRAME_WIDTH, LEFT, OUT, RIGHT, UP, WHITE, YELLOW
+from manimlib.mobject.geometry import Arrow, Line, Rectangle, TipableVMobject
+from manimlib.mobject.mobject import Group, Mobject, Point
 from manimlib.mobject.svg.text_mobject import Text
 from manimlib.scene.scene import EndScene, Scene
 from manimlib.utils.family_ops import extract_mobject_family_members, recursive_mobject_remove
 
 from manim_verbose.scenefile.layout import *  # noqa: F401,F403  (placement helpers, objects agent)
-from manim_verbose.scenefile.layout import set_frame_shape
+from manim_verbose.scenefile.layout import place, set_frame_shape
 from manim_verbose.scenefile.expressions import *  # noqa: F401,F403  (safe functions, objects agent)
 
 
 # Drawn above anything a scene file can ask for with `z`
 CAPTION_Z = 1_000_000
+
+# How long something done at once inside a play is taken to last, so that it has a moment of
+# its own among the rest: an add or a remove whose turn comes part way through a together
+INSTANT = 1e-6
+
+# What `keep: dim` leaves the original of a transform at: its opacities times this
+DIM_OPACITY = 0.35
+
+SIDE_DIRECTIONS = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
 
 # Manim's own default font, as configured when this module was first imported
 MANIM_DEFAULT_FONT = manim_config.text.font
@@ -130,6 +158,12 @@ class DocScene(Scene):
       then on, rather than twice, and the camera's frame is never taken into a group.
     - Once the camera turns away from looking straight at the frame, arrows turn to face it.
     - The frame takes the shape of the picture, so that one which isn't 16:9 isn't stretched.
+      Run by plain manimgl, which knows nothing of the scene file, a scene whose picture
+      isn't 16:9 (doc_resolution) keeps the size manimgl asks for along its shorter side and
+      takes the scene file's shape.
+    - Objects placed with `follow` stay beside what they follow, see "Following" above.
+    - A change leaves the object as the new look built for it, in every way (the parts of a
+      new text are the new text's), and as transformed as the old one was.
     """
     scene_id: str = ""
     caption_style: CaptionStyle = CaptionStyle()
@@ -137,8 +171,17 @@ class DocScene(Scene):
     default_font: str | None = None
     # How long a caption takes to fade from one to the next, at most
     caption_fade_time: float = 0.5
+    # The scene file's resolution, where it isn't 16:9, for a render by plain manimgl
+    doc_resolution: tuple[int, int] | None = None
 
     def __init__(self, plan: RenderPlan | None = None, **kwargs):
+        # Asked for by the machinery below as soon as Scene.__init__ runs
+        self._follows: dict[str, _Follow] = {}
+        self._pending_follows: dict[int, tuple[Mobject, _Follow]] = {}
+        self._playing: list[Animation] = []
+        self._replaying = False
+        if plan is None and self.doc_resolution is not None:
+            kwargs["camera_config"] = self._manimgl_camera_config(kwargs.get("camera_config"))
         self.plan = plan or RenderPlan()
         # Text reads its default font from manim's configuration as it is built. Set it for
         # every scene, back to manim's own when this one names none, since a process which
@@ -171,6 +214,27 @@ class DocScene(Scene):
         self._caption_parts: set[Mobject] = set()
         self._next_caption: str | None = None
         self._snapshots: dict[str, Mobject] = {}
+        # The matrices applied to each object so far, as one map of the frame, see transformed_as
+        self._maps: dict[str, np.ndarray] = {}
+        # Ids of the objects carried over from the scene before
+        self.carried_ids: list[str] = []
+
+    def _manimgl_camera_config(self, given: dict | None) -> dict:
+        """
+        The camera plain manimgl gets: the resolution it asks for (from -l, --hd and the like)
+        along the shorter side, and the scene file's shape, since everything was laid out for
+        a frame of that shape.
+        """
+        config = dict(given or {})
+        asked = config.get("resolution") or manim_config.camera.resolution
+        if isinstance(asked, str):
+            from ast import literal_eval
+            asked = literal_eval(asked)
+        short = min(int(asked[0]), int(asked[1]))
+        width, height = self.doc_resolution
+        scale = short / min(width, height)
+        config["resolution"] = (max(2, round(width * scale / 2) * 2), max(2, round(height * scale / 2) * 2))
+        return config
 
     def _fit_frame_to_picture(self) -> None:
         """
@@ -206,7 +270,17 @@ class DocScene(Scene):
     def obj(self, obj_id: str, mobject: Mobject) -> Mobject:
         """Registers a mobject under its id in the scene file, and hands it back."""
         self.objects[obj_id] = mobject
+        pending = self._pending_follows.pop(id(mobject), None)
+        if pending is not None:
+            self._start_following(obj_id, pending[1])
         return mobject
+
+    def id_of(self, mobject: Mobject) -> str | None:
+        """The id a mobject is registered under, if it is."""
+        for obj_id, mob in self.objects.items():
+            if mob is mobject:
+                return obj_id
+        return None
 
     @contextmanager
     def step(self, step_id: str, caption: str | None = None) -> Iterator[None]:
@@ -372,13 +446,255 @@ class DocScene(Scene):
         if not proto_animations:
             return super().play(*proto_animations, run_time=run_time, **kwargs)
         animations = [self._as_animation(anim) for anim in proto_animations]
+        given = list(animations)
         if self._in_step:
             self._snapshot_animated(animations)
         if self._next_caption is not None and self._in_step:
             length = run_time or max(anim.get_run_time() for anim in animations)
             animations += self._caption_transition(self._next_caption, length)
             run_time = length
-        return super().play(*animations, run_time=run_time, **kwargs)
+        leaves = list(_leaves(animations))
+        for anim in leaves:
+            if isinstance(anim, _AtItsTime):
+                anim.scene = self
+        self._playing = leaves
+        try:
+            result = super().play(*animations, run_time=run_time, **kwargs)
+        except Exception as err:
+            # Which of the animations it went wrong in, for render.py to name the step inside
+            # a together it came from, see problems_from_exception
+            if getattr(err, "docscene_path", None) is None:
+                err.docscene_path = _failing_path(err, given)
+            raise
+        finally:
+            self._playing = []
+        self._note_matrices(leaves)
+        return result
+
+    def update_mobjects(self, dt: float) -> None:
+        super().update_mobjects(dt)
+        # After the animations of the frame and the objects' own updaters, so that what
+        # follows is put beside where its target has just got to
+        self._keep_followers_beside()
+
+    # Following, see the module's docstring
+
+    def keep_beside(
+        self, mobject: Mobject, next_to: Mobject, anchor: str = "center", side: str = "down",
+        buff: float = 0.25, shift=None,
+    ) -> Mobject:
+        """Puts mobject beside next_to (at its anchor, see beside), and keeps it there from now on."""
+        beside(mobject, next_to, anchor=anchor, side=side, buff=buff, shift=shift)
+        return self.follow(mobject, next_to, anchor=anchor, side=side)
+
+    def follow(self, mobject: Mobject, target: Mobject, anchor: str = "center", side: str = "down") -> Mobject:
+        """From now on, mobject keeps where it is relative to the anchor of target, whenever both are on screen."""
+        rule = _Follow(self.id_of(target) or target, anchor, side, anchor_point(target, anchor, side))
+        follower = self.id_of(mobject)
+        if follower is None:
+            # Not registered yet, as while its object is being built: obj() takes it up
+            self._pending_follows[id(mobject)] = (mobject, rule)
+        else:
+            self._start_following(follower, rule)
+        return mobject
+
+    def stop_following(self, *mobjects: Mobject) -> None:
+        """These no longer follow anything: they have been moved some other way."""
+        for mobject in mobjects:
+            follower = self.id_of(mobject)
+            if follower in self._follows:
+                if self._replaying:
+                    self._keep_followers_beside()
+                del self._follows[follower]
+            self._pending_follows.pop(id(mobject), None)
+
+    def following(self) -> dict[str, str]:
+        """Which object follows which, by id."""
+        return {
+            follower: rule.target if isinstance(rule.target, str) else "?"
+            for follower, rule in self._follows.items()
+        }
+
+    def _start_following(self, follower: str, rule: _Follow) -> None:
+        # Two which followed each other would push each other along for ever: the newer
+        # following gives way
+        target, seen = rule.target, set()
+        while isinstance(target, str) and target not in seen:
+            if target == follower:
+                self._follows.pop(follower, None)
+                return
+            seen.add(target)
+            ahead = self._follows.get(target)
+            target = ahead.target if ahead is not None else None
+        self._follows[follower] = rule
+
+    def _following_order(self) -> list[str]:
+        """Followers after whatever they follow, so that a chain of them moves in one frame."""
+        order: list[str] = []
+        placed: set[str] = set()
+
+        def visit(follower: str, depth: int) -> None:
+            if follower in placed or depth > len(self._follows):
+                return
+            target = self._follows[follower].target
+            if isinstance(target, str) and target in self._follows:
+                visit(target, depth + 1)
+            placed.add(follower)
+            order.append(follower)
+
+        for follower in list(self._follows):
+            visit(follower, 0)
+        return order
+
+    def _keep_followers_beside(self) -> None:
+        if not self._follows:
+            return
+        # While objects carried over are being brought to how the scene before left them,
+        # nothing is on screen yet, and followers catch up regardless
+        in_scene = None if self._replaying else set(self.get_mobject_family_members())
+        for follower_id in self._following_order():
+            rule = self._follows[follower_id]
+            follower = self.objects.get(follower_id)
+            target = self.objects.get(rule.target) if isinstance(rule.target, str) else rule.target
+            if follower is None or target is None:
+                continue
+            if in_scene is not None and not (self.is_on_screen(follower, in_scene) and self.is_on_screen(target, in_scene)):
+                continue
+            try:
+                point = anchor_point(target, rule.anchor, rule.side)
+            except ValueError:
+                continue
+            delta = point - rule.point
+            if not np.all(np.isfinite(delta)) or np.allclose(delta, 0, atol=1e-9):
+                continue
+            rule.point = point
+            follower.shift(delta)
+            self._carry_along(follower, delta)
+
+    def _carry_along(self, mobject: Mobject, delta: np.ndarray) -> None:
+        """
+        What the animations playing keep of mobject (the copy they start from, the shape they
+        head for, an outline being drawn) moved along with it, so that a follower being
+        written, faded in or changed while its target moves is drawn beside it throughout,
+        rather than put back where it began by the next frame of its own animation.
+        """
+        members = set(mobject.get_family())
+        for anim in self._playing:
+            root = anim.mobject
+            family = root.get_family()
+            if root in members:
+                index = None
+            elif mobject in family:
+                index = next(i for i, mob in enumerate(family) if mob is mobject)
+            else:
+                continue
+            for ref in _references(anim):
+                if index is None:
+                    ref.shift(delta)
+                else:
+                    ref_family = ref.get_family()
+                    if len(ref_family) == len(family):
+                        ref_family[index].shift(delta)
+
+    # Changes, matrices and objects carried over
+
+    def transformed_as(self, old: Mobject, new: Mobject, on: Mobject | None = None) -> Mobject:
+        """
+        `new` put through the matrices `old` has been through, less those its coordinate
+        system `on` has been through, which a new look built on it shows already. This is how
+        a change keeps an object as a matrix left it: the new look lands where the old one
+        is, as distorted.
+        """
+        old_id = self.id_of(old)
+        mapping = self._maps.get(old_id, _IDENTITY) if old_id is not None else _IDENTITY
+        if on is not None:
+            on_id = self.id_of(on)
+            base = self._maps.get(on_id, _IDENTITY) if on_id is not None else _IDENTITY
+            mapping = mapping @ np.linalg.inv(base)
+        if not np.allclose(mapping, _IDENTITY, atol=1e-9):
+            map_mobject(new, mapping)
+        return new
+
+    def changed(self, old: Mobject, new: Mobject, on: Mobject | None = None, placed: bool = False) -> Mobject:
+        """
+        After a change: `new`, the look built for the object, takes the place of `old`
+        everywhere (on screen, in any group holding it, under its id), so that whatever comes
+        next finds the new look's own parts, the words of a new text say. The Transform just
+        played left old looking like new, so nothing shows. Where the object was placed anew
+        it is as transformed as its coordinate system `on`, and follows only what its new
+        placement says.
+        """
+        obj_id = self.id_of(old)
+        if obj_id is None or new is old:
+            return new
+        # Anything which moved old along during the change (following) moved new's likeness
+        delta = old.get_center() - new.get_center()
+        if np.all(np.isfinite(delta)) and not np.allclose(delta, 0, atol=1e-9):
+            new.shift(delta)
+        for index, mob in enumerate(self.mobjects):
+            if mob is old:
+                self.mobjects[index] = new
+        for parent in list(old.parents):
+            for index, mob in enumerate(parent.submobjects):
+                if mob is old:
+                    parent.replace_submobject(index, new)
+        self.objects[obj_id] = new
+        self.id_to_mobject_map.update({id(sm): sm for sm in new.get_family()})
+        pending = self._pending_follows.pop(id(new), None)
+        if pending is not None:
+            rule = pending[1]
+            target = self.objects.get(rule.target) if isinstance(rule.target, str) else rule.target
+            rule.point = anchor_point(target, rule.anchor, rule.side)
+            self._start_following(obj_id, rule)
+        elif placed:
+            self._follows.pop(obj_id, None)
+        if placed:
+            on_id = self.id_of(on) if on is not None else None
+            self._maps[obj_id] = self._maps.get(on_id, _IDENTITY).copy() if on_id is not None else _IDENTITY.copy()
+        return new
+
+    def apply_now(self, *animations) -> None:
+        """
+        Animations played out at once, taking no time and drawing nothing: how objects carried
+        over from the scene before are put through the matrices that scene applied to them.
+        """
+        anims = [prepare_animation(anim) for anim in animations]
+        for anim in anims:
+            anim.begin()
+        for anim in anims:
+            anim.finish()
+        self._note_matrices(list(_leaves(anims)))
+        if self._replaying:
+            self._keep_followers_beside()
+
+    @contextmanager
+    def carried_from(self, scene_id: str) -> Iterator[None]:
+        """
+        Objects carried over from scene `scene_id`: built, brought to the state that scene
+        left them in and put on screen inside the block, before the first step. Followers
+        among them catch up with what they follow as they go, on screen or not.
+        """
+        before = set(self.objects)
+        self._replaying = True
+        try:
+            yield
+            self._keep_followers_beside()
+        finally:
+            self._replaying = False
+        self.carried_ids = [obj_id for obj_id in self.objects if obj_id not in before]
+
+    def _note_matrices(self, animations: list[Animation]) -> None:
+        """Every registered object an ApplyMatrixOn just went over has that map added to its own, see transformed_as."""
+        noted: set[str] = set()
+        for anim in animations:
+            if not isinstance(anim, ApplyMatrixOn):
+                continue
+            family = {id(member) for member in anim.mobject.get_family()}
+            mapping = anim.frame_map()
+            for obj_id, mob in self.objects.items():
+                if obj_id not in noted and id(mob) in family:
+                    noted.add(obj_id)
+                    self._maps[obj_id] = mapping @ self._maps.get(obj_id, _IDENTITY)
 
     def wait(self, duration: float | None = None, *args, **kwargs):
         if self._next_caption is not None and self._in_step:
@@ -623,6 +939,137 @@ def _frame_at(seconds: float, fps: float) -> int:
     return math.floor(seconds * fps + 0.5 + 1e-9)
 
 
+def _leaves(animations) -> Iterator[Animation]:
+    """The animations inside these, groups opened up."""
+    for anim in animations:
+        if isinstance(anim, AnimationGroup):
+            yield from _leaves(anim.animations)
+        else:
+            yield anim
+
+
+def _references(anim: Animation) -> list[Mobject]:
+    """What an animation keeps of its mobject to work from: its starting copy, its target, an outline."""
+    try:
+        kept = anim.get_all_mobjects()
+    except AttributeError:
+        return []
+    out: list[Mobject] = []
+    for mob in kept:
+        if mob is not None and mob is not anim.mobject and all(mob is not other for other in out):
+            out.append(mob)
+    return out
+
+
+def _path_to(target: Animation, animations, prefix: tuple[int, ...] = ()) -> tuple[int, ...] | None:
+    for index, anim in enumerate(animations):
+        if anim is target:
+            return prefix + (index,)
+        if isinstance(anim, AnimationGroup):
+            found = _path_to(target, anim.animations, prefix + (index,))
+            if found is not None:
+                return found
+    return None
+
+
+def _failing_path(err: BaseException, animations: list[Animation]) -> tuple[int, ...] | None:
+    """
+    Where the animation a play went wrong in is among those it was given: the index of one
+    given to it, then of one inside that, and so on. None where it went wrong elsewhere.
+    """
+    found: list[Animation] = []
+    tb = err.__traceback__
+    while tb is not None:
+        candidate = tb.tb_frame.f_locals.get("self")
+        if isinstance(candidate, Animation):
+            found.append(candidate)
+        tb = tb.tb_next
+    for anim in reversed(found):
+        path = _path_to(anim, animations)
+        if path is not None:
+            return path
+    return None
+
+
+@dataclass
+class _Follow:
+    """One object following another, see DocScene.follow."""
+    # The id of what is followed, or the mobject itself where it isn't registered
+    target: str | Mobject
+    anchor: str
+    side: str
+    # Where the point followed was when the follower was last put beside it
+    point: np.ndarray
+
+
+# Anchors: the point of an object something is placed beside
+
+def anchor_point(mobject: Mobject, anchor: str = "center", side: str = "down") -> np.ndarray:
+    """
+    The point of mobject something placed beside it keeps to: the tip or tail of a vector,
+    the end or start of a line or arc, and for the whole object ("center") the middle of the
+    side something is beside it on.
+    """
+    if anchor == "center":
+        try:
+            direction = SIDE_DIRECTIONS[side]
+        except KeyError:
+            raise ValueError(f"'{side}' isn't a side: use one of {', '.join(SIDE_DIRECTIONS)}") from None
+        return np.array(mobject.get_critical_point(direction), dtype=float)
+    line = _line_of(mobject)
+    if anchor in ("tip", "end"):
+        return np.array(line.get_end(), dtype=float)
+    if anchor in ("tail", "start"):
+        return np.array(line.get_start(), dtype=float)
+    raise ValueError(f"'{anchor}' isn't an anchor: use one of center, tip, tail, start or end")
+
+
+def _line_of(mobject: Mobject) -> TipableVMobject:
+    """The line, arrow or arc an object is or leads with: a labelled vector, or one with a backdrop, is a group."""
+    for mob in mobject.get_family():
+        if isinstance(mob, TipableVMobject) and mob.has_points():
+            return mob
+    raise ValueError(f"A {type(mobject).__name__} has no start or end to be beside")
+
+
+def beside(
+    mobject: Mobject, next_to: Mobject, anchor: str = "center", side: str = "down",
+    buff: float = 0.25, shift=None,
+) -> Mobject:
+    """
+    place(mobject, next_to=...), except that with an anchor other than "center" it goes
+    beside that point of next_to (its tip or tail, start or end) rather than the whole of it.
+    """
+    if anchor == "center":
+        return place(mobject, next_to=next_to, side=side, buff=buff, shift=shift)
+    return place(mobject, next_to=Point(anchor_point(next_to, anchor)), side=side, buff=buff, shift=shift)
+
+
+_IDENTITY = np.identity(4)
+
+
+def map_mobject(mobject: Mobject, mapping: np.ndarray) -> Mobject:
+    """
+    A mobject put through a map of the frame (4x4, homogeneous) as ApplyMatrixOn puts it:
+    arrows by their two ends, keeping their heads' shape, everything else point by point.
+    """
+    linear, offset = mapping[:3, :3], mapping[:3, 3]
+
+    def apply(points: np.ndarray) -> np.ndarray:
+        return np.asarray(points, dtype=float) @ linear.T + offset
+
+    for sub in mobject.get_family():
+        if not sub.has_points():
+            continue
+        if isinstance(sub, Arrow):
+            sub.put_start_and_end_on(*apply(np.array([sub.get_start(), sub.get_end()])))
+            continue
+        for key in sub.pointlike_data_keys:
+            sub.data[key] = apply(sub.data[key])
+        sub.refresh_bounding_box()
+    return mobject
+
+
 # Helpers generated code calls
 
 def Grow(mobject: Mobject, **kwargs) -> Animation:
@@ -647,6 +1094,63 @@ def FlashOn(mobject: Mobject, color=YELLOW, **kwargs) -> Animation:
     """Flash, with the burst of lines sized to go round the object rather than a point."""
     radius = 0.3 + max(mobject.get_width(), mobject.get_height()) / 2
     return Flash(mobject, color=color, flash_radius=radius, line_length=0.25, **kwargs)
+
+
+class _AtItsTime(Animation):
+    """
+    Something done at once, the moment its turn comes among the animations of a LaggedStart
+    or AnimationGroup, and then run_time of nothing. Adds and removes inside a lagged
+    together are these, so that they happen when their place in the together comes round.
+
+    The scene playing it hands itself over before it starts (see DocScene.play). With no
+    run_time it lasts INSTANT, so that it still has a moment of its own: AnimationGroup never
+    says when something lasting no time at all has come.
+    """
+
+    def __init__(self, mobject: Mobject, run_time: float = 0.0, **kwargs):
+        super().__init__(mobject, run_time=max(float(run_time), INSTANT), **kwargs)
+        self.scene: Scene | None = None
+        self.done = False
+
+    def begin(self) -> None:
+        self.done = False
+
+    def interpolate(self, alpha: float) -> None:
+        if alpha > 0 and not self.done and self.scene is not None:
+            self.done = True
+            self.act(self.scene)
+
+    def finish(self) -> None:
+        self.interpolate(1.0)
+
+    def act(self, scene: Scene) -> None:
+        raise NotImplementedError
+
+    def get_all_mobjects(self) -> tuple[Mobject, ...]:
+        return (self.mobject,)
+
+    def update_reference_mobjects(self, dt: float, frame_rate: float | None = None) -> None:
+        pass
+
+    def clean_up_from_scene(self, scene: Scene) -> None:
+        pass
+
+
+class Add(_AtItsTime):
+    """Puts something on screen at once when its turn comes in a play, as `add` inside a lagged together."""
+
+    def act(self, scene: Scene) -> None:
+        scene.add(self.mobject)
+
+
+class Remove(_AtItsTime):
+    """Takes something off screen at once when its turn comes in a play, as `remove` inside a lagged together."""
+
+    def __init__(self, mobject: Mobject, run_time: float = 0.0, **kwargs):
+        super().__init__(mobject, run_time=run_time, remover=True, **kwargs)
+
+    def act(self, scene: Scene) -> None:
+        scene.remove(self.mobject)
 
 
 class ApplyMatrixOn(Animation):
@@ -681,6 +1185,13 @@ class ApplyMatrixOn(Animation):
         self.origin = origin
         self.frame_matrix = basis @ full @ np.linalg.inv(basis)
         super().__init__(mobject, **kwargs)
+
+    def frame_map(self) -> np.ndarray:
+        """Where this takes the frame, all the way, as a 4x4 homogeneous matrix."""
+        mapping = np.identity(4)
+        mapping[:3, :3] = self.frame_matrix
+        mapping[:3, 3] = self.origin - self.frame_matrix @ self.origin
+        return mapping
 
     def mapped(self, points: np.ndarray, alpha: float) -> np.ndarray:
         """Points moved alpha of the way to where the matrix takes them, straight there as a grid's points go."""

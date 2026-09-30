@@ -288,7 +288,19 @@ def check_document(doc: Document) -> list[Problem]:
         checker = SceneChecker(scene, sloc, seen_steps, previous)
         problems.extend(checker.run())
         previous = checker
+    if not has_errors(problems) and any(scene.carry for scene in doc.scenes):
+        problems.extend(_carry_problems(doc))
     return problems
+
+
+def _carry_problems(doc: Document) -> list[Problem]:
+    """Carried objects which can't be brought over exactly as the scene before left them (see carry.py), as warnings."""
+    try:
+        from manim_verbose.scenefile.carry import carry_problems
+        return carry_problems(doc)
+    except Exception:
+        # Warnings, never a reason for validation itself to fail
+        return []
 
 
 MATRIX_PART = re.compile(r"^\s*(row|column|entry)\s+(\d+)(?:\s*[, ]\s*(\d+))?\s*$", re.IGNORECASE)

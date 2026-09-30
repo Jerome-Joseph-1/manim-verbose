@@ -41,6 +41,7 @@ class Basics(DocScene):
             ring_new = Circle(radius=0.6).set_color(ORANGE).move_to([-4, 0, 0])
             ring_new.move_to(ring)
             self.play(Transform(ring, ring_new), run_time=1)
+            ring = self.changed(ring, ring_new)
         with self.step("s_transform"):
             self.play(TransformMatchingTex(eq, eq2), run_time=1.5)
         with self.step("s_wait"):
@@ -64,7 +65,11 @@ class PlaneView(DocScene):
         self.add(plane)
 
         with self.step("p_together", caption="Two vectors"):
-            self.play(LaggedStart(Grow(v, run_time=1), FadeIn(w, run_time=1), lag_ratio=0.5), run_time=1.5)
+            self.play(LaggedStart(
+                Grow(v, run_time=1),
+                FadeIn(w, run_time=1),
+                lag_ratio=0.5,
+            ), run_time=1.5)
         with self.step("p_matrix"):
             self.play(ApplyMatrixOn([[1, 1], [0, 1]], plane), ApplyMatrixOn([[1, 1], [0, 1]], v, plane), ApplyMatrixOn([[1, 1], [0, 1]], w, plane), run_time=2)
         with self.step("p_camera"):

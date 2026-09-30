@@ -37,13 +37,20 @@ OWNER: steps/render agent. Keep these signatures; the server is being built agai
     class RenderError(Exception): problems: list[Problem]   # LaTeX failures and the like, reworded
     class RenderCancelled(Exception)
 
+    carry_key(doc, scene_id) -> str
+        What a scene's pictures depend on beyond the scene itself: the scenes it carries
+        objects over from, as far back as they go ("" for a scene carrying nothing). Anything
+        caching stills or clips of a scene by its own contents has to add this to its key.
+
 How a render runs: the scene is turned into code (codegen.py), the code written to a module
 file and imported, and its scene class run with a configuration built here from manim_config,
 never from the command line. Stills and clips run in the calling process. A whole video runs
 each scene in a worker process of its own and joins what they write without re-encoding it.
 Rendered scenes are cached, keyed by everything which decides what they look like (see
 scene_cache_key), in MANIM_VERBOSE_CACHE, or ~/.cache/manim-verbose/ when that isn't set, so
-that re-rendering a long video after changing one scene renders only that scene.
+that re-rendering a long video after changing one scene renders only that scene. The cache
+is kept under MANIM_VERBOSE_CACHE_MAX_MB megabytes (2048 unless set; 0 for no limit) by
+deleting what was used least recently, see trim_cache.
 
 Anything which goes wrong comes back as a RenderError holding problems, placed on the object
 or step at fault where that can be worked out (see problems_from_exception), never as a
@@ -67,9 +74,9 @@ import threading
 import time
 import traceback
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Iterable, Literal
 
 from manim_verbose.scenefile.codegen import (
     GENERATOR_VERSION, CodegenContext, CodegenError, SourceRef, generate_module,
@@ -125,8 +132,12 @@ class RenderCancelled(Exception):
 
 def timeline(doc: Document, scene_id: str) -> list[StepTiming]:
     from manim_verbose.scenefile.actions import step_duration
+    from manim_verbose.scenefile.carry import carried_specs
     index, scene = _find_scene(doc, scene_id)
-    ctx = CodegenContext(doc=doc, scene=scene, objects={obj.id: obj for obj in scene.objects})
+    # Objects carried in are shown and hidden like any other, and how long that takes
+    # depends on what kind of object they are
+    objects = {**carried_specs(doc, index), **{obj.id: obj for obj in scene.objects}}
+    ctx = CodegenContext(doc=doc, scene=scene, objects=objects)
     timings = []
     start = 0.0
     for step_index, step in enumerate(scene.steps):
@@ -243,6 +254,10 @@ class RenderJob:
     class_name: str
     line_map: dict[int, SourceRef]
     base_dir: str
+    # See GeneratedModule.play_pieces
+    play_pieces: dict[int, dict[tuple[int, ...], int]] = field(default_factory=dict)
+    # The objects the scene carries over, as the scene before left them
+    carried_data: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def error_from(self, err: BaseException) -> RenderError:
         scene = SceneSpec.model_validate(self.scene_data)
@@ -251,6 +266,7 @@ class RenderJob:
 
 def prepare_job(doc: Document, scene_id: str, base_dir: Path | None = None) -> RenderJob:
     """The code for one scene, or a RenderError saying what in it couldn't be turned into code."""
+    from manim_verbose.scenefile.carry import carried_specs
     index, scene = _find_scene(doc, scene_id)
     base = Path(base_dir) if base_dir is not None else Path.cwd()
     try:
@@ -270,7 +286,23 @@ def prepare_job(doc: Document, scene_id: str, base_dir: Path | None = None) -> R
         class_name=generated.class_names[scene_id],
         line_map=generated.line_map,
         base_dir=str(base),
+        play_pieces=generated.play_pieces,
+        carried_data={obj_id: spec.model_dump(mode="json") for obj_id, spec in carried_specs(doc, index).items()},
     )
+
+
+def carry_key(doc: Document, scene_id: str) -> str:
+    """
+    What a scene's pictures depend on beyond the scene itself: the scenes it carries objects
+    over from, as far back as they go, as a digest; "" for a scene which carries nothing.
+    """
+    from manim_verbose.scenefile.carry import chain
+    index, scene = _find_scene(doc, scene_id)
+    earlier = chain(doc, index)[:-1]
+    if not earlier:
+        return ""
+    data = [doc.scenes[i].model_dump(mode="json") for i in earlier] + [scene.carry]
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:32]
 
 
 def run_job(
@@ -385,6 +417,9 @@ def load_module(code: str):
         tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
         tmp.write_text(code, encoding="utf-8")
         tmp.replace(path)
+        trim_cache(keep=[path])
+    else:
+        _touch(path)
     name = f"manim_verbose_generated_{digest}"
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -402,6 +437,81 @@ def cache_dir() -> Path:
     """Where rendered scenes and generated modules are kept: MANIM_VERBOSE_CACHE, or ~/.cache/manim-verbose/."""
     configured = os.environ.get("MANIM_VERBOSE_CACHE")
     return Path(configured) if configured else Path.home() / ".cache" / "manim-verbose"
+
+
+# How big the cache may grow, in megabytes, unless MANIM_VERBOSE_CACHE_MAX_MB says otherwise
+DEFAULT_CACHE_MAX_MB = 2048
+# What the cache holds which trimming may delete: rendered scenes and generated modules
+CACHED_KINDS = ("scenes", "modules")
+
+
+def cache_limit() -> int | None:
+    """The most the cache may hold, in bytes: MANIM_VERBOSE_CACHE_MAX_MB megabytes (2048 unless set), None for no limit (0)."""
+    configured = os.environ.get("MANIM_VERBOSE_CACHE_MAX_MB", "").strip()
+    megabytes = float(DEFAULT_CACHE_MAX_MB)
+    if configured:
+        try:
+            megabytes = float(configured)
+        except ValueError:
+            log.warning("MANIM_VERBOSE_CACHE_MAX_MB=%r isn't a number of megabytes; using %d", configured,
+                        DEFAULT_CACHE_MAX_MB)
+    if megabytes <= 0:
+        return None
+    return int(megabytes * 1024 * 1024)
+
+
+def trim_cache(keep: Iterable[Path] = ()) -> list[Path]:
+    """
+    Deletes what the cache holds, least recently used first, until it is back under its
+    limit (see cache_limit), and says what went. Using something cached marks it used (a
+    rendered scene found again, a module imported again), so what goes is what nobody has
+    asked for in longest. `keep` is spared: what is about to be used, such as the scenes of
+    a video about to be joined. Safe to run in several processes at once.
+    """
+    limit = cache_limit()
+    if limit is None:
+        return []
+    entries = []
+    for kind in CACHED_KINDS:
+        folder = cache_dir() / kind
+        if not folder.is_dir():
+            continue
+        for path in folder.iterdir():
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            if path.is_file():
+                entries.append((stat.st_mtime, stat.st_size, path))
+    total = sum(size for _, size, _ in entries)
+    if total <= limit:
+        return []
+    spared = {Path(path).resolve() for path in keep}
+    removed = []
+    for _, size, path in sorted(entries, key=lambda entry: (entry[0], entry[2].name)):
+        if total <= limit:
+            break
+        if path.resolve() in spared:
+            continue
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            continue
+        total -= size
+        removed.append(path)
+    if removed:
+        log.info("Trimmed %d file(s) from the render cache to keep it under %d MB", len(removed), limit // 2**20)
+    return removed
+
+
+def _touch(path: Path) -> None:
+    """Marks something cached as just used, for trim_cache."""
+    try:
+        os.utime(path)
+    except OSError:
+        pass
 
 
 # Getting a process ready to render
@@ -454,40 +564,92 @@ def problems_from_exception(err: BaseException, job: RenderJob, scene: SceneSpec
     log.debug("Render of scene %s failed", job.scene_id, exc_info=err)
     ref = _failing_ref(err, job)
     latex = _failing_latex(err)
+    missing = _missing_tex(err)
     reason = _reason(err, latex is not None)
     if ref is None or ref.kind == "scene":
         loc = list(ref.loc) if ref else []
-        return [Problem(f"Scene '{job.scene_id}' couldn't be rendered: {reason}", loc, "error", job.scene_id, None)]
+        text = missing or f"Scene '{job.scene_id}' couldn't be rendered: {reason}"
+        return [Problem(text, loc, "error", job.scene_id, None)]
     loc = list(ref.loc)
+    if ref.kind == "carry":
+        text = missing or f"'{ref.item_id}' couldn't be carried over from the scene before: {reason}"
+        return [Problem(text, loc, "error", job.scene_id, ref.item_id)]
     if ref.kind == "object":
         obj = scene.objects[ref.loc[-1]]
         field_name = _field_at_fault(obj, err, latex)
         what = "This formula couldn't be typeset" if latex is not None else "This object couldn't be made"
-        return [Problem(f"{what}: {reason}", loc + ([field_name] if field_name else []), "error", job.scene_id, ref.item_id)]
+        text = missing or f"{what}: {reason}"
+        return [Problem(text, loc + ([field_name] if field_name else []), "error", job.scene_id, ref.item_id)]
     step = _step_at(scene, ref.loc)
     extra: list[str | int] = []
     if isinstance(step, ChangeStep):
         target = next((obj for obj in scene.objects if obj.id == step.target), None)
+        if target is None and step.target in job.carried_data:
+            target = _carried_object(job, step.target)
         if target is not None:
             key = _field_at_fault(target, err, latex, only=list(step.set))
             if key:
                 extra = ["set", key]
     what = "A formula in this step couldn't be typeset" if latex is not None else "This step couldn't be played"
-    return [Problem(f"{what}: {reason}", loc + extra, "error", job.scene_id, ref.item_id)]
+    return [Problem(missing or f"{what}: {reason}", loc + extra, "error", job.scene_id, ref.item_id)]
+
+
+def _carried_object(job: RenderJob, obj_id: str) -> ObjectBase | None:
+    from manim_verbose.scenefile.model import OBJECT_MODELS
+    data = job.carried_data[obj_id]
+    try:
+        return OBJECT_MODELS[data["type"]].model_validate(data)
+    except Exception:
+        return None
 
 
 def _failing_ref(err: BaseException, job: RenderJob) -> SourceRef | None:
-    """The deepest line of generated code the failure passed through, as what it was generated from."""
+    """
+    The deepest line of generated code the failure passed through, as what it was generated
+    from. Where that is a play written over several lines (a together's), the line of the
+    animation it failed in, as DocScene.play found it (see CodeLine.piece).
+    """
     generated = f"scene_{_digest(job.code)}.py"
     found = None
-    for tb in _tracebacks(err):
+    for failure, tb in zip(_chain(err), _tracebacks(err)):
+        line = None
         while tb is not None:
             if Path(tb.tb_frame.f_code.co_filename).name == generated and tb.tb_lineno in job.line_map:
-                found = job.line_map[tb.tb_lineno]
+                line = tb.tb_lineno
             tb = tb.tb_next
-        if found is not None:
-            return found
+        if line is not None:
+            path = next((getattr(e, "docscene_path", None) for e in _chain(err) if getattr(e, "docscene_path", None)), None)
+            pieces = job.play_pieces.get(line)
+            if pieces and path:
+                for length in range(len(path), 0, -1):
+                    if tuple(path[:length]) in pieces:
+                        return job.line_map.get(pieces[tuple(path[:length])], job.line_map[line])
+            return job.line_map[line]
     return found
+
+
+# Programs LaTeX is run as, one of which not being there at all means LaTeX isn't installed
+TEX_PROGRAMS = ("latex", "xelatex", "pdflatex", "lualatex", "dvisvgm")
+MISSING_TEX = (
+    "LaTeX isn't installed, so formulas can't be drawn. Run `manimgl-doctor --install-tex` to set it up "
+    "(about 400 MB), or install TeX Live"
+)
+
+
+def _missing_tex(err: BaseException) -> str | None:
+    """What to say where the failure is LaTeX's programs not being found at all, rather than a formula's fault."""
+    for failure in _chain(err):
+        if not isinstance(failure, FileNotFoundError):
+            continue
+        name = Path(str(failure.filename or "")).name
+        if not name:
+            match = re.search(r"No such file or directory: '([^']+)'", str(failure))
+            name = Path(match.group(1)).name if match else ""
+        if name in TEX_PROGRAMS:
+            if name == "dvisvgm":
+                return MISSING_TEX.replace("LaTeX isn't installed", "LaTeX's dvisvgm isn't installed")
+            return MISSING_TEX
+    return None
 
 
 def _digest(code: str) -> str:
@@ -637,6 +799,9 @@ def render_video(
     durations = {scene.id: max(scene_duration(doc, scene.id), 1 / fps) for scene, _, _ in prepared}
     total = sum(durations.values())
     pending = [(scene, job, path) for scene, job, path in prepared if not path.exists()]
+    for _, _, path in prepared:
+        if path.exists():
+            _touch(path)
     _last_run["cached"] = [scene.id for scene, _, path in prepared if path.exists()]
     _last_run["rendered"] = [scene.id for scene, _, _ in pending]
     done = {scene.id: durations[scene.id] for scene, _, path in prepared if path.exists()}
@@ -659,7 +824,9 @@ def render_video(
     report(overall(), "Joining scenes")
     if cancel is not None and cancel():
         raise RenderCancelled()
-    _join([path for _, _, path in prepared], out_mp4)
+    paths = [path for _, _, path in prepared]
+    _join(paths, out_mp4)
+    trim_cache()
     report(1.0, "Done")
     return out_mp4
 
@@ -679,12 +846,14 @@ def scene_cache_key(
 ) -> str:
     """
     Everything a rendered scene depends on: its code (which carries the scene, its captions'
-    style and its background), the size and frame rate, the files its images come from, and
-    the versions of what made it.
+    style and its background, and how the objects it carries over were left by the scene
+    before), the size and frame rate, the files its images come from (those of objects it
+    carries over too), and the versions of what made it.
     """
     from manim_verbose.manim_import import import_manim
     assets = {}
-    for obj in scene.objects:
+    carried = [_carried_object(job, obj_id) for obj_id in job.carried_data]
+    for obj in [*scene.objects, *(obj for obj in carried if obj is not None)]:
         if isinstance(obj, (ImageObject, SvgObject)):
             path = Path(base_dir) / obj.path
             assets[obj.path] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "missing"

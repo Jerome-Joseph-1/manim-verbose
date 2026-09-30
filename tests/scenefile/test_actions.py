@@ -423,10 +423,22 @@ def ctx_for(doc) -> CodegenContext:
     ("camera_orientation_gamma", ["self.play(self.frame.animate.reorient(-30, 70, 10).set_height(FRAME_HEIGHT), run_time=2)"]),
     ("camera_reset", ["self.play(self.frame.animate.to_default_state(), run_time=2)"]),
     ("apply_matrix_plane", ["self.play(ApplyMatrixOn([[1, 1], [0, 1]], plane), ApplyMatrixOn([[1, 1], [0, 1]], v, plane), run_time=2)"]),
-    ("together", ["self.play(AnimationGroup(Write(t, run_time=1.5), ShowCreation(c, run_time=2)), run_time=2)"]),
-    ("together_lagged", ["self.play(LaggedStart(Write(t, run_time=1.5), AnimationGroup(ShowCreation(c, run_time=1), "
-                         "ShowCreation(sq, run_time=1), run_time=1.5), ShowCreation(d, run_time=1.5), lag_ratio=0.5), run_time=3)"]),
-    ("together_run_time", ["self.play(t.animate.shift([0, -1, 0]), FadeOut(u), run_time=3)"]),
+    # A together's play is written a step to a line, so that a failure is found on the step
+    ("together", ["self.play(AnimationGroup(",
+                  "    Write(t, run_time=1.5),",
+                  "    ShowCreation(c, run_time=2),",
+                  "), run_time=2)"]),
+    ("together_lagged", ["self.play(LaggedStart(",
+                         "    Write(t, run_time=1.5),",
+                         "    AnimationGroup(ShowCreation(c, run_time=1), ShowCreation(sq, run_time=1), run_time=1.5),",
+                         "    ShowCreation(d, run_time=1.5),",
+                         "    lag_ratio=0.5,",
+                         "), run_time=3)"]),
+    ("together_run_time", ["self.play(",
+                           "    t.animate.shift([0, -1, 0]),",
+                           "    FadeOut(u),",
+                           "    run_time=3,",
+                           ")"]),
     ("together_instant", ["self.add(d)", "self.remove(u)", "self.play(Indicate(t), run_time=1)"]),
     ("together_all_instant", ["self.add(d)", "self.remove(u)"]),
 ])
@@ -471,12 +483,23 @@ def test_small_pieces():
     assert StepCode().lines() == []
 
 
+def plays_in(code: str) -> list:
+    """Every self.play(...) call in some code, as ast nodes."""
+    import ast
+    return [
+        node for node in ast.walk(ast.parse(code))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "play"
+        and isinstance(node.func.value, ast.Name) and node.func.value.id == "self"
+    ]
+
+
 def test_every_play_says_how_long_it_takes(blocks_impl):
     from manim_verbose.scenefile.codegen import document_to_python
     for name in STEP_CASES:
-        for line in document_to_python(case_doc(name)).splitlines():
-            if "self.play(" in line:
-                assert line.rstrip().endswith(")") and ", run_time=" in line.rsplit(")", 2)[-2] + ")", line
+        code = document_to_python(case_doc(name))
+        for play in plays_in(code):
+            assert [k.arg for k in play.keywords] == ["run_time"], (name, play.lineno)
+        assert code.count("self.play(") == len(plays_in(code))
 
 
 def test_a_show_of_something_missing_still_has_a_time(blocks_impl):

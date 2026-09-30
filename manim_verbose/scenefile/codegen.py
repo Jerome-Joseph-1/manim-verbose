@@ -17,7 +17,10 @@ every step becomes a `with self.step(...)` block holding the calls a person woul
                 self.play(Write(eq), run_time=2)
 
 Who writes what: blocks.py turns an object into the expression which builds it, actions.py
-turns a step into the lines which play it, and this module puts those together in order.
+turns a step into the lines which play it, carry.py writes the block bringing in the objects a
+scene carries over from the scene before (as that scene left them), and this module puts
+those together in order. Each scene's class holds everything it needs: one generated on its
+own, for rendering one scene, runs as it would among the rest.
 
 Alongside the code comes a map from each line of it back to what in the scene file it came
 from (see GeneratedModule), so that when a line fails at render time, a formula LaTeX can't
@@ -35,14 +38,15 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from manim_verbose.scenefile.model import (
-    CaptionSettings, ClearStep, Document, ObjectBase, SceneSpec, StepBase, TogetherStep,
+    CaptionSettings, ClearStep, Document, FreeObject, ObjectBase, SceneSpec, StepBase, TogetherStep,
 )
 
 # Part of the key rendered scenes are cached under, so that a change to what code is generated
 # never serves a video made by the code before it. Bump it with any such change.
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 
 
 @dataclass
@@ -61,6 +65,9 @@ class CodegenContext:
     displaced: set[str] = field(default_factory=set)
     # Every name taken in the scene's construct method, which temporaries steer clear of
     taken: set[str] = field(default_factory=set)
+    # What the steps so far have done to the objects which their values don't say, a
+    # carry.History; made on first use (see carry.history_of)
+    history: Any = None
 
     def var(self, obj_id: str) -> str:
         """
@@ -84,11 +91,11 @@ class CodegenContext:
 
 @dataclass(frozen=True)
 class SourceRef:
-    """Where a line of generated code came from: a scene, and an object or step in it."""
+    """Where a line of generated code came from: a scene, and an object or step in it, or an object it carries."""
     scene_id: str
     loc: tuple[str | int, ...]
     item_id: str | None = None
-    kind: str = "scene"  # "scene", "object" or "step"
+    kind: str = "scene"  # "scene", "object", "step" or "carry"
 
 
 @dataclass
@@ -98,6 +105,10 @@ class GeneratedModule:
     line_map: dict[int, SourceRef]
     # The class generated for each scene, by scene id
     class_names: dict[str, str]
+    # For each play written over several lines (by its first line): the line each of its
+    # animations is on, by where that animation is among the play's (see actions.CodeLine),
+    # so that a failure while playing is laid at the step that animation came from
+    play_pieces: dict[int, dict[tuple[int, ...], int]] = field(default_factory=dict)
 
 
 class CodegenError(Exception):
@@ -140,6 +151,8 @@ def generate_module(doc: Document, base_dir: Path | None = None, scene_ids: list
 
     class_names: dict[str, str] = {}
     used_classes: set[str] = set()
+    # How each scene leaves things, walked through once for all the scenes carrying from it
+    walked: dict = {}
     for index, scene in enumerate(doc.scenes):
         if scene_ids is not None and scene.id not in scene_ids:
             continue
@@ -152,24 +165,58 @@ def generate_module(doc: Document, base_dir: Path | None = None, scene_ids: list
         class_names[scene.id] = name
         writer.line("")
         writer.line("")
-        _write_scene(writer, doc, scene, index, name, base_dir)
+        _write_scene(writer, doc, scene, index, name, base_dir, walked)
 
     if class_names:
         writer.line("")
         writer.line("")
         writer.line(f"SCENES_IN_ORDER = [{', '.join(class_names.values())}]")
-    return GeneratedModule(writer.text(), writer.line_map, class_names)
+    return GeneratedModule(writer.text(), writer.line_map, class_names, writer.play_pieces)
 
 
-def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, class_name: str, base_dir: Path) -> None:
-    from manim_verbose.scenefile import actions, blocks
+def build_expression(obj: ObjectBase, ctx: CodegenContext) -> str:
+    """
+    The expression building an object: blocks.object_expression, except that an object put
+    beside a point of another (its tip or tail, start or end) or following another is placed
+    by runtime's beside or DocScene.keep_beside, around what blocks builds unplaced.
+    """
+    from manim_verbose.scenefile import blocks
+    from manim_verbose.scenefile.actions import num, point_list
+    place = getattr(obj, "place", None)
+    if not (isinstance(obj, FreeObject) and place is not None and place.next_to is not None
+            and (place.anchor != "center" or place.follow)):
+        return blocks.object_expression(obj, ctx)
+    bare = blocks.object_expression(obj.model_copy(update={"place": None}), ctx)
+    args = ""
+    if place.anchor != "center":
+        args += f", anchor={py_str(place.anchor)}"
+    if place.side != "down":
+        args += f", side={py_str(place.side)}"
+    if place.buff != 0.25:
+        args += f", buff={num(place.buff)}"
+    if place.shift is not None:
+        args += f", shift={point_list(place.shift)}"
+    target = ctx.var(place.next_to)
+    if place.follow:
+        return f"self.keep_beside({bare}, {target}{args})"
+    return f"beside({bare}, {target}{args})"
+
+
+def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, class_name: str, base_dir: Path,
+                 walked: dict | None = None) -> None:
+    from manim_verbose.scenefile import actions, blocks, carry
 
     scene_loc = ("scenes", index)
     scene_ref = SourceRef(scene.id, scene_loc)
     ctx = CodegenContext(doc=doc, scene=scene, base_dir=base_dir)
-    ctx.objects = {obj.id: obj for obj in scene.objects}
-    ctx.names = object_names([obj.id for obj in scene.objects])
-    ctx.taken = set(ctx.names.values()) | {obj.id for obj in scene.objects}
+    start = carry.scene_start(doc, index, strict=True, cache=walked if walked is not None else {})
+    ctx.objects = dict(start.objects)
+    ctx.history = start.history
+    carried = [obj_id for obj_id in scene.carry if obj_id in ctx.objects and obj_id not in {o.id for o in scene.objects}]
+    ctx.displaced = {obj_id for obj_id in carried if carry.moved_since_built(ctx, obj_id)}
+    ids = carried + [obj.id for obj in scene.objects]
+    ctx.names = object_names(ids)
+    ctx.taken = set(ctx.names.values()) | set(ids)
 
     writer.ref = scene_ref
     writer.line(f"class {class_name}(DocScene):")
@@ -184,9 +231,24 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
     background = scene.background or doc.settings.background
     if background:
         writer.line(f"    default_camera_config = dict(background_color={actions.color_code(background)})")
+    width, height = doc.settings.resolution
+    if width * 9 != height * 16:
+        # For plain manimgl, which renders at 16:9 unless told otherwise, see DocScene
+        writer.line(f"    doc_resolution = ({int(width)}, {int(height)})")
     writer.line("")
     writer.line("    def construct(self):")
     body_start = len(writer.lines)
+
+    if carried:
+        carry_index = {obj_id: i for i, obj_id in enumerate(scene.carry)}
+        try:
+            lines = carry.carried_code(ctx, index)
+        except Exception as err:
+            raise CodegenError(_describe(err), SourceRef(scene.id, scene_loc + ("carry",))) from err
+        for line, obj_id in lines:
+            writer.ref = (SourceRef(scene.id, scene_loc + ("carry", carry_index[obj_id]), obj_id, "carry")
+                          if obj_id in carry_index else scene_ref)
+            writer.line("        " + line)
 
     object_index = {obj.id: i for i, obj in enumerate(scene.objects)}
     try:
@@ -197,7 +259,7 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
         ref = SourceRef(scene.id, scene_loc + ("objects", object_index[obj.id]), obj.id, "object")
         writer.ref = ref
         try:
-            expression = blocks.object_expression(obj, ctx)
+            expression = build_expression(obj, ctx)
         except Exception as err:
             raise CodegenError(_describe(err), ref) from err
         writer.line(f"        {ctx.var(obj.id)} = self.obj({py_str(obj.id)}, {expression})")
@@ -212,6 +274,7 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
     for step_index, step in enumerate(scene.steps):
         ref = SourceRef(scene.id, scene_loc + ("steps", step_index), step.id, "step")
         writer.ref = ref
+        ctx.history.step_id = step.id
         try:
             lines = actions.step_lines_from(step, ctx)
         except Exception as err:
@@ -221,9 +284,14 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
         if caption is not None:
             opening += f", caption={py_str(caption)}"
         writer.line(opening + "):")
-        for line, path in lines or [("pass", ())]:
-            writer.ref = _inner_ref(step, ref, path)
-            writer.line("            " + line)
+        play_start = None
+        for line in lines or [actions.CodeLine("pass")]:
+            writer.ref = _inner_ref(step, ref, line.origin)
+            writer.line("            " + line.text)
+            if line.opens_play:
+                play_start = len(writer.lines)
+            if line.piece is not None and play_start is not None:
+                writer.play_pieces.setdefault(play_start, {})[line.piece] = len(writer.lines)
 
     if len(writer.lines) == body_start:
         writer.ref = scene_ref
@@ -332,6 +400,7 @@ class _Writer:
         self.lines: list[str] = []
         self.line_map: dict[int, SourceRef] = {}
         self.ref: SourceRef | None = None
+        self.play_pieces: dict[int, dict[tuple[int, ...], int]] = {}
 
     def line(self, text: str) -> None:
         for piece in text.split("\n"):
