@@ -1,0 +1,4 @@
+# Mesa's lavapipe, a Vulkan driver which runs on the CPU, so the wgpu renderer has an adapter
+# on a runner with no GPU. The loader finds it through the ICD file the package installs.
+mesa-vulkan-drivers
+libvulkan1

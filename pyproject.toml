@@ -1,2 +1,21 @@
 [build-system]
 requires = ["setuptools", "wheel"]
+
+[tool.pytest.ini_options]
+# `pytest` from the root runs what is under tests/, and nothing from editor-ui/, docs/ or a
+# build directory
+testpaths = ["tests"]
+# Only test_*.py files hold tests. The other scripts in tests/ (render_compare.py, readback.py
+# and the like) are run by hand, or by CI as scripts.
+python_files = ["test_*.py"]
+markers = [
+    "render: draws pixels, so needs a Vulkan adapter (Mesa's lavapipe will do) and LaTeX. CI runs these with -m render",
+    "slow: takes more than a few seconds, such as building a wheel",
+    "e2e: drives the real editor server end to end",
+]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = [
+    # pydub imports audioop, which Python 3.13 dropped and audioop-lts stands in for there
+    "ignore:'audioop' is deprecated:DeprecationWarning",
+]

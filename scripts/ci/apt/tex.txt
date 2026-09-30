@@ -1,0 +1,13 @@
+# What compiling manim's default tex template (manimlib/tex_templates.yml) needs on Ubuntu 24.04,
+# installed with --no-install-recommends. Checked by scripts/ci/check_tex.py, whose --provenance
+# option names the package behind every file LaTeX and dvisvgm read and fails on any not
+# brought in by this list.
+texlive-latex-base          # latex itself; babel (english), inputenc, fontenc, amsmath, textcomp, pifont
+texlive-latex-recommended   # setspace, mathrsfs, ragged2e, xcolor, microtype
+texlive-latex-extra         # standalone (the document class), relsize, calligra; brings preview-latex-style
+texlive-fonts-recommended   # wasysym, and the rsfs fonts behind \mathscr
+texlive-fonts-extra         # dsfont, and the doublestroke and calligra fonts. The big one, ~630 MB
+texlive-science             # physics
+tipa                        # tipa
+cm-super                    # Type 1 T1-encoded fonts at every size, so text comes out as outlines
+dvisvgm                     # DVI to SVG

@@ -1,0 +1,2 @@
+# manimlib writes video by piping frames to the ffmpeg binary, see SceneFileWriter
+ffmpeg
