@@ -179,6 +179,8 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
     captions = _caption_style(doc.settings.captions)
     if captions:
         writer.line(f"    caption_style = {captions}")
+    if doc.settings.font:
+        writer.line(f"    default_font = {py_str(doc.settings.font)}")
     background = scene.background or doc.settings.background
     if background:
         writer.line(f"    default_camera_config = dict(background_color={actions.color_code(background)})")

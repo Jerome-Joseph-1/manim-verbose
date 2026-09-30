@@ -426,7 +426,6 @@ def prepare_process() -> None:
       renders compiling at once would overwrite each other's working files.
     - Text is laid out through temporary files named by the text alone, so two processes
       writing the same words would delete each other's; this process gets its own.
-    - A formula which fails to compile is reported as failing, see _guard_stale_dvi.
     """
     global _prepared_pid
     if _prepared_pid == os.getpid() and Path(tempfile.gettempdir()).is_dir():
@@ -441,33 +440,7 @@ def prepare_process() -> None:
     temp = private / "tmp"
     temp.mkdir(exist_ok=True)
     tempfile.tempdir = str(temp)
-    _guard_stale_dvi()
     _prepared_pid = os.getpid()
-
-
-def _guard_stale_dvi() -> None:
-    """
-    manimlib compiles every formula into the same working.dvi, and takes a failed compile
-    for a good one whenever a .dvi is there, which after the first formula it always is. So
-    a formula with a mistake in it came out as the formula compiled before it, and was cached
-    as that. Deleting the old .dvi before each compile makes a failure a failure.
-
-    (The proper fix belongs in manimlib.utils.tex_file_writing.full_tex_to_svg.)
-    """
-    from manimlib.utils import tex_file_writing
-    if getattr(tex_file_writing.full_tex_to_svg, "_guards_stale_dvi", False):
-        return
-    compile_tex = tex_file_writing.full_tex_to_svg
-
-    def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
-        from manimlib.config import manim_config
-        working = Path(manim_config.directories.latex_cache) / "working"
-        for suffix in (".dvi", ".xdv"):
-            working.with_suffix(suffix).unlink(missing_ok=True)
-        return compile_tex(full_tex, compiler, message)
-
-    full_tex_to_svg._guards_stale_dvi = True
-    tex_file_writing.full_tex_to_svg = full_tex_to_svg
 
 
 # Failures, reworded

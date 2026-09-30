@@ -45,6 +45,7 @@ from manimlib.animation.transform import ReplacementTransform, Transform
 from manimlib.animation.transform_matching_parts import TransformMatchingParts
 from manimlib.camera.camera import Camera
 from manimlib.camera.camera_frame import CameraFrame
+from manimlib.config import manim_config
 from manimlib.constants import BLACK, DOWN, FRAME_HEIGHT, FRAME_WIDTH, OUT, UP, WHITE, YELLOW
 from manimlib.mobject.geometry import Arrow, Line, Rectangle
 from manimlib.mobject.mobject import Group, Mobject
@@ -59,6 +60,9 @@ from manim_verbose.scenefile.expressions import *  # noqa: F401,F403  (safe func
 
 # Drawn above anything a scene file can ask for with `z`
 CAPTION_Z = 1_000_000
+
+# Manim's own default font, as configured when this module was first imported
+MANIM_DEFAULT_FONT = manim_config.text.font
 
 
 @dataclass
@@ -129,11 +133,17 @@ class DocScene(Scene):
     """
     scene_id: str = ""
     caption_style: CaptionStyle = CaptionStyle()
+    # Font for text which doesn't name its own, from the scene file's settings.font
+    default_font: str | None = None
     # How long a caption takes to fade from one to the next, at most
     caption_fade_time: float = 0.5
 
     def __init__(self, plan: RenderPlan | None = None, **kwargs):
         self.plan = plan or RenderPlan()
+        # Text reads its default font from manim's configuration as it is built. Set it for
+        # every scene, back to manim's own when this one names none, since a process which
+        # renders one scene file after another would otherwise carry a font over
+        manim_config.text.font = self.default_font or MANIM_DEFAULT_FONT
         if self.plan.still or self.plan.first_step > 0:
             kwargs["skip_animations"] = True
         if self.plan.headless:

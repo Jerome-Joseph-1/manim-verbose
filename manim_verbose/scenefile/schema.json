@@ -3650,6 +3650,19 @@
           "description": "Background color; manim's default if left out",
           "title": "Background"
         },
+        "font": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Font for all text and captions, unless an object names its own; manim's default if left out",
+          "title": "Font"
+        },
         "captions": {
           "$ref": "#/$defs/CaptionSettings"
         }

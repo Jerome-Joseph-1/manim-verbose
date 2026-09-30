@@ -676,6 +676,9 @@ class Settings(Model):
     resolution: Annotated[list[int], Field(min_length=2, max_length=2)] = Field(default_factory=lambda: [1920, 1080])
     fps: int = Field(30, ge=1, le=120)
     background: Color | None = Field(None, description="Background color; manim's default if left out")
+    font: str | None = Field(
+        None, description="Font for all text and captions, unless an object names its own; manim's default if left out"
+    )
     captions: CaptionSettings = Field(default_factory=CaptionSettings)
 
 
