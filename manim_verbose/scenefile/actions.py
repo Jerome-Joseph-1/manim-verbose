@@ -549,7 +549,10 @@ def placement_args(place: Placement, ctx: CodegenContext) -> str:
     if place.at is not None:
         args.append(f"at={point_list(place.at)}")
         if place.on is not None:
-            args.append(f"on={ctx.var(place.on)}")
+            system = ctx.spec(place.on)
+            # A number line with a backdrop is built as VGroup(panel, line), see blocks.py
+            inside = "[1]" if system.type == "number_line" and getattr(system, "backdrop", False) else ""
+            args.append(f"on={ctx.var(place.on)}{inside}")
     if place.edge is not None:
         args.append(f'edge="{place.edge}"')
     if place.next_to is not None:
