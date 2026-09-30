@@ -221,6 +221,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -257,6 +263,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "axes_3d",
@@ -358,6 +370,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -394,6 +412,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "axes",
@@ -542,6 +566,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "type": {
           "const": "box",
           "title": "Type",
@@ -631,6 +661,12 @@
           "default": false,
           "description": "On screen from the start of the scene, without being animated in",
           "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
           "type": "boolean"
         },
         "type": {
@@ -735,6 +771,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -771,6 +813,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "bullets",
@@ -1101,6 +1149,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -1137,6 +1191,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "circle",
@@ -1194,7 +1254,7 @@
     },
     "ClearStep": {
       "additionalProperties": false,
-      "description": "Fade out everything on the screen.",
+      "description": "Fade out everything on the screen, the caption included.",
       "properties": {
         "id": {
           "anyOf": [
@@ -1301,6 +1361,12 @@
           "default": false,
           "description": "On screen from the start of the scene, without being animated in",
           "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
           "type": "boolean"
         },
         "on": {
@@ -1430,6 +1496,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "type": {
           "const": "graph",
           "title": "Type",
@@ -1542,6 +1614,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -1578,6 +1656,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "group",
@@ -1878,6 +1962,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -1914,6 +2004,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "image",
@@ -1991,6 +2087,12 @@
           "default": false,
           "description": "On screen from the start of the scene, without being animated in",
           "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
           "type": "boolean"
         },
         "on": {
@@ -2124,6 +2226,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -2160,6 +2268,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "matrix",
@@ -2385,6 +2499,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -2421,6 +2541,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "number_line",
@@ -2520,6 +2646,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -2556,6 +2688,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "number_plane",
@@ -2634,7 +2772,7 @@
     },
     "Placement": {
       "additionalProperties": false,
-      "description": "Where a free standing object sits on the frame. Give at most one of `at`, `edge` or\n`next_to`; with none of them the object is centred. `shift` then nudges it.\n\nIn a file, `place: top` is short for `place: {edge: top}`, and `place: [1, 2]` for\n`place: {at: [1, 2]}`.",
+      "description": "Where a free standing object sits on the frame. Give at most one of `at`, `edge` or\n`next_to`; with none of them the object is centred. `shift` then nudges it.\n\nAn edge places the object against that edge and centred along it: `top` is top centre,\n`left` is middle left, and a corner such as `top_left` sets both. This holds for a move\ntoo, so moving to `top` also centres the object horizontally.\n\nIn a file, `place: top` is short for `place: {edge: top}`, and `place: [1, 2]` for\n`place: {at: [1, 2]}`.",
       "properties": {
         "at": {
           "anyOf": [
@@ -2652,8 +2790,29 @@
             }
           ],
           "default": null,
-          "description": "Position of the object's centre, in frame units",
+          "description": "Position of the object's centre, in frame units, or in the coordinates of `on`",
           "title": "At"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Read `at` as coordinates on this coordinate system",
+          "title": "On"
         },
         "edge": {
           "anyOf": [
@@ -2676,7 +2835,7 @@
             }
           ],
           "default": null,
-          "description": "Push the object against an edge or corner of the frame",
+          "description": "Push the object against an edge or corner of the frame, centred along it",
           "title": "Edge"
         },
         "next_to": {
@@ -2784,6 +2943,12 @@
           "default": false,
           "description": "On screen from the start of the scene, without being animated in",
           "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
           "type": "boolean"
         },
         "on": {
@@ -2907,6 +3072,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -2943,6 +3114,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "quote",
@@ -3033,6 +3210,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -3069,6 +3252,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "rectangle",
@@ -3621,6 +3810,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -3657,6 +3852,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "square",
@@ -3762,6 +3963,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -3798,6 +4005,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "svg",
@@ -3877,6 +4090,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -3913,6 +4132,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "tex",
@@ -4000,6 +4225,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -4036,6 +4267,12 @@
           "default": null,
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
+        },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
         },
         "type": {
           "const": "text",
@@ -4155,6 +4392,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "place": {
           "anyOf": [
             {
@@ -4192,6 +4435,12 @@
           "description": "Degrees, counterclockwise",
           "title": "Rotate"
         },
+        "backdrop": {
+          "default": false,
+          "description": "Put a dark panel behind the object, so it reads over a grid or other objects",
+          "title": "Backdrop",
+          "type": "boolean"
+        },
         "type": {
           "const": "title",
           "title": "Type",
@@ -4225,7 +4474,7 @@
     },
     "TogetherStep": {
       "additionalProperties": false,
-      "description": "Run several steps at the same time.",
+      "description": "Run several steps at the same time. With `lag` 0 they all start at once and the whole\nlasts as long as the longest; with a lag, each starts `lag` times the length of the one\nbefore it later than that one did. A `run_time` given here stretches or squeezes the\nwhole to fit.",
       "properties": {
         "id": {
           "anyOf": [
@@ -4501,6 +4750,12 @@
           "title": "Shown",
           "type": "boolean"
         },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
         "on": {
           "anyOf": [
             {
@@ -4571,6 +4826,7 @@
             }
           ],
           "default": null,
+          "description": "LaTeX label placed beside the tip, on `label_side`",
           "title": "Label"
         },
         "label_side": {

@@ -128,11 +128,16 @@ class Placement(Model):
     Where a free standing object sits on the frame. Give at most one of `at`, `edge` or
     `next_to`; with none of them the object is centred. `shift` then nudges it.
 
+    An edge places the object against that edge and centred along it: `top` is top centre,
+    `left` is middle left, and a corner such as `top_left` sets both. This holds for a move
+    too, so moving to `top` also centres the object horizontally.
+
     In a file, `place: top` is short for `place: {edge: top}`, and `place: [1, 2]` for
     `place: {at: [1, 2]}`.
     """
-    at: Point2 | None = Field(None, description="Position of the object's centre, in frame units")
-    edge: Edge | None = Field(None, description="Push the object against an edge or corner of the frame")
+    at: Point2 | None = Field(None, description="Position of the object's centre, in frame units, or in the coordinates of `on`")
+    on: CoordinateSystemRef | None = Field(None, description="Read `at` as coordinates on this coordinate system")
+    edge: Edge | None = Field(None, description="Push the object against an edge or corner of the frame, centred along it")
     next_to: AnyRef | None = Field(None, description="Put the object beside another one")
     side: Side = Field("down", description="Which side of `next_to` to put it on")
     buff: float = Field(0.25, ge=0, description="Gap left against the edge, or against `next_to`")
@@ -152,6 +157,8 @@ class Placement(Model):
         given = [name for name in ("at", "edge", "next_to") if getattr(self, name) is not None]
         if len(given) > 1:
             raise ValueError(f"Give only one of at, edge or next_to, not {' and '.join(given)}")
+        if self.on is not None and self.at is None:
+            raise ValueError("`on` says which coordinates `at` is in, so it needs `at`")
         return self
 
 
@@ -163,6 +170,9 @@ class ObjectBase(Model):
     opacity: float | None = Field(None, ge=0, le=1)
     z: int = Field(0, description="Drawing order; higher is drawn on top")
     shown: bool = Field(False, description="On screen from the start of the scene, without being animated in")
+    fixed: bool = Field(
+        False, description="Stays put on the screen when the camera moves or turns, as labels in a 3D scene should"
+    )
 
 
 class FreeObject(ObjectBase):
@@ -170,10 +180,15 @@ class FreeObject(ObjectBase):
     place: Placement | None = None
     scale: float | None = Field(None, gt=0)
     rotate: float | None = Field(None, description="Degrees, counterclockwise")
+    backdrop: bool = Field(False, description="Put a dark panel behind the object, so it reads over a grid or other objects")
 
 
 class PlottedObject(ObjectBase):
-    """An object whose geometry is given by points, on a coordinate system if `on` names one."""
+    """
+    An object whose geometry is given by points, on a coordinate system if `on` names one.
+    On a number line a point is [n, height]: n along the line, and a height above it in
+    frame units.
+    """
     on: CoordinateSystemRef | None = Field(None, description="Coordinate system the points are on; frame units if left out")
 
 
@@ -314,7 +329,7 @@ class VectorObject(PlottedObject):
     tip: Point
     tail: Point = Field(default_factory=lambda: [0, 0])
     thickness: float | None = Field(None, gt=0)
-    label: TexString | None = None
+    label: TexString | None = Field(None, description="LaTeX label placed beside the tip, on `label_side`")
     label_side: Side = "right"
     show_coordinates: bool = Field(False, description="Show the tip's coordinates as a column vector beside it")
 
@@ -502,7 +517,7 @@ class RemoveStep(StepBase):
 
 
 class ClearStep(StepBase):
-    """Fade out everything on the screen."""
+    """Fade out everything on the screen, the caption included."""
     model_config = _step_meta("Clear screen")
     do: Literal["clear"]
 
@@ -612,7 +627,12 @@ class ApplyMatrixStep(StepBase):
 
 
 class TogetherStep(StepBase):
-    """Run several steps at the same time."""
+    """
+    Run several steps at the same time. With `lag` 0 they all start at once and the whole
+    lasts as long as the longest; with a lag, each starts `lag` times the length of the one
+    before it later than that one did. A `run_time` given here stretches or squeezes the
+    whole to fit.
+    """
     model_config = _step_meta("Together")
     do: Literal["together"]
     steps: list[AnyStep] = Field(min_length=2)

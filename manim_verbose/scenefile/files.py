@@ -75,13 +75,28 @@ def to_data(doc: Document) -> dict[str, Any]:
     return _tidy({"version": doc.version, **data})
 
 
-def _tidy(value: Any) -> Any:
-    """Put id and type (or do) first in every mapping, and write whole numbers without a decimal point."""
+# What a reader wants first and last in a mapping; everything else keeps the models' order
+_FIRST = ("version", "id", "title", "type", "do", "target", "into")
+_LAST = ("color", "opacity", "z", "shown", "fixed", "place", "scale", "rotate", "backdrop", "run_time", "caption")
+
+
+def _tidy(value: Any, key: str | None = None) -> Any:
+    """
+    Arrange data the way a person would write it: id and kind first, styling, timing and
+    captions last, placements back in their short forms (`place: top`, `place: [1, 2]`), and
+    whole numbers without a decimal point.
+    """
     if isinstance(value, dict):
-        first = [key for key in ("version", "id", "type", "do") if key in value]
-        return {key: _tidy(value[key]) for key in first + [k for k in value if k not in first]}
+        if key in ("place", "to") and set(value) == {"edge"}:
+            return value["edge"]
+        if key in ("place", "to") and set(value) == {"at"}:
+            return _tidy(value["at"])
+        first = [k for k in _FIRST if k in value]
+        last = [k for k in _LAST if k in value and k not in first]
+        middle = [k for k in value if k not in first and k not in last]
+        return {k: _tidy(value[k], k) for k in first + middle + last}
     if isinstance(value, list):
-        return [_tidy(item) for item in value]
+        return [_tidy(item, key) for item in value]
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return value
@@ -91,7 +106,7 @@ def dump_text(doc: Document, fmt: str = "yaml") -> str:
     data = to_data(doc)
     if fmt == "json":
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    return yaml.dump(data, Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=100)
+    return yaml.dump(data, Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=10_000)
 
 
 def save_file(doc: Document, path: str | Path) -> None:
@@ -123,13 +138,53 @@ class _Loader(yaml.SafeLoader):
 
 @_without_yaml11_bools
 class _Dumper(yaml.SafeDumper):
-    """Writes short lists of numbers, like points and ranges, on one line, and long text as blocks."""
+    """
+    Writes anything short on one line, the way a person would type it: points and ranges
+    as [1, 2], and a step or a small object as {id: a_1, do: show, target: eq}. Anything
+    longer, or holding text of several lines, is written out a field per line.
+    """
+
+
+FLOW_WIDTH = 96
+
+
+def _is_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, (bool, int, float)) or (isinstance(value, str) and "\n" not in value)
+
+
+def _flow_length(value: Any) -> int | None:
+    """Length of `value` written on one line, or None if it shouldn't be."""
+    if _is_scalar(value):
+        text = str(value)
+        quoted = isinstance(value, str) and (text == "" or any(c in text for c in ",:{}[]#&*!|>'\"%@`") or text != text.strip())
+        return len(text) + (2 if quoted else 0)
+    if isinstance(value, list):
+        parts = [_flow_length(item) for item in value]
+    elif isinstance(value, dict):
+        parts = []
+        for k, v in value.items():
+            n = _flow_length(v)
+            parts.append(None if n is None else len(str(k)) + 2 + n)
+    else:
+        return None
+    if any(p is None for p in parts):
+        return None
+    return 2 + sum(parts) + 2 * max(len(parts) - 1, 0)
+
+
+def _flow(value: Any) -> bool:
+    length = _flow_length(value)
+    return length is not None and length <= FLOW_WIDTH
 
 
 def _represent_list(dumper: yaml.SafeDumper, data: list):
-    flow = len(data) <= 4 and all(isinstance(x, (int, float, str)) and not isinstance(x, bool) for x in data)
-    flow = flow or all(isinstance(x, list) and len(x) <= 4 for x in data) and len(data) <= 4
-    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow)
+    flow = all(_is_scalar(x) for x in data) and _flow(data)
+    flow = flow or all(isinstance(x, list) and all(_is_scalar(y) for y in x) for x in data) and _flow(data)
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=bool(data) and flow)
+
+
+def _represent_dict(dumper: yaml.SafeDumper, data: dict):
+    return dumper.represent_mapping("tag:yaml.org,2002:map", data, flow_style=bool(data) and _flow(data))
 
 
 def _represent_str(dumper: yaml.SafeDumper, data: str):
@@ -139,4 +194,5 @@ def _represent_str(dumper: yaml.SafeDumper, data: str):
 
 
 _Dumper.add_representer(list, _represent_list)
+_Dumper.add_representer(dict, _represent_dict)
 _Dumper.add_representer(str, _represent_str)
