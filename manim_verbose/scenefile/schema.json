@@ -1,0 +1,4706 @@
+{
+  "$defs": {
+    "AddStep": {
+      "additionalProperties": false,
+      "description": "Put objects on the screen instantly.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "add",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "AddStep",
+      "type": "object",
+      "x-label": "Add"
+    },
+    "ApplyMatrixStep": {
+      "additionalProperties": false,
+      "description": "Apply a linear transformation, given as a matrix, to objects such as a number plane and vectors on it.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "apply_matrix",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        },
+        "matrix": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Matrix",
+          "type": "array"
+        }
+      },
+      "required": [
+        "do",
+        "target",
+        "matrix"
+      ],
+      "title": "ApplyMatrixStep",
+      "type": "object",
+      "x-label": "Apply matrix"
+    },
+    "Axes3DObject": {
+      "additionalProperties": false,
+      "description": "Three axes. Use a camera step with `orientation` to look at them from an angle.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "axes_3d",
+          "title": "Type",
+          "type": "string"
+        },
+        "x_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "X Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "y_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Y Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "z_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Z Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "numbers": {
+          "default": false,
+          "title": "Numbers",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "Axes3DObject",
+      "type": "object",
+      "x-category": "Coordinates",
+      "x-label": "3D axes"
+    },
+    "AxesObject": {
+      "additionalProperties": false,
+      "description": "A pair of axes.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "axes",
+          "title": "Type",
+          "type": "string"
+        },
+        "x_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "X Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "y_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Y Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "numbers": {
+          "default": true,
+          "title": "Numbers",
+          "type": "boolean"
+        },
+        "tips": {
+          "default": false,
+          "title": "Tips",
+          "type": "boolean"
+        },
+        "x_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X Label"
+        },
+        "y_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y Label"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "AxesObject",
+      "type": "object",
+      "x-category": "Coordinates",
+      "x-label": "Axes"
+    },
+    "BoxObject": {
+      "additionalProperties": false,
+      "description": "A rectangle drawn around another object.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "box",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Target",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "buff": {
+          "default": 0.15,
+          "minimum": 0,
+          "title": "Buff",
+          "type": "number"
+        },
+        "corner_radius": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Corner Radius",
+          "type": "number"
+        },
+        "fill_opacity": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fill Opacity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "target"
+      ],
+      "title": "BoxObject",
+      "type": "object",
+      "x-category": "Annotations",
+      "x-label": "Box around"
+    },
+    "BraceObject": {
+      "additionalProperties": false,
+      "description": "A curly brace along one side of another object, with an optional label.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "brace",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Target",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "side": {
+          "default": "down",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "buff": {
+          "default": 0.1,
+          "minimum": 0,
+          "title": "Buff",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "target"
+      ],
+      "title": "BraceObject",
+      "type": "object",
+      "x-category": "Annotations",
+      "x-label": "Brace"
+    },
+    "BulletsObject": {
+      "additionalProperties": false,
+      "description": "A bulleted list, one item per line.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "bullets",
+          "title": "Type",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "font_size": {
+          "default": 36,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "buff": {
+          "default": 0.3,
+          "description": "Gap between items",
+          "minimum": 0,
+          "title": "Buff",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "items"
+      ],
+      "title": "BulletsObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Bullet list"
+    },
+    "CameraStep": {
+      "additionalProperties": false,
+      "description": "Move the camera: zoom, look at a point or an object, or turn it to look at 3D from an angle.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "camera",
+          "title": "Do",
+          "type": "string"
+        },
+        "zoom": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "1 is the normal view, 2 twice as close",
+          "title": "Zoom"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center"
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Centre on this object",
+          "title": "Focus"
+        },
+        "orientation": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[theta, phi] or [theta, phi, gamma] in degrees, for 3D",
+          "title": "Orientation"
+        },
+        "reset": {
+          "default": false,
+          "description": "Go back to the normal view",
+          "title": "Reset",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "do"
+      ],
+      "title": "CameraStep",
+      "type": "object",
+      "x-label": "Camera"
+    },
+    "CaptionSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "font_size": {
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "color": {
+          "default": "WHITE",
+          "title": "Color",
+          "type": "string",
+          "x-widget": "color"
+        },
+        "edge": {
+          "default": "bottom",
+          "enum": [
+            "bottom",
+            "top"
+          ],
+          "title": "Edge",
+          "type": "string"
+        },
+        "background": {
+          "default": true,
+          "description": "Put a dark band behind captions so they read over anything",
+          "title": "Background",
+          "type": "boolean"
+        }
+      },
+      "title": "CaptionSettings",
+      "type": "object"
+    },
+    "ChangeStep": {
+      "additionalProperties": false,
+      "description": "Animate an object to new property values, such as {color: RED}, {tip: [2, 1]} or\n{text: \"new words\"}. The object keeps the new values for the rest of the scene.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "change",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Target",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "set": {
+          "additionalProperties": true,
+          "minProperties": 1,
+          "title": "Set",
+          "type": "object",
+          "x-widget": "properties"
+        }
+      },
+      "required": [
+        "do",
+        "target",
+        "set"
+      ],
+      "title": "ChangeStep",
+      "type": "object",
+      "x-label": "Change"
+    },
+    "CircleObject": {
+      "additionalProperties": false,
+      "description": "A circle.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "circle",
+          "title": "Type",
+          "type": "string"
+        },
+        "radius": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "fill_opacity": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fill Opacity",
+          "type": "number"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "CircleObject",
+      "type": "object",
+      "x-category": "Shapes",
+      "x-label": "Circle"
+    },
+    "ClearStep": {
+      "additionalProperties": false,
+      "description": "Fade out everything on the screen.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "clear",
+          "title": "Do",
+          "type": "string"
+        }
+      },
+      "required": [
+        "do"
+      ],
+      "title": "ClearStep",
+      "type": "object",
+      "x-label": "Clear screen"
+    },
+    "DotObject": {
+      "additionalProperties": false,
+      "description": "A dot at a point.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "dot",
+          "title": "Type",
+          "type": "string"
+        },
+        "point": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Point",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "radius": {
+          "default": 0.08,
+          "exclusiveMinimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "label_side": {
+          "default": "up",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ],
+          "title": "Label Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "point"
+      ],
+      "title": "DotObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Dot"
+    },
+    "GraphObject": {
+      "additionalProperties": false,
+      "description": "The graph of a function of x, on a set of axes. The function is written as an\nexpression, such as \"sin(x)\" or \"x**2 / 4\", using + - * / ** and the usual functions.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "graph",
+          "title": "Type",
+          "type": "string"
+        },
+        "on": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "On",
+          "type": "string",
+          "x-ref-types": [
+            "axes",
+            "number_plane"
+          ],
+          "x-widget": "object-ref"
+        },
+        "function": {
+          "title": "Function",
+          "type": "string",
+          "x-widget": "expression"
+        },
+        "x_range": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X Range"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "on",
+        "function"
+      ],
+      "title": "GraphObject",
+      "type": "object",
+      "x-category": "Coordinates",
+      "x-label": "Function graph"
+    },
+    "GroupObject": {
+      "additionalProperties": false,
+      "description": "Several objects handled as one: shown, hidden, moved and highlighted together, and\noptionally arranged in a row or column.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "group",
+          "title": "Type",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string",
+            "x-widget": "object-ref"
+          },
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "arrange": {
+          "default": "none",
+          "enum": [
+            "none",
+            "row",
+            "column"
+          ],
+          "title": "Arrange",
+          "type": "string"
+        },
+        "buff": {
+          "default": 0.5,
+          "description": "Gap between members when arranged",
+          "minimum": 0,
+          "title": "Buff",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "members"
+      ],
+      "title": "GroupObject",
+      "type": "object",
+      "x-category": "Layout",
+      "x-label": "Group"
+    },
+    "HideStep": {
+      "additionalProperties": false,
+      "description": "Take objects off the screen.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "hide",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        },
+        "style": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "fade",
+            "fade_down",
+            "uncreate",
+            "shrink"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "lag": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lag",
+          "type": "number"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "HideStep",
+      "type": "object",
+      "x-label": "Hide"
+    },
+    "HighlightStep": {
+      "additionalProperties": false,
+      "description": "Draw attention to an object, or to one part of a text or formula. Every style but\nrecolor is momentary; recolor leaves the part in its new color.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "highlight",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Target",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "part": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A piece of the text or formula to highlight, rather than all of it",
+          "title": "Part"
+        },
+        "style": {
+          "default": "indicate",
+          "enum": [
+            "indicate",
+            "flash",
+            "box",
+            "underline",
+            "wiggle",
+            "recolor"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "HighlightStep",
+      "type": "object",
+      "x-label": "Highlight"
+    },
+    "ImageObject": {
+      "additionalProperties": false,
+      "description": "A picture, from a file next to the scene file.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "image",
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "accept": "image/*",
+          "title": "Path",
+          "type": "string",
+          "x-widget": "file"
+        },
+        "height": {
+          "default": 3,
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "path"
+      ],
+      "title": "ImageObject",
+      "type": "object",
+      "x-category": "Media",
+      "x-label": "Image"
+    },
+    "LineObject": {
+      "additionalProperties": false,
+      "description": "A straight line, or an arrow when `arrow` is set.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "line",
+          "title": "Type",
+          "type": "string"
+        },
+        "start": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Start",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "end": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "End",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "dashed": {
+          "default": false,
+          "title": "Dashed",
+          "type": "boolean"
+        },
+        "arrow": {
+          "default": false,
+          "title": "Arrow",
+          "type": "boolean"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "start",
+        "end"
+      ],
+      "title": "LineObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Line"
+    },
+    "MatrixObject": {
+      "additionalProperties": false,
+      "description": "A matrix, or a column vector when it has one column. Entries are LaTeX.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "matrix",
+          "title": "Type",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Entries",
+          "type": "array"
+        },
+        "bracket": {
+          "default": "square",
+          "enum": [
+            "square",
+            "round"
+          ],
+          "title": "Bracket",
+          "type": "string"
+        },
+        "font_size": {
+          "default": 40,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "row_colors": {
+          "items": {
+            "type": "string",
+            "x-widget": "color"
+          },
+          "title": "Row Colors",
+          "type": "array"
+        },
+        "column_colors": {
+          "items": {
+            "type": "string",
+            "x-widget": "color"
+          },
+          "title": "Column Colors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "entries"
+      ],
+      "title": "MatrixObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Matrix"
+    },
+    "MoveStep": {
+      "additionalProperties": false,
+      "description": "Move objects, either to a placement or by an offset.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "move",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "By"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "MoveStep",
+      "type": "object",
+      "x-label": "Move"
+    },
+    "NumberLineObject": {
+      "additionalProperties": false,
+      "description": "A number line.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "number_line",
+          "title": "Type",
+          "type": "string"
+        },
+        "x_range": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "X Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length"
+        },
+        "numbers": {
+          "default": true,
+          "title": "Numbers",
+          "type": "boolean"
+        },
+        "tip": {
+          "default": false,
+          "title": "Tip",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "NumberLineObject",
+      "type": "object",
+      "x-category": "Coordinates",
+      "x-label": "Number line"
+    },
+    "NumberPlaneObject": {
+      "additionalProperties": false,
+      "description": "A grid with axes, filling the frame unless given a size.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "number_plane",
+          "title": "Type",
+          "type": "string"
+        },
+        "x_range": {
+          "description": "[min, max, step]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "X Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "y_range": {
+          "description": "[min, max, step]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Y Range",
+          "type": "array",
+          "x-widget": "range"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "faded": {
+          "default": false,
+          "description": "Draw the grid lines faintly",
+          "title": "Faded",
+          "type": "boolean"
+        },
+        "numbers": {
+          "default": false,
+          "description": "Label the axes with numbers",
+          "title": "Numbers",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "NumberPlaneObject",
+      "type": "object",
+      "x-category": "Coordinates",
+      "x-label": "Number plane"
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "description": "Where a free standing object sits on the frame. Give at most one of `at`, `edge` or\n`next_to`; with none of them the object is centred. `shift` then nudges it.\n\nIn a file, `place: top` is short for `place: {edge: top}`, and `place: [1, 2]` for\n`place: {at: [1, 2]}`.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Position of the object's centre, in frame units",
+          "title": "At"
+        },
+        "edge": {
+          "anyOf": [
+            {
+              "enum": [
+                "center",
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "top_left",
+                "top_right",
+                "bottom_left",
+                "bottom_right"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Push the object against an edge or corner of the frame",
+          "title": "Edge"
+        },
+        "next_to": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Put the object beside another one",
+          "title": "Next To"
+        },
+        "side": {
+          "default": "down",
+          "description": "Which side of `next_to` to put it on",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "buff": {
+          "default": 0.25,
+          "description": "Gap left against the edge, or against `next_to`",
+          "minimum": 0,
+          "title": "Buff",
+          "type": "number"
+        },
+        "shift": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Moved by this much afterwards, in frame units",
+          "title": "Shift"
+        }
+      },
+      "title": "Placement",
+      "type": "object"
+    },
+    "PolygonObject": {
+      "additionalProperties": false,
+      "description": "A closed shape through the given points.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "polygon",
+          "title": "Type",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 2,
+            "type": "array",
+            "x-widget": "point"
+          },
+          "minItems": 3,
+          "title": "Points",
+          "type": "array"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "fill_opacity": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fill Opacity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "points"
+      ],
+      "title": "PolygonObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Polygon"
+    },
+    "QuoteObject": {
+      "additionalProperties": false,
+      "description": "A quotation, with its author beneath it.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "quote",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string",
+          "x-widget": "multiline"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "font_size": {
+          "default": 40,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "text"
+      ],
+      "title": "QuoteObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Quote"
+    },
+    "RectangleObject": {
+      "additionalProperties": false,
+      "description": "A rectangle, with rounded corners if given a corner radius.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "rectangle",
+          "title": "Type",
+          "type": "string"
+        },
+        "width": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "number"
+        },
+        "corner_radius": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Corner Radius",
+          "type": "number"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "fill_opacity": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fill Opacity",
+          "type": "number"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "RectangleObject",
+      "type": "object",
+      "x-category": "Shapes",
+      "x-label": "Rectangle"
+    },
+    "RemoveStep": {
+      "additionalProperties": false,
+      "description": "Take objects off the screen instantly.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "remove",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "RemoveStep",
+      "type": "object",
+      "x-label": "Remove"
+    },
+    "SceneSpec": {
+      "additionalProperties": false,
+      "description": "One part of the video, with its own objects and steps.",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Background"
+        },
+        "objects": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "axes": "#/$defs/AxesObject",
+                "axes_3d": "#/$defs/Axes3DObject",
+                "box": "#/$defs/BoxObject",
+                "brace": "#/$defs/BraceObject",
+                "bullets": "#/$defs/BulletsObject",
+                "circle": "#/$defs/CircleObject",
+                "dot": "#/$defs/DotObject",
+                "graph": "#/$defs/GraphObject",
+                "group": "#/$defs/GroupObject",
+                "image": "#/$defs/ImageObject",
+                "line": "#/$defs/LineObject",
+                "matrix": "#/$defs/MatrixObject",
+                "number_line": "#/$defs/NumberLineObject",
+                "number_plane": "#/$defs/NumberPlaneObject",
+                "polygon": "#/$defs/PolygonObject",
+                "quote": "#/$defs/QuoteObject",
+                "rectangle": "#/$defs/RectangleObject",
+                "square": "#/$defs/SquareObject",
+                "svg": "#/$defs/SvgObject",
+                "tex": "#/$defs/TexObject",
+                "text": "#/$defs/TextObject",
+                "title": "#/$defs/TitleObject",
+                "vector": "#/$defs/VectorObject"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextObject"
+              },
+              {
+                "$ref": "#/$defs/TexObject"
+              },
+              {
+                "$ref": "#/$defs/TitleObject"
+              },
+              {
+                "$ref": "#/$defs/QuoteObject"
+              },
+              {
+                "$ref": "#/$defs/BulletsObject"
+              },
+              {
+                "$ref": "#/$defs/MatrixObject"
+              },
+              {
+                "$ref": "#/$defs/NumberPlaneObject"
+              },
+              {
+                "$ref": "#/$defs/AxesObject"
+              },
+              {
+                "$ref": "#/$defs/Axes3DObject"
+              },
+              {
+                "$ref": "#/$defs/NumberLineObject"
+              },
+              {
+                "$ref": "#/$defs/GraphObject"
+              },
+              {
+                "$ref": "#/$defs/DotObject"
+              },
+              {
+                "$ref": "#/$defs/VectorObject"
+              },
+              {
+                "$ref": "#/$defs/LineObject"
+              },
+              {
+                "$ref": "#/$defs/PolygonObject"
+              },
+              {
+                "$ref": "#/$defs/CircleObject"
+              },
+              {
+                "$ref": "#/$defs/RectangleObject"
+              },
+              {
+                "$ref": "#/$defs/SquareObject"
+              },
+              {
+                "$ref": "#/$defs/BraceObject"
+              },
+              {
+                "$ref": "#/$defs/BoxObject"
+              },
+              {
+                "$ref": "#/$defs/ImageObject"
+              },
+              {
+                "$ref": "#/$defs/SvgObject"
+              },
+              {
+                "$ref": "#/$defs/GroupObject"
+              }
+            ]
+          },
+          "title": "Objects",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "add": "#/$defs/AddStep",
+                "apply_matrix": "#/$defs/ApplyMatrixStep",
+                "camera": "#/$defs/CameraStep",
+                "change": "#/$defs/ChangeStep",
+                "clear": "#/$defs/ClearStep",
+                "hide": "#/$defs/HideStep",
+                "highlight": "#/$defs/HighlightStep",
+                "move": "#/$defs/MoveStep",
+                "remove": "#/$defs/RemoveStep",
+                "show": "#/$defs/ShowStep",
+                "together": "#/$defs/TogetherStep",
+                "transform": "#/$defs/TransformStep",
+                "wait": "#/$defs/WaitStep"
+              },
+              "propertyName": "do"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ShowStep"
+              },
+              {
+                "$ref": "#/$defs/HideStep"
+              },
+              {
+                "$ref": "#/$defs/AddStep"
+              },
+              {
+                "$ref": "#/$defs/RemoveStep"
+              },
+              {
+                "$ref": "#/$defs/ClearStep"
+              },
+              {
+                "$ref": "#/$defs/TransformStep"
+              },
+              {
+                "$ref": "#/$defs/ChangeStep"
+              },
+              {
+                "$ref": "#/$defs/MoveStep"
+              },
+              {
+                "$ref": "#/$defs/HighlightStep"
+              },
+              {
+                "$ref": "#/$defs/WaitStep"
+              },
+              {
+                "$ref": "#/$defs/CameraStep"
+              },
+              {
+                "$ref": "#/$defs/ApplyMatrixStep"
+              },
+              {
+                "$ref": "#/$defs/TogetherStep"
+              }
+            ]
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "SceneSpec",
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "resolution": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Resolution",
+          "type": "array"
+        },
+        "fps": {
+          "default": 30,
+          "maximum": 120,
+          "minimum": 1,
+          "title": "Fps",
+          "type": "integer"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Background color; manim's default if left out",
+          "title": "Background"
+        },
+        "captions": {
+          "$ref": "#/$defs/CaptionSettings"
+        }
+      },
+      "title": "Settings",
+      "type": "object"
+    },
+    "ShowStep": {
+      "additionalProperties": false,
+      "description": "Bring objects onto the screen.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "show",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "items": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string",
+                "x-widget": "object-ref"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Target"
+        },
+        "style": {
+          "default": "auto",
+          "description": "auto picks by kind of object: write for text, draw for shapes, grow for arrows",
+          "enum": [
+            "auto",
+            "write",
+            "draw",
+            "fade",
+            "fade_up",
+            "grow",
+            "pop"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "lag": {
+          "default": 0,
+          "description": "With several targets: 0 starts them together, 1 one after another",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lag",
+          "type": "number"
+        }
+      },
+      "required": [
+        "do",
+        "target"
+      ],
+      "title": "ShowStep",
+      "type": "object",
+      "x-label": "Show"
+    },
+    "SquareObject": {
+      "additionalProperties": false,
+      "description": "A square.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "square",
+          "title": "Type",
+          "type": "string"
+        },
+        "side": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Side",
+          "type": "number"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "fill_opacity": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fill Opacity",
+          "type": "number"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "SquareObject",
+      "type": "object",
+      "x-category": "Shapes",
+      "x-label": "Square"
+    },
+    "SvgObject": {
+      "additionalProperties": false,
+      "description": "A vector drawing, from an .svg file next to the scene file.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "svg",
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "accept": ".svg",
+          "title": "Path",
+          "type": "string",
+          "x-widget": "file"
+        },
+        "height": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "path"
+      ],
+      "title": "SvgObject",
+      "type": "object",
+      "x-category": "Media",
+      "x-label": "SVG drawing"
+    },
+    "TexObject": {
+      "additionalProperties": false,
+      "description": "A LaTeX formula, in math mode.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "tex",
+          "title": "Type",
+          "type": "string"
+        },
+        "tex": {
+          "title": "Tex",
+          "type": "string",
+          "x-widget": "tex"
+        },
+        "font_size": {
+          "default": 48,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "colors": {
+          "additionalProperties": {
+            "type": "string",
+            "x-widget": "color"
+          },
+          "description": "Color parts of the formula: {tex: color}",
+          "title": "Colors",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "tex"
+      ],
+      "title": "TexObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Equation"
+    },
+    "TextObject": {
+      "additionalProperties": false,
+      "description": "Plain text. Line breaks in the text are kept.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string",
+          "x-widget": "multiline"
+        },
+        "font_size": {
+          "default": 48,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "font": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Font"
+        },
+        "bold": {
+          "default": false,
+          "title": "Bold",
+          "type": "boolean"
+        },
+        "italic": {
+          "default": false,
+          "title": "Italic",
+          "type": "boolean"
+        },
+        "align": {
+          "default": "center",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ],
+          "title": "Align",
+          "type": "string"
+        },
+        "colors": {
+          "additionalProperties": {
+            "type": "string",
+            "x-widget": "color"
+          },
+          "description": "Color parts of the text: {part: color}",
+          "title": "Colors",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "text"
+      ],
+      "title": "TextObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Text"
+    },
+    "TitleObject": {
+      "additionalProperties": false,
+      "description": "A heading, at the top of the frame unless placed elsewhere.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "rotate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Degrees, counterclockwise",
+          "title": "Rotate"
+        },
+        "type": {
+          "const": "title",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "font_size": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "title": "Font Size",
+          "type": "number"
+        },
+        "underline": {
+          "default": true,
+          "title": "Underline",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "text"
+      ],
+      "title": "TitleObject",
+      "type": "object",
+      "x-category": "Text & math",
+      "x-label": "Title"
+    },
+    "TogetherStep": {
+      "additionalProperties": false,
+      "description": "Run several steps at the same time.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "together",
+          "title": "Do",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "add": "#/$defs/AddStep",
+                "apply_matrix": "#/$defs/ApplyMatrixStep",
+                "camera": "#/$defs/CameraStep",
+                "change": "#/$defs/ChangeStep",
+                "clear": "#/$defs/ClearStep",
+                "hide": "#/$defs/HideStep",
+                "highlight": "#/$defs/HighlightStep",
+                "move": "#/$defs/MoveStep",
+                "remove": "#/$defs/RemoveStep",
+                "show": "#/$defs/ShowStep",
+                "together": "#/$defs/TogetherStep",
+                "transform": "#/$defs/TransformStep",
+                "wait": "#/$defs/WaitStep"
+              },
+              "propertyName": "do"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ShowStep"
+              },
+              {
+                "$ref": "#/$defs/HideStep"
+              },
+              {
+                "$ref": "#/$defs/AddStep"
+              },
+              {
+                "$ref": "#/$defs/RemoveStep"
+              },
+              {
+                "$ref": "#/$defs/ClearStep"
+              },
+              {
+                "$ref": "#/$defs/TransformStep"
+              },
+              {
+                "$ref": "#/$defs/ChangeStep"
+              },
+              {
+                "$ref": "#/$defs/MoveStep"
+              },
+              {
+                "$ref": "#/$defs/HighlightStep"
+              },
+              {
+                "$ref": "#/$defs/WaitStep"
+              },
+              {
+                "$ref": "#/$defs/CameraStep"
+              },
+              {
+                "$ref": "#/$defs/ApplyMatrixStep"
+              },
+              {
+                "$ref": "#/$defs/TogetherStep"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Steps",
+          "type": "array"
+        },
+        "lag": {
+          "default": 0,
+          "description": "0 starts them all at once; above 0 staggers them",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lag",
+          "type": "number"
+        }
+      },
+      "required": [
+        "do",
+        "steps"
+      ],
+      "title": "TogetherStep",
+      "type": "object",
+      "x-label": "Together"
+    },
+    "TransformStep": {
+      "additionalProperties": false,
+      "description": "Turn one object into another. Afterwards `into` is on the screen and `target` is not,\nunless `keep` is set, in which case a copy of `target` is what turns into `into`.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "transform",
+          "title": "Do",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Target",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "into": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Into",
+          "type": "string",
+          "x-widget": "object-ref"
+        },
+        "style": {
+          "default": "auto",
+          "description": "match moves matching parts of text or formulas to each other; auto uses it for those",
+          "enum": [
+            "auto",
+            "morph",
+            "match",
+            "fade"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "keep": {
+          "default": false,
+          "title": "Keep",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "do",
+        "target",
+        "into"
+      ],
+      "title": "TransformStep",
+      "type": "object",
+      "x-label": "Transform"
+    },
+    "VectorObject": {
+      "additionalProperties": false,
+      "description": "An arrow from `tail` to `tip`, from the origin unless a tail is given.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "vector",
+          "title": "Type",
+          "type": "string"
+        },
+        "tip": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Tip",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "tail": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Tail",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "label_side": {
+          "default": "right",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ],
+          "title": "Label Side",
+          "type": "string"
+        },
+        "show_coordinates": {
+          "default": false,
+          "description": "Show the tip's coordinates as a column vector beside it",
+          "title": "Show Coordinates",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "tip"
+      ],
+      "title": "VectorObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Vector"
+    },
+    "WaitStep": {
+      "additionalProperties": false,
+      "description": "Hold still.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filled in when the file is loaded, if left out",
+          "title": "Id"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subtitle shown from this step on, until another step changes it. An empty string clears it",
+          "title": "Caption",
+          "x-widget": "multiline"
+        },
+        "run_time": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 600,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seconds; each kind of step has its own default",
+          "title": "Run Time"
+        },
+        "do": {
+          "const": "wait",
+          "title": "Do",
+          "type": "string"
+        },
+        "duration": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "title": "Duration",
+          "type": "number"
+        }
+      },
+      "required": [
+        "do"
+      ],
+      "title": "WaitStep",
+      "type": "object",
+      "x-label": "Wait"
+    }
+  },
+  "$id": "https://github.com/Jerome-Joseph-1/manim-verbose/scenefile/v1",
+  "additionalProperties": false,
+  "description": "A whole video.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "title": {
+      "default": "Untitled",
+      "title": "Title",
+      "type": "string"
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "scenes": {
+      "items": {
+        "$ref": "#/$defs/SceneSpec"
+      },
+      "minItems": 1,
+      "title": "Scenes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scenes"
+  ],
+  "title": "Document",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

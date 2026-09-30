@@ -159,3 +159,13 @@ latex_cache/
 
 # Textures the render comparison harness makes for itself
 tests/assets/
+
+### manim_verbose ###
+manimgl.egg-info/
+.hypothesis/
+.pytest_cache/
+editor-ui/node_modules/
+editor-ui/test-results/
+editor-ui/playwright-report/
+!editor-ui/src/lib/
+manim_verbose/editor/static/

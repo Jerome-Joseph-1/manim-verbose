@@ -1,2 +1,4 @@
 graft manimlib
+graft manim_verbose
 recursive-exclude manimlib *.pyc *.DS_Store
+recursive-exclude manim_verbose *.pyc *.DS_Store
