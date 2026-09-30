@@ -1,0 +1,48 @@
+// Documents the mock server can start from. `demo` is a small populated lesson; `empty` is
+// what a brand new file looks like.
+
+export const FIXTURES = {
+  empty: () => ({
+    version: 1,
+    title: 'Untitled',
+    scenes: [{ id: 'scene_1' }],
+  }),
+
+  demo: () => ({
+    version: 1,
+    title: 'Pythagoras',
+    scenes: [
+      {
+        id: 'intro',
+        title: 'The theorem',
+        objects: [
+          { id: 'title', type: 'title', text: 'Pythagoras' },
+          { id: 'tri', type: 'polygon', points: [[-2, -1.5], [1, -1.5], [1, 0.5]], color: 'BLUE' },
+          { id: 'eq', type: 'tex', tex: 'a^2 + b^2 = c^2', place: { at: [3.5, -1] } },
+          { id: 'note', type: 'text', text: 'For right triangles', font_size: 32, place: { next_to: 'eq', side: 'down' } },
+        ],
+        steps: [
+          { id: 'intro_1', do: 'show', target: 'title' },
+          { id: 'intro_2', do: 'show', target: 'tri', caption: 'Take a right triangle' },
+          { id: 'intro_3', do: 'show', target: ['eq', 'note'], caption: 'The oldest theorem you know' },
+          { id: 'intro_4', do: 'highlight', target: 'eq', part: 'c^2' },
+        ],
+      },
+      {
+        id: 'proof',
+        title: 'A proof',
+        objects: [
+          { id: 'square', type: 'square', side: 3, color: 'YELLOW', fill_opacity: 0.2 },
+          { id: 'label', type: 'tex', tex: 'c^2', place: { next_to: 'square', side: 'right' } },
+        ],
+        steps: [
+          { id: 'proof_1', do: 'show', target: 'square' },
+          { id: 'proof_2', do: 'show', target: 'label' },
+        ],
+      },
+    ],
+  }),
+};
+
+/** Objects for a scene with everything on it, used by tests that want a busy canvas. */
+export const DEFAULT_FIXTURE = 'demo';
