@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogFromSchema, fillObjectTemplate, fillStepTemplate, suggestPosition } from './templates';
+import { catalogFromSchema, fillObjectTemplate, fillStepTemplate, suggestPosition, unfilledReferences } from './templates';
 import { schemaIndex, sampleDoc } from '../test/fixtures';
 import type { Scene } from '../doc/types';
 
@@ -62,6 +62,23 @@ describe('filling in new steps', () => {
   it('leaves steps without targets alone', () => {
     expect(fillStepTemplate(schemaIndex, { do: 'wait', duration: 1 }, { ...base, frameIndex: 0, selectedObjectId: 'a' })).toEqual({ do: 'wait', duration: 1 });
     expect(fillStepTemplate(schemaIndex, { do: 'clear' }, { ...base, frameIndex: 0, selectedObjectId: 'a' })).toEqual({ do: 'clear' });
+  });
+});
+
+describe('references left empty', () => {
+  it('finds required references a template could not fill', () => {
+    expect(unfilledReferences(schemaIndex, { type: 'brace', target: '' })).toEqual(['target']);
+    expect(unfilledReferences(schemaIndex, { type: 'group', members: [] })).toEqual(['members']);
+    expect(unfilledReferences(schemaIndex, { type: 'graph', on: '', function: 'x' })).toEqual(['on']);
+    expect(unfilledReferences(schemaIndex, { do: 'show', target: '' })).toEqual(['target']);
+    expect(unfilledReferences(schemaIndex, { do: 'together', steps: [{ do: 'show', target: 'a' }, { do: 'show', target: '' }] })).toEqual(['steps.target']);
+  });
+
+  it('passes templates which are complete', () => {
+    expect(unfilledReferences(schemaIndex, { type: 'brace', target: 'eq' })).toEqual([]);
+    expect(unfilledReferences(schemaIndex, { type: 'text', text: 'hi' })).toEqual([]);
+    expect(unfilledReferences(schemaIndex, { do: 'wait', duration: 1 })).toEqual([]);
+    expect(unfilledReferences(schemaIndex, { do: 'camera', zoom: 2 })).toEqual([]);
   });
 });
 

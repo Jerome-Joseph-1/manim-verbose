@@ -194,6 +194,7 @@ export function EnumWidget({ spec, value, onChange, inputId, dataField, describe
       data-field={dataField}
       className={`select${invalid ? ' invalid' : ''}`}
       value={current}
+      aria-labelledby={`${inputId}-label`}
       aria-describedby={describedBy}
       onChange={(e) => onChange(e.target.value === spec.default && !spec.required ? undefined : e.target.value)}
     >

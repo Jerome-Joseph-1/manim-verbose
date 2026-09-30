@@ -69,10 +69,12 @@ export function PlacementWidget({
     return write({ at });
   };
 
+  // "Next to" needs another object to be next to
+  const others = refOptions(schema, scene, null, selfId);
   const modes: { mode: Mode; label: string }[] = [
     { mode: 'centre', label: 'Centre' },
     { mode: 'edge', label: 'Edge' },
-    { mode: 'next_to', label: 'Next to' },
+    ...(others.length || mode === 'next_to' ? [{ mode: 'next_to' as const, label: 'Next to' }] : []),
     { mode: 'at', label: 'Point' },
   ];
 
@@ -199,7 +201,7 @@ export function PlacementWidget({
               options={systems}
               onChange={(id) => write({ ...place, on: id })}
               allowNone
-              noneLabel="The frame (x from about −7 to 7, y from −4 to 4)"
+              noneLabel="The frame (frame units)"
               ariaLabel={`${spec.label}: coordinates of`}
               dataField={`${dataField}.on`}
             />

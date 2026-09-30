@@ -101,10 +101,10 @@ export function Menu({
                 type="button"
                 role="menuitem"
                 className="menu-item"
-                tabIndex={-1}
                 data-key={entry.key}
                 onClick={() => {
                   setOpen(false);
+                  button.current?.focus();
                   entry.onSelect();
                 }}
               >

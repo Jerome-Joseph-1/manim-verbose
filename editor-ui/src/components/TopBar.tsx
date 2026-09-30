@@ -36,7 +36,8 @@ export function SaveStatus() {
 
 function Brand() {
   return (
-    <div className="brand" aria-label="manim editor">
+    <div className="brand">
+      <h1 className="sr-only">manim editor</h1>
       <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
         <rect x="1" y="1" width="30" height="30" rx="7" fill="currentColor" opacity="0.14" />
         <path d="M8 22V11l8 7 8-7v11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />

@@ -6,20 +6,25 @@ import { useMemo } from 'react';
 import type { Json, JsonObject, Loc, Step } from '../../doc/types';
 import { findStep } from '../../doc/ops';
 import { newStepId, stepIds } from '../../doc/ids';
-import { fillStepTemplate } from '../../lib/templates';
+import { fillStepTemplate, unfilledReferences } from '../../lib/templates';
 import { objectKind, settableFields, stepFields, stepKind, type FieldSpec } from '../../lib/schema';
 import { problemsForField } from '../../lib/problems';
-import { useEditor, frameStepIndex } from '../../state/store';
+import { useEditor, frameStepIndex, toast } from '../../state/store';
 import { Icon, stepIcon } from '../Icon';
 import { FormContext, useForm } from './context';
 import type { WidgetProps } from './basic';
 import { Field, FieldProblems } from './Field';
 
 /** A starting value for a field being added to a change step. */
-function startingValue(spec: FieldSpec, current: Json | undefined): Json {
+function startingValue(spec: FieldSpec, current: Json | undefined, candidates: string[]): Json {
   if (current !== undefined) return structuredClone(current);
   if (spec.default !== undefined && spec.default !== null) return structuredClone(spec.default);
   switch (spec.kind) {
+    case 'object-ref':
+    case 'targets':
+      return candidates[0] ?? '';
+    case 'ref-list':
+      return candidates.slice(0, 1);
     case 'color':
       return 'YELLOW';
     case 'number':
@@ -49,7 +54,10 @@ export function PropertiesWidget({ value, inputId, path }: WidgetProps & { path:
     return <p className="field-help">Choose the object to change first; then pick which of its properties to change.</p>;
   }
   const kindLabel = objectKind(ctx.schema, target.type)?.label ?? target.type;
-  const available = fields.filter((f) => !(f.name in set));
+  const candidatesFor = (f: FieldSpec) =>
+    (ctx.scene?.objects ?? []).filter((o) => o.id !== target.id && (!f.refTypes || f.refTypes.includes(o.type))).map((o) => o.id);
+  // A reference can only be offered when there is something for it to name
+  const available = fields.filter((f) => !(f.name in set) && (!['object-ref', 'ref-list', 'targets'].includes(f.kind) || target[f.name] !== undefined || candidatesFor(f).length > 0));
   return (
     <div>
       {Object.entries(set).map(([key, v]) => {
@@ -76,7 +84,7 @@ export function PropertiesWidget({ value, inputId, path }: WidgetProps & { path:
         aria-label={`Add a property of the ${kindLabel.toLowerCase()} to change`}
         onChange={(e) => {
           const spec = fields.find((f) => f.name === e.target.value);
-          if (spec) ctx.commit([...path, spec.name], startingValue(spec, target[spec.name]));
+          if (spec) ctx.commit([...path, spec.name], startingValue(spec, target[spec.name], candidatesFor(spec)));
         }}
       >
         <option value="">Change another property of {target.id}…</option>
@@ -109,6 +117,10 @@ export function StepsWidget({ value, inputId, path }: WidgetProps & { path: Loc 
       frameIndex: Math.max(-1, frameIndex - 1),
       selectedObjectId: null,
     });
+    if (unfilledReferences(ctx.schema, template).length) {
+      toast('That step acts on an object: add an object to this scene first', 'error');
+      return;
+    }
     const id = newStepId(ctx.scene.id, stepIds(ctx.doc));
     ctx.commit(path, [...steps, { id, ...template }]);
   };

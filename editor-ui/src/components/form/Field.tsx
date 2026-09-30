@@ -28,9 +28,9 @@ const SELF_LABELLED: WidgetKind[] = ['boolean'];
 export function FieldProblems({ problems, id }: { problems: Problem[]; id?: string }) {
   if (problems.length === 0) return null;
   return (
-    <ul className="field-problems" id={id}>
+    <ul className="field-problems" id={id} aria-live="polite">
       {problems.map((p, i) => (
-        <li key={i} className={`field-problem ${p.severity}`} role={p.severity === 'error' ? 'alert' : undefined}>
+        <li key={i} className={`field-problem ${p.severity}`}>
           <span className="sr-only">{p.severity === 'error' ? 'Error: ' : 'Warning: '}</span>
           {p.message}
         </li>

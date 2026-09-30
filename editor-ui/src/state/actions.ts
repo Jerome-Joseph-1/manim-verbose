@@ -3,8 +3,8 @@
  * turns into one or more document ops through `apply`, with the selection following along.
  */
 import type { CatalogEntry } from '../lib/api';
-import { fillObjectTemplate, fillStepTemplate, suggestPosition } from '../lib/templates';
-import { hasPlacement } from '../lib/schema';
+import { fillObjectTemplate, fillStepTemplate, suggestPosition, unfilledReferences } from '../lib/templates';
+import { hasPlacement, objectFields, type SchemaIndex } from '../lib/schema';
 import { roundFrame, type Box } from '../lib/geometry';
 import {
   addObject, addScene, addStep, duplicateObject, duplicateScene, duplicateStep, findObject, findScene, findStepPath,
@@ -26,6 +26,14 @@ function selectedObjectId(): string | null {
 
 // Objects
 
+/** "a set of axes or a number plane", for what an object's references need. */
+function describeNeeds(schema: SchemaIndex, type: string): string {
+  const refs = objectFields(schema, type).filter((f) => f.required && (f.kind === 'object-ref' || f.kind === 'ref-list'));
+  const kinds = refs.flatMap((f) => f.refTypes ?? []);
+  const phrase: Record<string, string> = { axes: 'a set of axes', axes_3d: 'a set of 3D axes', number_plane: 'a number plane', number_line: 'a number line' };
+  return kinds.length ? [...new Set(kinds)].map((k) => phrase[k] ?? `a ${k.replace(/_/g, ' ')}`).join(' or ') : 'another object';
+}
+
 export function addObjectFrom(entry: CatalogEntry): string | null {
   const s = state();
   const doc = currentDoc(s);
@@ -38,6 +46,10 @@ export function addObjectFrom(entry: CatalogEntry): string | null {
     selectedObjectId: selectedObjectId(),
   });
   const type = String(template.type);
+  if (unfilledReferences(s.schema, template).length) {
+    toast(`${entry.label} goes with another object (${describeNeeds(s.schema, type)}); add that first`, 'error');
+    return null;
+  }
   if (hasPlacement(s.schema, type) && template.place === undefined && s.still?.sceneId === sceneId) {
     const occupied: Box[] = s.still.objects.map((o) => o.frame_bbox);
     const at = suggestPosition(occupied);
@@ -171,6 +183,10 @@ export function addStepFrom(entry: CatalogEntry): string | null {
     frameIndex,
     selectedObjectId: selectedObjectId(),
   });
+  if (unfilledReferences(s.schema, template).length) {
+    toast(`A ${entry.label.toLowerCase()} step acts on an object: add an object to this scene first`, 'error');
+    return null;
+  }
   let newId: string | null = null;
   apply((d) => {
     const result = addStep(d, sceneId, template as { do: string }, { index: frameIndex + 1 });

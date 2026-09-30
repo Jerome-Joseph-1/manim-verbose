@@ -154,7 +154,7 @@ export function TargetsWidget({ spec, value, onChange, inputId, dataField, descr
       describedBy={describedBy}
       invalid={invalid}
       label={spec.label}
-      min={0}
+      min={spec.required ? 1 : 0}
     />
   );
 }
@@ -171,7 +171,7 @@ export function RefListWidget({ spec, value, onChange, inputId, dataField, descr
       describedBy={describedBy}
       invalid={invalid}
       label={spec.label}
-      min={0}
+      min={spec.minItems ?? 0}
     />
   );
 }

@@ -10,8 +10,8 @@
   --border: #2c3139;
   --border-strong: #3f4650;
   --text: #e9ecef;
-  --text-muted: #aab3bf;
-  --text-faint: #8d97a3;
+  --text-muted: #b0b9c4;
+  --text-faint: #a0aab6;
   --accent: #58c4dd;
   --accent-strong: #8fd9ea;
   --accent-contrast: #06232b;
@@ -20,6 +20,7 @@
   --danger: #ff8a80;
   --danger-soft: rgba(252, 98, 85, 0.14);
   --danger-strong: #fc6255;
+  --danger-button: #c23a2e;
   --warning: #f4d345;
   --warning-soft: rgba(244, 211, 69, 0.12);
   --success: #9bd07f;
@@ -50,6 +51,7 @@
   --danger: #b42318;
   --danger-soft: rgba(180, 35, 24, 0.09);
   --danger-strong: #b42318;
+  --danger-button: #b42318;
   --warning: #7a4f00;
   --warning-soft: rgba(232, 193, 28, 0.18);
   --success: #2a6f2d;
@@ -195,14 +197,14 @@ textarea {
 }
 
 .btn-danger {
-  background: var(--danger-strong);
-  border-color: var(--danger-strong);
+  background: var(--danger-button);
+  border-color: var(--danger-button);
   color: #fff;
 }
 
 .btn-danger:hover:not(:disabled) {
   filter: brightness(1.08);
-  background: var(--danger-strong);
+  background: var(--danger-button);
 }
 
 .btn-ghost {
@@ -528,6 +530,12 @@ textarea {
   color: var(--text-faint);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.row.selected .row-sub,
+.step-card.selected .step-duration,
+.step-card.framed .step-duration {
+  color: var(--text-muted);
 }
 
 .kind-badge {

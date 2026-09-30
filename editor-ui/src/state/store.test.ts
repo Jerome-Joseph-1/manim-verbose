@@ -115,6 +115,18 @@ describe('user actions', () => {
     expect(useEditor.getState().selection).toEqual({ kind: 'step', sceneId: 'intro', id });
   });
 
+  it("won't add what the server couldn't read: a step or a brace with nothing to act on", () => {
+    setupEditor({ version: 1, title: 'T', scenes: [{ id: 'empty' }] });
+    const before = currentDoc();
+    expect(addStepFrom(stepEntry('show'))).toBeNull();
+    expect(addObjectFrom(entry('brace'))).toBeNull();
+    expect(addObjectFrom(entry('graph'))).toBeNull();
+    expect(currentDoc()).toBe(before);
+    expect(useEditor.getState().toasts.at(-1)?.message).toBe('Function graph goes with another object (a set of axes or a number plane); add that first');
+    // Steps which act on nothing are fine
+    expect(addStepFrom(stepEntry('wait'))).not.toBeNull();
+  });
+
   it('adds a step showing objects not on screen', () => {
     setFrameStep('intro', null);
     showObjects(['dot', 'axes']);

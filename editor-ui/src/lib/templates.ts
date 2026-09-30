@@ -96,6 +96,31 @@ export function fillStepTemplate(schema: SchemaIndex, template: Template, ctx: A
   return out;
 }
 
+/**
+ * Required references a filled-in template still leaves empty. An empty reference isn't a
+ * valid id, so the server couldn't even read a document holding one; the editor doesn't add
+ * such an object or step, and says what is missing instead.
+ */
+export function unfilledReferences(schema: SchemaIndex, template: Template): string[] {
+  const isObject = typeof template.type === 'string';
+  const fields = isObject ? objectFields(schema, String(template.type)) : stepFields(schema, String(template.do));
+  const out: string[] = [];
+  for (const field of fields) {
+    const value = template[field.name];
+    const refKind = field.kind === 'object-ref' || field.kind === 'targets' || field.kind === 'ref-list';
+    if (!refKind) continue;
+    if (value === '' || (Array.isArray(value) && (value.length === 0 || value.includes(''))) || (field.required && value === undefined)) {
+      out.push(field.name);
+    }
+  }
+  if (!isObject && Array.isArray(template.steps)) {
+    for (const inner of template.steps) {
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) out.push(...unfilledReferences(schema, inner as Template).map((n) => `steps.${n}`));
+    }
+  }
+  return out;
+}
+
 /** A catalog made from the schema alone, for a server which doesn't offer one. */
 export function catalogFromSchema(schema: SchemaIndex): Catalog {
   const defaultFor = (field: FieldSpec): Json | undefined => {

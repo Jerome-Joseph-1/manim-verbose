@@ -123,7 +123,11 @@ function SceneRow({ scene, index, count, current, selected, duration }: { scene:
         onKeyDown={(e) => {
           if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
             e.preventDefault();
-            reorderScene(index, index + (e.key === 'ArrowUp' ? -1 : 1));
+            const to = index + (e.key === 'ArrowUp' ? -1 : 1);
+            if (to < 0 || to >= count) return;
+            reorderScene(index, to);
+            // Moving the row in the page loses its focus; give it back
+            requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-scene-id="${scene.id}"] .row-main`)?.focus());
           }
         }}
       >
@@ -131,7 +135,7 @@ function SceneRow({ scene, index, count, current, selected, duration }: { scene:
           {index + 1}
         </span>
         <span className="row-label">{scene.title || scene.id}</span>
-        {duration !== undefined ? <span className="row-sub">{formatDuration(duration)}</span> : null}
+        {duration ? <span className="row-sub">{formatDuration(duration)}</span> : null}
       </button>
       <div className="row-actions">
         <button type="button" className="icon-btn drag-handle" aria-label={`Reorder scene ${scene.title || scene.id}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown as React.KeyboardEventHandler | undefined}>
