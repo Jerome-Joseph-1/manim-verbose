@@ -1,0 +1,303 @@
+name: release
+
+# Makes a release people can install without a checkout, Node or LaTeX of their own, following
+# docs/editor/INSTALL.md:
+#
+#   build    the editor UI, then the sdist and the wheel (with the UI in it), checked
+#   try      that wheel installed into a clean venv on Linux, macOS and Windows, with the pip
+#            command INSTALL.md gives; `manimgl-doctor --install-tex` really downloading
+#            TinyTeX and its packages; then manimgl-doctor itself, and on Linux the editor
+#            started on a new file and asked for pictures, one with a formula
+#   publish  a GitHub Release for the tag, with the wheel and sdist attached, so that
+#            pip install "manimgl[editor] @ https://github.com/OWNER/REPO/releases/download/vX.Y.Z/manimgl-X.Y.Z-py3-none-any.whl"
+#            works
+#
+# Runs on pushing a tag vX.Y.Z, which has to be the version in setup.cfg. Run by hand
+# (workflow_dispatch) it does everything but publish, as a rehearsal.
+#
+# A release made with the workflow's own GITHUB_TOKEN starts no other workflows (GitHub's
+# rule against loops), so publish.yml, which uploads to PyPI when a release is published,
+# does not run for these.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build sdist and wheel, with the editor UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      wheel: ${{ steps.names.outputs.wheel }}
+      sdist: ${{ steps.names.outputs.sdist }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Read the version, and check the tag names the same one
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(python -c "import configparser; c = configparser.ConfigParser(interpolation=None); c.read('setup.cfg'); print(c['metadata']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "setup.cfg says version $version"
+          if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
+            echo "::error title=The tag and the version differ::The tag is $REF_NAME, and setup.cfg says version $version, which is what the wheel would be named for. Tag v$version, or change the version in setup.cfg and tag again."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor-ui/package-lock.json
+
+      - name: Build the editor UI into manim_verbose/editor/static
+        working-directory: editor-ui
+        run: |
+          npm ci
+          npm run build
+
+      # python -m build makes the sdist, then the wheel from the sdist, so the UI reaching the
+      # wheel means it is in the sdist too
+      - name: Build the sdist, and the wheel from it
+        run: |
+          python -m pip install build twine
+          python -m build
+
+      - name: Check the metadata, and what the wheel holds
+        run: |
+          python -m twine check --strict dist/*
+          python tests/packaging/wheel_contents.py dist/*.whl --require-ui
+
+      - name: Note the file names
+        id: names
+        run: |
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ]; then
+            echo "::error::Expected one wheel and one sdist in dist/, found: $(ls dist)"
+            exit 1
+          fi
+          echo "wheel=$(basename "${wheels[0]}")" >> "$GITHUB_OUTPUT"
+          echo "sdist=$(basename "${sdists[0]}")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  try:
+    name: install on ${{ matrix.os }}, Python ${{ matrix.python }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    env:
+      SCENE: ${{ github.workspace }}/scripts/ci/smoke/hello.yaml
+      SCRIPTS: ${{ github.workspace }}/scripts/ci
+      WHEEL: ${{ needs.build.outputs.wheel }}
+    steps:
+      # For the smoke scripts only: what is tested is the wheel
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      # What INSTALL.md has people on Linux install first: Pango to build manimpango against,
+      # a Vulkan driver (lavapipe, as the runner has no GPU), and ffmpeg. Nothing of TeX.
+      - name: Install what INSTALL.md asks for on Linux
+        if: runner.os == 'Linux'
+        run: scripts/ci/apt-install.sh pango vulkan ffmpeg
+
+      - name: Install the wheel into a fresh venv, the way INSTALL.md says
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin="$RUNNER_TEMP/venv/Scripts"
+          else
+            bin="$RUNNER_TEMP/venv/bin"
+          fi
+          # As if the venv were activated, for this step and the ones after
+          export PATH="$bin:$PATH"
+          echo "$bin" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip
+          wheel_url=$(python -c "import pathlib, sys; print(pathlib.Path(sys.argv[1]).resolve().as_uri())" "dist/$WHEEL")
+          python -m pip install "manimgl[editor] @ $wheel_url"
+          # Where --install-tex puts TinyTeX: the default, in the user's data folder, as for anyone
+          tex_dir=$(python -c "from manim_verbose.tex_setup import tex_dir; print(tex_dir().as_posix())")
+          echo "TEX_DIR=$tex_dir" >> "$GITHUB_ENV"
+          echo "Python: $(python -c 'import sys; print(sys.executable)'); TinyTeX would go to $tex_dir"
+
+      # From an empty directory, so that only the installed wheel can be imported
+      - name: Import manim, validate a scene file, print the schema
+        working-directory: ${{ runner.temp }}
+        run: python "$SCRIPTS/smoke.py" --installed --scene "$SCENE"
+
+      - name: What manimgl-doctor says before LaTeX is set up
+        working-directory: ${{ runner.temp }}
+        run: manimgl-doctor || true
+
+      - name: manimgl-doctor --install-tex (downloads TinyTeX and packages from CTAN)
+        working-directory: ${{ runner.temp }}
+        run: |
+          manimgl-doctor --install-tex
+          du -sh "$TEX_DIR" || true
+
+      - name: Installing again only checks it
+        working-directory: ${{ runner.temp }}
+        run: manimgl-doctor --install-tex | tee install-again.txt && grep -q "already set up" install-again.txt
+
+      # macOS and Windows runners have no GPU (nor, usually, ffmpeg), so there the graphics,
+      # ffmpeg and render checks are reported but only the rest has to pass. On Linux, lavapipe
+      # stands in for a GPU, and every check has to pass, the render including a formula.
+      - name: manimgl-doctor
+        working-directory: ${{ runner.temp }}
+        run: |
+          status=0
+          manimgl-doctor || status=$?
+          manimgl-doctor --json > doctor.json || true
+          python - <<'EOF'
+          import json, os, sys
+          report = json.load(open("doctor.json", encoding="utf-8"))
+          statuses = {check["id"]: check["status"] for check in report["checks"]}
+          required = ["python", "manim", "editor", "latex", "fonts"]
+          if os.environ["RUNNER_OS"] == "Linux":
+              required += ["gpu", "ffmpeg", "render"]
+          bad = [name for name in required if statuses.get(name) not in ("ok", "warn")]
+          render = next(check for check in report["checks"] if check["id"] == "render")
+          if os.environ["RUNNER_OS"] == "Linux" and not render["details"].get("formula"):
+              bad.append("render (without a formula)")
+          print("checks:", statuses)
+          if bad:
+              print(f"::error title=manimgl-doctor::these checks didn't pass: {', '.join(bad)}")
+              sys.exit(1)
+          EOF
+          echo "manimgl-doctor exited $status"
+
+      - name: Start the editor on a new file, and ask it for pictures
+        if: runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}
+        run: python "$SCRIPTS/editor_smoke.py" "$RUNNER_TEMP/editor-smoke" --formula --clip
+
+      - name: manimgl-doctor --uninstall-tex
+        working-directory: ${{ runner.temp }}
+        run: |
+          manimgl-doctor --uninstall-tex
+          test ! -e "$TEX_DIR"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: try-${{ matrix.os }}-${{ matrix.python }}
+          path: |
+            ${{ runner.temp }}/doctor.json
+            ${{ runner.temp }}/editor-smoke/*.png
+            ${{ runner.temp }}/editor-smoke/editor.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: publish the GitHub Release
+    needs: [build, try]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      - name: Create the release, with the wheel and sdist attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          WHEEL: ${{ needs.build.outputs.wheel }}
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$WHEEL"
+          cat > notes.md <<EOF
+          ## Install
+
+          With Python 3.10 to 3.13 installed, from [python.org](https://www.python.org/downloads/)
+          (step by step, with the few system packages Linux needs first:
+          [docs/editor/INSTALL.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/docs/editor/INSTALL.md)).
+
+          Windows:
+          \`\`\`
+          py -m pip install "manimgl[editor] @ $url"
+          \`\`\`
+          macOS:
+          \`\`\`
+          python3 -m pip install "manimgl[editor] @ $url"
+          \`\`\`
+          Linux:
+          \`\`\`
+          python3 -m venv ~/manim
+          ~/manim/bin/python -m pip install "manimgl[editor] @ $url"
+          source ~/manim/bin/activate
+          \`\`\`
+          Then:
+          \`\`\`
+          manimgl-doctor
+          manimgl-editor my-video.yaml
+          \`\`\`
+          \`manimgl-doctor\` checks everything and says what to do about anything missing. If it says
+          LaTeX is missing, \`manimgl-doctor --install-tex\` sets it up for you.
+          EOF
+          prerelease=()
+          if [[ "$VERSION" =~ (a|b|rc|dev)[0-9]*$ ]]; then
+            prerelease=(--prerelease)
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "The release $TAG exists already (a re-run); replacing its files"
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "manimgl $VERSION" --notes-file notes.md --generate-notes "${prerelease[@]}"
+          fi
+          echo "Released: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "Install with: python -m pip install \"manimgl[editor] @ $url\"" >> "$GITHUB_STEP_SUMMARY"

@@ -14,6 +14,7 @@ from types import ModuleType
 
 
 def import_manim() -> ModuleType:
+    use_managed_tex()
     if "manimlib.config" in sys.modules:
         import manimlib
         return manimlib
@@ -24,3 +25,13 @@ def import_manim() -> ModuleType:
     finally:
         sys.argv = saved
     return manimlib
+
+
+def use_managed_tex() -> None:
+    """
+    manimlib runs `latex` and `dvisvgm` from PATH. When `manimgl-doctor --install-tex` has set
+    up a LaTeX of manim's own, put it first there, so that formulas work without anyone editing
+    a PATH. Cheap (a file or two looked at), and does nothing when there is none.
+    """
+    from manim_verbose.tex_setup import use_managed_tex as use
+    use()
