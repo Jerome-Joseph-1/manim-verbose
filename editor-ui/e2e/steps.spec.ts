@@ -61,7 +61,7 @@ test('delete an object in use: asked first, and what used it goes too', async ({
   await page.keyboard.press('Delete');
   const dialog = page.getByTestId('confirm-dialog');
   await expect(dialog).toContainText("'eq' is used elsewhere");
-  await expect(dialog).toContainText('intro_4');
+  await expect(dialog).toContainText('Step 4, which only acts on it, will be deleted; step 3 will stop using it');
   await dialog.getByRole('button', { name: 'Delete it and what uses it' }).click();
   await expect(page.locator('[data-object-id="eq"]')).toHaveCount(0);
   await expect(editor.stepCards()).toHaveCount(3);

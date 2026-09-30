@@ -137,7 +137,7 @@ describe('user actions', () => {
     requestRemoveObject('intro', 'eq');
     const confirm = useEditor.getState().confirm!;
     expect(confirm.title).toBe("Delete 'eq'?");
-    expect(confirm.message).toMatch(/intro_3/);
+    expect(confirm.message).toMatch(/Steps 3, 4, 6, 8, which only act on it, will be deleted; steps 2, 5, 7 will stop using it/);
     confirm.onConfirm();
     expect(findObject(currentDoc()!, 'intro', 'eq')).toBeUndefined();
     expect(invariantViolations(currentDoc()!, { references: true })).toEqual([]);

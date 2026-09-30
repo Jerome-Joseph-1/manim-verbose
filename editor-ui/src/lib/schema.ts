@@ -149,7 +149,7 @@ function kindsFrom(defs: Record<string, JsonSchema>, container: JsonSchema | und
       defName: ref,
       label: typeof def['x-label'] === 'string' ? def['x-label'] : humanize(name),
       category: typeof def['x-category'] === 'string' ? def['x-category'] : tag,
-      description: firstParagraph(def.description ?? ''),
+      description: plain(firstParagraph(def.description ?? '')),
     };
   });
 }
@@ -181,6 +181,11 @@ export function stepKind(index: SchemaIndex, name: string): KindInfo | undefined
 export function humanize(name: string): string {
   const words = name.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim().split(/\s+/);
   return words.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())).join(' ');
+}
+
+/** Help text without the code marks of docstrings: "Which side of `next_to`" -> "Which side of next to". */
+export function plain(text: string): string {
+  return text.replace(/`([^`]+)`/g, (_, code: string) => code.replace(/_/g, ' '));
 }
 
 export function firstParagraph(text: string): string {
@@ -312,7 +317,7 @@ export function fieldSpec(
     group: groupFor(name, owner),
   };
   const description = outer.description ?? inner.description ?? DESCRIPTIONS[name];
-  if (description) spec.description = firstParagraph(description);
+  if (description) spec.description = plain(firstParagraph(description));
   if (outer.default !== undefined) spec.default = outer.default;
   else if (inner.default !== undefined) spec.default = inner.default;
   for (const key of ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems'] as const) {
@@ -370,6 +375,8 @@ export function fieldSpec(
   const refName = property.$ref ? defName(property.$ref) : outer.anyOf?.find((v) => v.$ref)?.$ref;
   if (refName && defName(refName) === 'Placement') {
     spec.kind = 'placement';
+    // The model's own description names its fields; the editor shows them as choices
+    spec.description = name === 'to' ? 'Where to move it: an edge, beside another object, or a point.' : 'Centred, against an edge, beside another object, or at a point; then nudged if you like.';
     return spec;
   }
   if (inner.const !== undefined) {

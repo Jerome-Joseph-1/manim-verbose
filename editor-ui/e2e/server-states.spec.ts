@@ -51,6 +51,7 @@ test.describe('against the mock only', () => {
 
 test('see the Python code, for a scene or the whole video', async ({ editor, page }) => {
   await editor.open('demo');
+  test.skip(!(await editor.codeWorks()), 'this server cannot make code yet');
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   const dialog = page.getByTestId('code-dialog');
   const code = dialog.getByTestId('code-view');

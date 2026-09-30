@@ -5,7 +5,7 @@
  * without seeing each other's edits. Against the real server, which edits one file, the
  * document is put back to the fixture through the API before each test.
  */
-import { test as base, expect, type Locator, type Page } from '@playwright/test';
+import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,6 +150,13 @@ export class EditorDriver {
     await this.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   }
 
+  /** Whether this server can make the Python code (the real one can't until codegen lands). */
+  async codeWorks(): Promise<boolean> {
+    if (!this.real) return true;
+    const response = await this.page.request.post('/api/code', { data: { document: await this.serverDocument() }, timeout: 60_000 });
+    return response.ok();
+  }
+
   /** Whether this server can draw stills (the real one can't until rendering lands). */
   async renderingWorks(): Promise<boolean> {
     if (!this.real) return true;
@@ -163,15 +170,32 @@ export class EditorDriver {
 }
 
 /** Console messages which are the browser's, not the editor's: expected HTTP statuses. */
-export function isExpectedConsoleNoise(text: string): boolean {
+export function isExpectedConsoleNoise(text: string, serverCantRender = false): boolean {
+  if (serverCantRender && /status of 50\d/.test(text)) return true;
   return /Failed to load resource: the server responded with a status of (409|422|404|429)/.test(text);
 }
 
+let realRendering: Promise<boolean> | null = null;
+
+/**
+ * Whether the real server can draw stills yet. Until the rendering work lands it answers
+ * still, clip, code and timeline requests with 500s, which the editor shows but which aren't
+ * the editor's errors.
+ */
+function realServerRenders(request: APIRequestContext): Promise<boolean> {
+  realRendering ??= request
+    .post('/api/still', { data: { document: fixtureDocument('demo'), scene_id: 'intro', step_index: 0, width: 320 }, timeout: 90_000 })
+    .then((r) => r.ok())
+    .catch(() => false);
+  return realRendering;
+}
+
 export const test = base.extend<{ editor: EditorDriver; consoleErrors: string[] }>({
-  consoleErrors: async ({ page }, use) => {
+  consoleErrors: async ({ page, request }, use, testInfo) => {
     const errors: string[] = [];
+    const cantRender = testInfo.project.name === 'real' && process.env.E2E_REAL_AVAILABLE === '1' && !(await realServerRenders(request));
     page.on('console', (message) => {
-      if (message.type() === 'error' && !isExpectedConsoleNoise(message.text())) errors.push(message.text());
+      if (message.type() === 'error' && !isExpectedConsoleNoise(message.text(), cantRender)) errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(`page error: ${error.message}`));
     await use(errors);

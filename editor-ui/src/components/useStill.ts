@@ -75,8 +75,14 @@ export function useStill(doc: Document | null, sceneId: string | null, stepIndex
         if (err instanceof ApiError && err.superseded) return; // a newer request is on its way
         setLoading(false);
         if (err instanceof ApiError) {
-          const docProblems = err.problems.filter((p) => !isRequestProblem(p));
-          setRenderProblems(sceneId, docProblems.filter((p) => p.scene_id === sceneId || p.scene_id === null));
+          // Only a 422 is about the document; anything else is the server failing, said on the canvas
+          if (err.status === 422) {
+            const docProblems = err.problems.filter((p) => !isRequestProblem(p));
+            setRenderProblems(sceneId, docProblems.filter((p) => p.scene_id === sceneId || p.scene_id === null));
+          } else {
+            // What an earlier render said was about an earlier document
+            setRenderProblems(sceneId, []);
+          }
           setError({
             message: err.status === 422 ? "This picture can't be drawn until this is fixed:" : err.status === 0 ? "Can't reach the editor server." : 'Drawing the picture failed.',
             problems: err.problems,

@@ -226,7 +226,8 @@ function IdField({ spec, value, inputId, dataField, problems, helpId, problemsId
       />
       {error ? <div className="local-error" role="alert">{error}</div> : null}
       <p className="field-help" id={helpId}>
-        {sentence(spec.description ?? 'Other parts of the video refer to it by this name')} Renaming updates every use.
+        {sentence(spec.description ?? 'Other parts of the video refer to it by this name')}
+        {ctx.item.kind === 'object' ? ' Renaming it updates every step and object that uses it.' : ''}
       </p>
       <FieldProblems problems={problems} id={problemsId} />
     </div>

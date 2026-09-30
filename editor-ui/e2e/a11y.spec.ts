@@ -42,7 +42,7 @@ for (const theme of ['dark', 'light'] as const) {
       expect(await seriousViolations(page)).toEqual([]);
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Code', exact: true }).click();
-      await expect(page.getByTestId('code-view')).toBeVisible();
+      if (await editor.codeWorks()) await expect(page.getByTestId('code-view')).toBeVisible();
       expect(await seriousViolations(page)).toEqual([]);
       await page.keyboard.press('Escape');
       await editor.objectRow('eq').click();

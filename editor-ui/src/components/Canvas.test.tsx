@@ -143,6 +143,25 @@ describe('the still', () => {
   });
 });
 
+describe('a server that fails', () => {
+  it('says so on the canvas, without listing it as a problem with the document', async () => {
+    const { spy } = await renderWithStill();
+    const problem = { message: "'d^2' doesn't appear in 'eq'", severity: 'error' as const, loc: ['scenes', 0, 'steps', 0, 'part'], path: '', scene_id: 's', item_id: 's_1' };
+    spy.mockRejectedValue(new ApiError(422, { problems: [problem] }));
+    act(() => {
+      apply((d) => setItemField(d, { kind: 'object', sceneId: 's', id: 'eq' }, ['tex'], 'y'));
+    });
+    await waitFor(() => expect(useEditor.getState().renderProblems.s).toEqual([problem]));
+    // The next render fails for the server's own reasons: the old problem was about an older document
+    spy.mockRejectedValue(new ApiError(500, { problems: [{ message: 'rendering a frame failed', severity: 'error', loc: [], path: '', scene_id: null, item_id: null }] }));
+    act(() => {
+      apply((d) => setItemField(d, { kind: 'object', sceneId: 's', id: 'eq' }, ['tex'], 'z'));
+    });
+    await waitFor(() => expect(screen.getByTestId('canvas-error')).toHaveTextContent('Drawing the picture failed'));
+    expect(useEditor.getState().renderProblems.s).toEqual([]);
+  });
+});
+
 describe('pointing at objects', () => {
   const at = (frame: [number, number]) => frameToPixel(mapping, frame[0], frame[1]);
 

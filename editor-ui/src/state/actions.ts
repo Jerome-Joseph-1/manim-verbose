@@ -80,14 +80,22 @@ export function requestRemoveObject(sceneId: string, objectId: string): void {
     toast(`Deleted '${objectId}'. Undo with Ctrl+Z.`);
     return;
   }
+  // Steps by their number in the list, as the user sees them
+  const scene = findScene(doc, sceneId);
+  const stepName = (id: string) => {
+    const index = (scene?.steps ?? []).findIndex((s) => s.id === id);
+    return index >= 0 ? `${index + 1}` : id;
+  };
+  const steps = (ids: string[]) => `${ids.length === 1 ? 'step' : 'steps'} ${ids.map(stepName).join(', ')}`;
   const parts: string[] = [];
-  if (plan.steps.length) parts.push(`${plan.steps.length} step${plan.steps.length === 1 ? '' : 's'} that only act on it (${plan.steps.join(', ')}) will be deleted`);
-  if (plan.editedSteps.length) parts.push(`${plan.editedSteps.length} step${plan.editedSteps.length === 1 ? '' : 's'} will stop using it (${plan.editedSteps.join(', ')})`);
+  if (plan.steps.length) parts.push(`${steps(plan.steps)}, which only ${plan.steps.length === 1 ? 'acts' : 'act'} on it, will be deleted`);
+  if (plan.editedSteps.length) parts.push(`${steps(plan.editedSteps)} will stop using it`);
   if (others.length) parts.push(`${others.join(', ')} can't exist without it and will be deleted too`);
   if (plan.editedObjects.length) parts.push(`${plan.editedObjects.join(', ')} will stop referring to it`);
+  if (parts[0]) parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
   askConfirm({
     title: `Delete '${objectId}'?`,
-    message: `'${objectId}' is used elsewhere in this scene. ${parts.join('; ')}.`,
+    message: `'${objectId}' is used elsewhere in this scene. ${parts.join('; ')}. You can undo this.`,
     confirmLabel: 'Delete it and what uses it',
     danger: true,
     altLabel: `Delete only '${objectId}'`,
