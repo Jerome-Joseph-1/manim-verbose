@@ -459,12 +459,12 @@ function texError(tex) {
     if (c === '{') depth += 1;
     if (c === '}') {
       depth -= 1;
-      if (depth < 0) return "LaTeX couldn't compile this formula: a } has no { to match it";
+      if (depth < 0) return "This formula couldn't be typeset: a } has no { to match it";
     }
   }
-  if (depth > 0) return "LaTeX couldn't compile this formula: a { is never closed with }";
-  if (tex.includes('$')) return "LaTeX couldn't compile this formula: leave out the $ signs, it is already math";
+  if (depth > 0) return "This formula couldn't be typeset: a { is never closed with }";
+  if (tex.includes('$')) return "This formula couldn't be typeset: leave out the $ signs, it is already math";
   const bad = /\\(undefinedcommand|badmacro|oops)\b/.exec(tex);
-  if (bad) return `LaTeX couldn't compile this formula: it doesn't know the command \\${bad[1]}`;
+  if (bad) return `This formula couldn't be typeset: it doesn't know the command \\${bad[1]}`;
   return null;
 }

@@ -9,14 +9,14 @@ test('bad LaTeX: an error on the field and in the Problems panel, and the rest k
   await editor.field('tex').locator('textarea').fill('c^2 = \\frac{a}{b');
 
   const canvasError = page.getByTestId('canvas-error');
-  await expect(canvasError).toContainText("LaTeX couldn't compile", { timeout: 60_000 });
-  await expect(editor.field('tex')).toContainText("LaTeX couldn't compile");
+  await expect(canvasError).toContainText("couldn't be typeset", { timeout: 60_000 });
+  await expect(editor.field('tex')).toContainText("couldn't be typeset");
   await expect(editor.field('tex')).toHaveClass(/has-error/);
   // The last good picture stays
   await expect(editor.still).toBeVisible();
 
   await canvasError.getByRole('button', { name: 'Show problems' }).click();
-  const item = page.getByTestId('problem-item').filter({ hasText: "LaTeX couldn't compile" });
+  const item = page.getByTestId('problem-item').filter({ hasText: "couldn't be typeset" });
   await expect(item).toBeVisible();
   await expect(item).toContainText('eq');
 

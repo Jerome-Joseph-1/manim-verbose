@@ -13,7 +13,7 @@ the format's own: arrows, grids, text, formulas and simple polygons.
 
 | File | What it is |
 |------|------------|
-| [`vectors.yaml`](vectors.yaml) | The video: 11 scenes, 248 steps and 111 captions, lasting 9:57.5 |
+| [`vectors.yaml`](vectors.yaml) | The video: 11 scenes, 247 steps and 111 captions, lasting 9:57.5 |
 | [`storyboard.md`](storyboard.md) | What happens when, scene by scene, and a timing table |
 
 ## Checking and rendering
@@ -23,7 +23,7 @@ From the repository root:
 ```sh
 manimgl-scene validate examples/eola_vectors/vectors.yaml       # ok, no errors or warnings
 manimgl-scene format --check examples/eola_vectors/vectors.yaml # already in canonical form
-manimgl-scene info examples/eola_vectors/vectors.yaml           # per scene timings, once render.timeline exists
+manimgl-scene info examples/eola_vectors/vectors.yaml           # per scene timings: 9:57.5 in all
 manimgl-scene render examples/eola_vectors/vectors.yaml -q hd   # the video
 manimgl-scene render examples/eola_vectors/vectors.yaml -s addition -q low   # one scene
 ```
@@ -32,8 +32,14 @@ manimgl-scene render examples/eola_vectors/vectors.yaml -s addition -q low   # o
 `manimgl-scene`.)
 
 The file is in canonical form, so the editor's save round-trips it without changes.
-Rendering hasn't been possible yet, because object and step code generation are still being
-written. A render-and-review pass will follow once they land.
+
+Text is set in CMU Serif (`settings.font`), the Computer Modern of LaTeX, so that words and
+formulas match as they do in the original. On Debian and Ubuntu it is `apt install fonts-cmu`;
+without it, text falls back to another font.
+
+On a 4 core machine with no GPU (Mesa's software Vulkan), the whole video renders in about
+3 minutes at low quality with 3 scenes at a time. Scenes are cached, so after an edit only the
+scenes which changed render again.
 
 ## How the file is put together
 
@@ -73,6 +79,7 @@ workaround used here and a suggestion.
    *Workaround:* a zero-time `add: features` before the transform, and hiding the parts by
    name. *Suggestion:* treat a group as on screen when all its members are, or let
    `transform` take a list of targets.
+   **Since fixed:** a group counts as on screen once all its members are, and the zero-time `add` is gone.
 
 3. **Nothing stays facing the camera in 3D.** Free objects turn with the camera once it has
    an `orientation`, so the 3D scene can't show the column `[2; 1; 3]`, axis names, or
@@ -80,12 +87,14 @@ workaround used here and a suggestion.
    *Workaround:* the numbers are given in the captions, and the steps are colour-coded (green
    x, red y, blue z). *Suggestion:* `fixed: true` on free objects (manim's `fix_in_frame`),
    or keep text-like objects fixed in the frame whenever the camera is turned.
+   **Since fixed in the format:** `fixed: true` keeps an object still on screen while the camera turns. The video doesn't use it yet.
 
 4. **No backdrop behind text on a grid.** 3Blue1Brown puts formulas on a dark rectangle so
    the grid doesn't run through them.
    *Workaround:* a `box` around the formula's group with `color: BLACK` and
    `fill_opacity: 0.85`, drawn at `z: 1` under the text at `z: 2`. *Suggestion:*
    `backdrop: true` on text, tex, matrix and group (manim's `add_background_rectangle`).
+   **Since fixed in the format:** `backdrop: true` on free objects. The video still uses the box.
 
 5. **Part of a matrix can't be picked out.** `highlight … part` and braces work only on
    text, formulas, titles and quotes, or on whole objects, so a row or entry of a `matrix`
@@ -103,6 +112,7 @@ workaround used here and a suggestion.
    the numeric addition scene `w` has no label, because every side of its tip is taken by
    the red and green step arrows. *Suggestion:* define it as beside the tip, add
    `label_buff`, and allow `part: label` on show, hide and highlight.
+   **Since fixed:** the label is defined as beside the tip.
 
 7. **Braces only fit the sides of a bounding box.** The length of a slanted arrow can't be
    braced.
@@ -114,11 +124,13 @@ workaround used here and a suggestion.
    *Workaround:* the arrows for 2 + 5 = 7 are in frame units. The number line runs from −1
    to 8 and is centred, so n sits at x = n − 3.5, worked out by hand. *Suggestion:* say that
    on a number line a point is `[n]` or `[n, height above the line]`.
+   **Since fixed:** on a number line a point is `[n, height]`.
 
 9. **Free objects can't be placed in a coordinate system's coordinates.** Labels and
    coordinate columns are placed in frame units, while vectors use the plane's coordinates.
    This works only because the plane is the default full-frame one.
    *Suggestion:* `place: {at: [x, y], on: plane}`.
+   **Since fixed:** `place: {at: [x, y], on: plane}`.
 
 10. **Nothing follows anything.** When a vector's tip moves, its coordinate column doesn't
     move with it. The built-in `show_coordinates` would follow, but it can't colour the rows
@@ -131,6 +143,7 @@ workaround used here and a suggestion.
     vertically, so `move … to: {edge: top}` on a label at x = −4.7 would leave it on the left.
     *Workaround:* `to: [0, 3.3]`. *Suggestion:* say whether `edge` keeps the other
     coordinate or centres it.
+    **Since fixed:** an edge places the object against it and centred along it, for moves too.
 
 12. **Coordinates are plain numbers.** `⅓v` has its tip at `[1, 0.3333]`.
     *Suggestion:* allow fractions or simple expressions in points, such as `1/3`.
@@ -146,10 +159,12 @@ workaround used here and a suggestion.
     adds up durations and checks each caption's time on screen against its word count.
     *Suggestion:* document the defaults and the lag rule in `model.py`, and have
     `validate --timing` report caption reading times.
+    **Since fixed:** `manimgl-scene info` gives every step's timing, and the `together` lag rule is documented in `model.py`.
 
 15. **The last caption stays up during the closing `clear`.**
     *Workaround:* `caption: ''` on some closing `clear` steps. *Suggestion:* have `clear`
     clear the caption as well, unless it sets one.
+    **Since fixed:** `clear` takes the caption with it.
 
 16. **Layout isn't checked.** Validation catches nothing off the frame, in the caption band,
     or overlapping. Layer 1 of the plan lists these checks, but they don't exist yet.
@@ -169,6 +184,7 @@ workaround used here and a suggestion.
     *Suggestion:* write short mappings in flow style on one line. Order step fields as
     `id, do, target, into, style, …, run_time, caption`, and object fields as
     `id, type, <content>, place, style`.
+    **Since fixed:** `format` now writes short objects and steps on one line, fields in that order, and placements in their short forms; the file is 1,213 lines.
 
 18. **3D axes have no axis labels, and a floor grid can't be put on them.** `axes_3d` takes
     no `x_label`/`y_label`/`z_label`, and a `number_plane` can't be put `on` the axes.

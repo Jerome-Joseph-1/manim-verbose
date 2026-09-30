@@ -226,3 +226,21 @@ def test_misindented_keys_say_so(yaml_text, expected):
     found = messages(yaml_text)
     assert expected in found, found
     assert not any("did you mean 'type'" in m for m in found), found
+
+
+def test_data_for_the_api_keeps_placements_whole():
+    from manim_verbose.scenefile.files import to_data
+    doc, _ = load("""
+        scenes:
+          - id: a
+            objects:
+              - {id: t, type: text, text: Hello, place: top}
+              - {id: u, type: text, text: There, place: [1, 2]}
+            steps:
+              - {do: move, target: t, to: [0, 1]}
+    """)
+    scene = to_data(doc)["scenes"][0]
+    assert scene["objects"][0]["place"] == {"edge": "top"}
+    assert scene["objects"][1]["place"] == {"at": [1, 2]}
+    assert scene["steps"][0]["to"] == {"at": [0, 1]}
+    assert "place: top" in dump_text(doc)

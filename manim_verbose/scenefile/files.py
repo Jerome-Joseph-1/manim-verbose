@@ -70,9 +70,13 @@ def load_document(path: str | Path) -> Document:
     return doc
 
 
-def to_data(doc: Document) -> dict[str, Any]:
+def to_data(doc: Document, short: bool = False) -> dict[str, Any]:
+    """
+    A document as plain data in canonical form. Placements stay full mappings, as the
+    editor's API promises, unless `short`, which gives the forms a person would type in YAML.
+    """
     data = doc.model_dump(mode="json", exclude_defaults=True)
-    return _tidy({"version": doc.version, **data})
+    return _tidy({"version": doc.version, **data}, short=short)
 
 
 # What a reader wants first and last in a mapping; everything else keeps the models' order
@@ -80,33 +84,32 @@ _FIRST = ("version", "id", "title", "type", "do", "target", "into")
 _LAST = ("color", "opacity", "z", "shown", "fixed", "place", "scale", "rotate", "backdrop", "run_time", "caption")
 
 
-def _tidy(value: Any, key: str | None = None) -> Any:
+def _tidy(value: Any, key: str | None = None, short: bool = False) -> Any:
     """
     Arrange data the way a person would write it: id and kind first, styling, timing and
-    captions last, placements back in their short forms (`place: top`, `place: [1, 2]`), and
-    whole numbers without a decimal point.
+    captions last, and whole numbers without a decimal point. With `short`, placements go
+    back to their short forms too (`place: top`, `place: [1, 2]`).
     """
     if isinstance(value, dict):
-        if key in ("place", "to") and set(value) == {"edge"}:
+        if short and key in ("place", "to") and set(value) == {"edge"}:
             return value["edge"]
-        if key in ("place", "to") and set(value) == {"at"}:
+        if short and key in ("place", "to") and set(value) == {"at"}:
             return _tidy(value["at"])
         first = [k for k in _FIRST if k in value]
         last = [k for k in _LAST if k in value and k not in first]
         middle = [k for k in value if k not in first and k not in last]
-        return {k: _tidy(value[k], k) for k in first + middle + last}
+        return {k: _tidy(value[k], k, short) for k in first + middle + last}
     if isinstance(value, list):
-        return [_tidy(item, key) for item in value]
+        return [_tidy(item, key, short) for item in value]
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return value
 
 
 def dump_text(doc: Document, fmt: str = "yaml") -> str:
-    data = to_data(doc)
     if fmt == "json":
-        return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    return yaml.dump(data, Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=10_000)
+        return json.dumps(to_data(doc), indent=2, ensure_ascii=False) + "\n"
+    return yaml.dump(to_data(doc, short=True), Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=10_000)
 
 
 def save_file(doc: Document, path: str | Path) -> None:

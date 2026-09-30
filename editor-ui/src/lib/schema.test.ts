@@ -182,6 +182,7 @@ describe('other models', () => {
       ['resolution', 'number-list'],
       ['fps', 'number'],
       ['background', 'color'],
+      ['font', 'text'],
       ['captions', 'object'],
     ]);
     expect(field(settings.fields!, 'captions').fields!.map((f) => f.kind)).toEqual(['number', 'color', 'enum', 'boolean']);

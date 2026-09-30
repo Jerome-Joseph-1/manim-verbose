@@ -1,6 +1,6 @@
 version: 1
 title: Vectors, what even are they? (a recreation of the visuals)
-settings: {background: BLACK}
+settings: {background: BLACK, font: CMU Serif}
 scenes:
 - id: opening
   title: Title card and opening quote
