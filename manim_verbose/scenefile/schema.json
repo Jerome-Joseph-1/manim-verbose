@@ -276,6 +276,11 @@
           "type": "string"
         },
         "x_range": {
+          "default": [
+            -5,
+            5,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -286,6 +291,11 @@
           "x-widget": "range"
         },
         "y_range": {
+          "default": [
+            -5,
+            5,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -296,6 +306,11 @@
           "x-widget": "range"
         },
         "z_range": {
+          "default": [
+            -3,
+            3,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -425,6 +440,11 @@
           "type": "string"
         },
         "x_range": {
+          "default": [
+            -6,
+            6,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -435,6 +455,11 @@
           "x-widget": "range"
         },
         "y_range": {
+          "default": [
+            -3,
+            3,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -2554,6 +2579,11 @@
           "type": "string"
         },
         "x_range": {
+          "default": [
+            -5,
+            5,
+            1
+          ],
           "items": {
             "type": "number"
           },
@@ -2701,6 +2731,11 @@
           "type": "string"
         },
         "x_range": {
+          "default": [
+            -8,
+            8,
+            1
+          ],
           "description": "[min, max, step]",
           "items": {
             "type": "number"
@@ -2712,6 +2747,11 @@
           "x-widget": "range"
         },
         "y_range": {
+          "default": [
+            -4,
+            4,
+            1
+          ],
           "description": "[min, max, step]",
           "items": {
             "type": "number"
@@ -3621,6 +3661,10 @@
       "additionalProperties": false,
       "properties": {
         "resolution": {
+          "default": [
+            1920,
+            1080
+          ],
           "items": {
             "type": "integer"
           },
@@ -4806,6 +4850,10 @@
           "x-widget": "point"
         },
         "tail": {
+          "default": [
+            0,
+            0
+          ],
           "items": {
             "type": "number"
           },

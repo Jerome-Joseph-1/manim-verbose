@@ -270,8 +270,8 @@ class NumberPlaneObject(FreeObject):
     """A grid with axes, filling the frame unless given a size."""
     model_config = _object_meta("Number plane", "Coordinates")
     type: Literal["number_plane"]
-    x_range: Range = Field(default_factory=lambda: [-8, 8, 1], description="[min, max, step]")
-    y_range: Range = Field(default_factory=lambda: [-4, 4, 1], description="[min, max, step]")
+    x_range: Range = Field([-8, 8, 1], description="[min, max, step]")
+    y_range: Range = Field([-4, 4, 1], description="[min, max, step]")
     width: float | None = Field(None, gt=0)
     height: float | None = Field(None, gt=0)
     faded: bool = Field(False, description="Draw the grid lines faintly")
@@ -282,8 +282,8 @@ class AxesObject(FreeObject):
     """A pair of axes."""
     model_config = _object_meta("Axes", "Coordinates")
     type: Literal["axes"]
-    x_range: Range = Field(default_factory=lambda: [-6, 6, 1])
-    y_range: Range = Field(default_factory=lambda: [-3, 3, 1])
+    x_range: Range = Field([-6, 6, 1])
+    y_range: Range = Field([-3, 3, 1])
     width: float | None = Field(None, gt=0)
     height: float | None = Field(None, gt=0)
     numbers: bool = True
@@ -296,9 +296,9 @@ class Axes3DObject(FreeObject):
     """Three axes. Use a camera step with `orientation` to look at them from an angle."""
     model_config = _object_meta("3D axes", "Coordinates")
     type: Literal["axes_3d"]
-    x_range: Range = Field(default_factory=lambda: [-5, 5, 1])
-    y_range: Range = Field(default_factory=lambda: [-5, 5, 1])
-    z_range: Range = Field(default_factory=lambda: [-3, 3, 1])
+    x_range: Range = Field([-5, 5, 1])
+    y_range: Range = Field([-5, 5, 1])
+    z_range: Range = Field([-3, 3, 1])
     numbers: bool = False
 
 
@@ -306,7 +306,7 @@ class NumberLineObject(FreeObject):
     """A number line."""
     model_config = _object_meta("Number line", "Coordinates")
     type: Literal["number_line"]
-    x_range: Range = Field(default_factory=lambda: [-5, 5, 1])
+    x_range: Range = Field([-5, 5, 1])
     length: float | None = Field(None, gt=0)
     numbers: bool = True
     tip: bool = False
@@ -327,7 +327,7 @@ class VectorObject(PlottedObject):
     model_config = _object_meta("Vector", "Geometry")
     type: Literal["vector"]
     tip: Point
-    tail: Point = Field(default_factory=lambda: [0, 0])
+    tail: Point = Field([0, 0])
     thickness: float | None = Field(None, gt=0)
     label: TexString | None = Field(None, description="LaTeX label placed beside the tip, on `label_side`")
     label_side: Side = "right"
@@ -673,7 +673,7 @@ class CaptionSettings(Model):
 
 
 class Settings(Model):
-    resolution: Annotated[list[int], Field(min_length=2, max_length=2)] = Field(default_factory=lambda: [1920, 1080])
+    resolution: Annotated[list[int], Field(min_length=2, max_length=2)] = Field([1920, 1080])
     fps: int = Field(30, ge=1, le=120)
     background: Color | None = Field(None, description="Background color; manim's default if left out")
     font: str | None = Field(
