@@ -40,9 +40,7 @@ UI_INDEX = f"{UI_DIR}/index.html"
 
 # Console scripts whose module is still being written: its absence is noted rather than failed,
 # and once it is in the wheel, the entry has to come out of here
-PENDING_ENTRY_POINTS = {
-    "manimgl-editor": "manim_verbose/editor/cli.py is still being written",
-}
+PENDING_ENTRY_POINTS: dict[str, str] = {}
 
 FORBIDDEN_PARTS = {"tests", "__pycache__", "node_modules", "latex_cache", ".DS_Store", ".pytest_cache"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo"}
