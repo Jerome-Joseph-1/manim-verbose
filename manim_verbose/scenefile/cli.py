@@ -2,6 +2,7 @@
 manimgl-scene: scene files from the command line.
 
     manimgl-scene validate lesson.yaml          check it, and say what is wrong in plain words
+    manimgl-scene validate --layout lesson.yaml also look for things off the frame, under the captions or overlapping
     manimgl-scene format lesson.yaml            rewrite it in canonical form (ids filled in, defaults dropped)
     manimgl-scene schema [--write]              print the json schema, or refresh schema.json
     manimgl-scene info lesson.yaml              scenes, steps and how long each runs
@@ -34,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("validate", help="Check a scene file")
     p.add_argument("file", type=Path)
     p.add_argument("--json", action="store_true", help="Print problems as json")
+    p.add_argument("--layout", action="store_true",
+                   help="Also warn about things off the frame, under the captions or on top of each other "
+                        "(builds every scene, without drawing it)")
     p.set_defaults(run=cmd_validate)
 
     p = sub.add_parser("format", help="Rewrite a scene file in canonical form")
@@ -88,6 +92,9 @@ def load_or_report(file: Path):
 
 def cmd_validate(args) -> int:
     doc, problems = load_file(args.file)
+    if args.layout and doc is not None:
+        from manim_verbose.scenefile.layout_check import check_document_layout
+        problems = problems + check_document_layout(doc, problems, args.file.parent.resolve())
     if args.json:
         import json
         print(json.dumps([p.to_json() for p in problems], indent=2))
