@@ -1,0 +1,190 @@
+name: install
+
+# Layer 7 of docs/editor/PLAN.md: a wheel built once, installed into a clean venv on Linux,
+# macOS and Windows under every supported Python, and used from a directory with no checkout
+# in it, the way someone who ran `pip install manimgl[editor]` would use it.
+#
+# Nightly (dependencies move under us), before a release, and on any change to how the
+# package is built or what it depends on.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - setup.cfg
+      - setup.py
+      - pyproject.toml
+      - requirements.txt
+      - MANIFEST.in
+      - .github/workflows/install.yml
+      - scripts/ci/**
+      - tests/packaging/**
+  push:
+    branches: [master]
+    paths:
+      - setup.cfg
+      - setup.py
+      - pyproject.toml
+      - requirements.txt
+      - MANIFEST.in
+      - .github/workflows/install.yml
+      - scripts/ci/**
+      - tests/packaging/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build sdist and wheel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Look for the editor UI, which has to be built into the package
+        id: ui
+        run: |
+          if [ -f editor-ui/package-lock.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=No editor UI yet::editor-ui/ is not in this commit, so the wheel ships without it"
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.ui.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor-ui/package-lock.json
+
+      - name: Build the editor UI into manim_verbose/editor/static
+        if: steps.ui.outputs.present == 'true'
+        working-directory: editor-ui
+        run: |
+          npm ci
+          npm run build
+
+      # python -m build makes the sdist, then the wheel from the sdist, so anything MANIFEST.in
+      # leaves out of the sdist is missing from the wheel too
+      - name: Build the sdist, and the wheel from it
+        run: |
+          python -m pip install build twine
+          python -m build
+
+      - name: Check the metadata PyPI will show
+        run: python -m twine check --strict dist/*
+
+      - name: Check what the wheel holds
+        env:
+          UI_BUILT: ${{ steps.ui.outputs.present }}
+        run: |
+          if [ "$UI_BUILT" = true ]; then
+            python tests/packaging/wheel_contents.py dist/*.whl --require-ui
+          else
+            python tests/packaging/wheel_contents.py dist/*.whl
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  install:
+    name: ${{ matrix.os }}, Python ${{ matrix.python }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      SCENE: ${{ github.workspace }}/scripts/ci/smoke/hello.yaml
+      SMOKE: ${{ github.workspace }}/scripts/ci/smoke.py
+    steps:
+      # For the smoke test script and its scene file only: what is tested is the wheel
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: setup.cfg
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      # macOS and Windows need nothing from the system: manimpango, skia-pathops, wgpu, glfw
+      # and av all have wheels there. Linux has no manimpango wheel.
+      - name: Install pango (manimpango builds from source on Linux) and lavapipe
+        if: runner.os == 'Linux'
+        run: scripts/ci/apt-install.sh pango vulkan
+
+      - name: Install the wheel, with the editor extra, into a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [ "$RUNNER_OS" = Windows ]; then
+            venv_python="$RUNNER_TEMP/venv/Scripts/python.exe"
+          else
+            venv_python="$RUNNER_TEMP/venv/bin/python"
+          fi
+          echo "VENV_PYTHON=$venv_python" >> "$GITHUB_ENV"
+          "$venv_python" -m pip install --upgrade pip
+          wheels=(dist/*.whl)
+          "$venv_python" -m pip install "${wheels[0]}[editor]"
+
+      # From an empty directory, so that nothing but the installed wheel can be imported
+      - name: Import manim, validate a scene file and print the schema
+        working-directory: ${{ runner.temp }}
+        run: '"$VENV_PYTHON" "$SMOKE" --installed --scene "$SCENE"'
+
+      - name: Render a still with lavapipe
+        if: runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}
+        run: '"$VENV_PYTHON" "$SMOKE" --installed --no-checks --render still --scene "$SCENE" --out "$RUNNER_TEMP/still"'
+
+      - name: Try to render a still (hosted macOS and Windows runners have no GPU, so failing here is reported, not fatal)
+        if: runner.os != 'Linux'
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}
+        run: '"$VENV_PYTHON" "$SMOKE" --installed --no-checks --render still --scene "$SCENE" --out "$RUNNER_TEMP/still"'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: still-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/still/*.png
+          if-no-files-found: ignore
+          retention-days: 7

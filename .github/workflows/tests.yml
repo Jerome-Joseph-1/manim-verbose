@@ -1,0 +1,287 @@
+name: tests
+
+# The test layers of docs/editor/PLAN.md which run on every push. Layer 7, installing a built
+# wheel on every platform, is install.yml.
+#
+#   python    layers 1, 2 and 4, and the packaging checks: pytest -m "not render and not e2e"
+#             on every supported Python
+#   render    layer 3: pytest -m render, and the renderer's own scripts, with Mesa's lavapipe
+#             standing in for a GPU and the TeX manim's default template needs
+#   frontend  layer 5: typecheck, lint, Vitest and a build of editor-ui/
+#   e2e       layer 6: Playwright in Chromium against the real server and real renders
+#
+# frontend and e2e wait for editor-ui/package-lock.json to exist, and say so until it does.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # A newer push makes an older run moot, except on master, where every commit's result counts
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  python:
+    name: python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            setup.cfg
+            requirements.txt
+
+      - name: Install pango (manimpango builds from source on Linux) and ffmpeg
+        run: scripts/ci/apt-install.sh pango ffmpeg
+
+      - name: Install manimgl with the editor and test extras
+        run: python -m pip install -e ".[editor,test]"
+
+      # No Vulkan driver is installed here, so a test which renders without being marked
+      # render fails in this job rather than passing by luck
+      - name: Run everything but render and e2e tests
+        run: python -m pytest -m "not render and not e2e"
+
+  render:
+    name: render (lavapipe, LaTeX)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Render tests write what they compared (diffs, failing frames) here to be uploaded
+      MANIM_TEST_ARTIFACTS: ${{ github.workspace }}/.ci-artifacts/render-tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            setup.cfg
+            requirements.txt
+
+      - name: Note the runner image, which the apt cache is kept per
+        id: image
+        run: echo "version=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore downloaded Ubuntu packages (TeX Live is most of a gigabyte)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: apt-${{ steps.image.outputs.version }}-${{ hashFiles('scripts/ci/apt/*.txt') }}
+          restore-keys: |
+            apt-${{ steps.image.outputs.version }}-
+            apt-
+
+      - name: Install pango, ffmpeg, lavapipe (Vulkan on the CPU) and TeX
+        run: APT_ARCHIVES="$HOME/apt-archives" scripts/ci/apt-install.sh pango ffmpeg vulkan tex
+
+      - name: Install manimgl with the editor and test extras
+        id: install
+        run: python -m pip install -e ".[editor,test]"
+
+      - name: Check LaTeX compiles manim's default template to outlines
+        run: python scripts/ci/check_tex.py
+
+      - name: Check wgpu finds a Vulkan adapter
+        run: |
+          python - <<'EOF'
+          import wgpu
+          adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
+          info = adapter.info
+          print(f"{info['adapter_type']} {info['backend_type']}: {info['device']} ({info['description']})")
+          EOF
+
+      - name: Run render tests
+        run: |
+          status=0
+          python -m pytest -m render || status=$?
+          # 5 is pytest finding nothing to run
+          if [ "$status" -eq 5 ]; then
+            echo "::warning title=No render tests::No tests are marked render yet, so pytest -m render ran none"
+            exit 0
+          fi
+          exit "$status"
+
+      # These run whatever became of the render tests, so long as manim installed
+      - name: Check every frame drawn reaches the video (tests/readback.py)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: python tests/readback.py --out "$GITHUB_WORKSPACE/.ci-artifacts/readback"
+
+      - name: Check cached bounding boxes (tests/bounding_box.py)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: python tests/bounding_box.py
+
+      - name: Render a scene file to video (manimgl-scene render, or manimgl until that exists)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          python scripts/ci/smoke.py --no-checks --render video
+          --scene scripts/ci/smoke/hello.yaml --out "$GITHUB_WORKSPACE/.ci-artifacts/scenefile"
+
+      - name: Upload what was rendered
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: render
+          path: .ci-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  detect:
+    name: what is here yet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      editor-ui: ${{ steps.look.outputs.editor-ui }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: editor-ui
+      # hashFiles() can't be used in a job's `if`, so the look is taken here once
+      - name: Look for editor-ui/package-lock.json
+        id: look
+        run: |
+          if [ -f editor-ui/package-lock.json ]; then
+            echo "editor-ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "editor-ui=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=No editor UI yet::editor-ui/package-lock.json is not in this commit, so the frontend and e2e jobs are skipped"
+          fi
+
+  frontend:
+    name: frontend (typecheck, lint, vitest, build)
+    needs: detect
+    if: needs.detect.outputs.editor-ui == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: editor-ui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor-ui/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    name: e2e (Playwright, real server and renders)
+    needs: detect
+    if: needs.detect.outputs.editor-ui == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            setup.cfg
+            requirements.txt
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor-ui/package-lock.json
+
+      - name: Note the runner image, which the apt cache is kept per
+        id: image
+        run: echo "version=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore downloaded Ubuntu packages (TeX Live is most of a gigabyte)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: apt-${{ steps.image.outputs.version }}-${{ hashFiles('scripts/ci/apt/*.txt') }}
+          restore-keys: |
+            apt-${{ steps.image.outputs.version }}-
+            apt-
+
+      - name: Install pango, ffmpeg, lavapipe (Vulkan on the CPU) and TeX
+        run: APT_ARCHIVES="$HOME/apt-archives" scripts/ci/apt-install.sh pango ffmpeg vulkan tex
+
+      - name: Install manimgl with the editor and test extras
+        run: python -m pip install -e ".[editor,test]"
+
+      - name: Install editor-ui's dependencies
+        working-directory: editor-ui
+        run: npm ci
+
+      - name: Build the editor UI into manim_verbose/editor/static
+        working-directory: editor-ui
+        run: npm run build
+
+      - name: Restore Playwright's browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('editor-ui/package-lock.json') }}
+
+      - name: Install Chromium for Playwright, and the libraries it needs
+        id: chromium
+        working-directory: editor-ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the journeys against a mocked server (--project=mock)
+        working-directory: editor-ui
+        run: npx playwright test --project=mock
+
+      # Runs whatever became of the mocked journeys, so long as everything installed
+      - name: Run the journeys against the real server and renders (--project=real)
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
+        working-directory: editor-ui
+        run: npx playwright test --project=real
+
+      - name: Upload the Playwright report, screenshots and traces
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright
+          path: |
+            editor-ui/playwright-report/
+            editor-ui/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
