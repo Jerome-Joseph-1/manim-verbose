@@ -6,9 +6,8 @@ from __future__ import annotations
 
 import copy
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
-import pytest
 
 from manim_verbose.editor.jobs import Job, JobRegistry
 from manim_verbose.editor.limits import Limits
@@ -205,7 +204,6 @@ def test_clips_go_ahead_of_waiting_exports(make_client, scene_file, sample, back
     first = export(client, titled(sample, "gate:gate"))
     wait_for_status(client, first, "running")
     waiting = export(client, sample)
-    from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(1) as pool:
         pending_clip = pool.submit(client.post, "/api/clip", json={"document": sample, "scene_id": "intro"})
         time.sleep(0.2)

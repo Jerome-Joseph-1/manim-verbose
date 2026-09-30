@@ -440,6 +440,10 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
     `allowed_hosts`, when given, is the set of host names requests may be addressed to, which
     keeps web pages elsewhere from reaching a server on localhost by DNS rebinding.
     `start_workers` starts the still worker as the app starts, rather than on the first still.
+
+    Renders run in processes started with multiprocessing's spawn method, which imports the
+    main module afresh in each; a script which calls this has to do so under
+    `if __name__ == "__main__":`, as the manimgl-editor command does.
     """
     limits = limits or Limits()
     editor = Editor(path, output_dir, backend or RenderBackend(), limits)

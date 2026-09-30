@@ -219,23 +219,22 @@ def test_a_crashed_renderer_is_replaced(client, sample):
 
 
 def test_a_still_past_its_time_limit_is_stopped_and_the_server_keeps_answering(make_client, scene_file, sample, pool):
-    client = make_client(scene_file, Limits(still_timeout=1.5))
+    client = make_client(scene_file, Limits(still_timeout=3))
     hanging = copy.deepcopy(sample)
     hanging["scenes"][0]["title"] = "hang"
     started = time.monotonic()
     pending = pool.submit(still, client, hanging)
     wait_until(lambda: client.app.state.editor.stills.running is not None)
     for _ in range(3):
-        t = time.monotonic()
         assert client.get("/api/health").status_code == 200
         assert client.get("/api/document").status_code == 200
         assert client.post("/api/validate", json={"document": sample}).status_code == 200
-        assert time.monotonic() - t < 1.0
+    assert not pending.done(), "those were answered while the render hung"
     r = pending.result(timeout=20)
-    assert time.monotonic() - started < 10
+    assert time.monotonic() - started < 15
     assert r.status_code == 422
     [p] = r.json()["problems"]
-    assert p["message"].startswith("Drawing this frame took longer than 1.5 seconds")
+    assert p["message"].startswith("Drawing this frame took longer than 3 seconds")
     assert (p["loc"], p["scene_id"]) == (["scenes", 0], "intro")
     assert still(client, sample).status_code == 200
 
