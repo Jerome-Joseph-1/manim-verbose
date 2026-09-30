@@ -9,9 +9,15 @@ OWNER: objects agent. Re-exported by runtime.py, so generated code can call thes
 
 Alongside place are the few builders generated code needs where manimlib has no way of making
 something in one expression: a label added to a dot or beside a vector's tip, a matrix with
-round brackets, axes with their numbers, the graph of a typed formula, a dark panel behind
-an object. Each takes the mobject it works on first and returns it (or the group it made), so
-they nest like the rest.
+round brackets, axes with their numbers and tips, the graph of a typed formula, a dark panel
+behind an object, the mark of an angle, an arrow tip on an arc, a brace between two points,
+the entries of a matrix a part names. Each takes the mobject it works on first and returns it
+(or the group it made), so they nest like the rest.
+
+Things in a 3D scene which should read the same from wherever the camera looks (the labels of
+3D axes, dots) are made facing_camera: before each frame is drawn they turn, about their own
+centre, to face the camera of the scene being played, which is how they stay where they are
+in 3D and still never vanish edge on.
 
 Everything is measured against the frame the scene starts with: frame_shape() is manim's
 default frame unless the scene has said otherwise with set_frame_shape, which a scene of an
@@ -20,6 +26,7 @@ unusual aspect ratio has to do before building its objects.
 from __future__ import annotations
 
 import math
+import sys
 from typing import Callable, Sequence
 
 import numpy as np
@@ -28,21 +35,29 @@ from manim_verbose.manim_import import import_manim
 
 import_manim()
 
-from manimlib.constants import DL, DOWN, DR, FRAME_HEIGHT, FRAME_WIDTH, LEFT, ORIGIN, OUT, RIGHT, UL, UP, UR, YELLOW
+from manimlib.constants import (
+    DEGREES, DL, DOWN, DR, FRAME_HEIGHT, FRAME_WIDTH, LEFT, MED_SMALL_BUFF, ORIGIN, OUT, RIGHT, TAU, UL, UP, UR,
+    YELLOW,
+)
 from manimlib.mobject.coordinate_systems import CoordinateSystem
+from manimlib.mobject.geometry import Arc, ArrowTip, Line
 from manimlib.mobject.matrix import Matrix
 from manimlib.mobject.mobject import Group, Mobject
+from manimlib.mobject.number_line import NumberLine
 from manimlib.mobject.shape_matchers import BackgroundRectangle, Underline
+from manimlib.mobject.svg.brace import Brace, LineBrace
 from manimlib.mobject.svg.tex_mobject import Tex
 from manimlib.mobject.types.vectorized_mobject import VGroup, VMobject
+from manimlib.scene.scene import Scene
 
 from manim_verbose.scenefile.expressions import safe_function
 
 __all__ = [
     "place", "frame_shape", "set_frame_shape", "SIDES", "EDGES",
     "with_underline", "with_label", "with_tip_label", "with_coordinates", "with_brace_label",
-    "with_round_brackets", "with_row_colors", "with_numbers", "with_axis_labels", "with_backdrop",
-    "point_on", "function_graph",
+    "with_round_brackets", "with_row_colors", "with_numbers", "with_tips", "with_axis_labels", "with_backdrop",
+    "point_on", "function_graph", "matrix_part", "angle_mark", "with_arc_tip", "brace_between", "brace_part",
+    "facing_camera", "face_camera",
 ]
 
 SIDES: dict[str, np.ndarray] = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
@@ -214,15 +229,21 @@ def with_coordinates(
     coordinates: Sequence[str | float] | Mobject,
     buff: float = 0.2,
     font_size: float = 30,
+    colors: Sequence | None = None,
 ) -> Mobject:
     """
     An arrow with its coordinates added beyond its tip, as a column matrix unless given as a
     mobject already. They carry on in the direction the arrow points, so they never sit on
     the arrow itself, and move further out if they would cover a label added before them.
+    `colors` colors the coordinates in turn, x then y then z, leaving the brackets as they are.
     """
     if not isinstance(coordinates, Mobject):
         entries = [[c if isinstance(c, str) else _number_text(c)] for c in coordinates]
         coordinates = Matrix(entries, v_buff=0.3, element_config=dict(font_size=font_size))
+    if colors:
+        rows = coordinates.elements if isinstance(coordinates, Matrix) else coordinates.submobjects
+        for color, row in zip(colors, rows):
+            row.set_color(color)
     start, end = arrow.get_start(), arrow.get_end()
     direction = _compass(end - start)
     coordinates.next_to(end, direction, buff=buff)
@@ -273,7 +294,7 @@ def with_round_brackets(matrix: VMobject) -> VMobject:
     return matrix
 
 
-def with_backdrop(mob: Mobject, buff: float = 0.15, opacity: float = 0.75) -> Mobject:
+def with_backdrop(mob: Mobject, buff: float = 0.15, opacity: float = 0.75, color=None) -> Mobject:
     """
     mob with a panel of the background color behind it, so it reads over a grid, as part of
     it so that it moves and fades along. Coordinate systems and matrices take the panel as
@@ -281,8 +302,11 @@ def with_backdrop(mob: Mobject, buff: float = 0.15, opacity: float = 0.75) -> Mo
     else becomes a group of the two, the panel [0] and mob [1], since a panel added inside a
     text would throw out the indices its parts are found by, and one added inside a shape
     with an outline of its own would be drawn over that outline.
+
+    The panel is `color`, which should be the background of the scene it is drawn in; left
+    out, it is the background manim is configured with.
     """
-    backdrop = BackgroundRectangle(mob, buff=buff, fill_opacity=opacity)
+    backdrop = BackgroundRectangle(mob, color=color, buff=buff, fill_opacity=opacity)
     if isinstance(mob, (CoordinateSystem, Matrix)):
         mob.add_to_back(backdrop)
         return mob
@@ -302,13 +326,337 @@ def with_numbers(axes: Mobject, font_size: float = 24, num_decimal_places: int =
     return axes
 
 
-def with_axis_labels(axes: Mobject, x_label: str | None = None, y_label: str | None = None, font_size: float = 36) -> Mobject:
-    """Axes with a formula labelling the end of the x axis, the y axis, or both."""
+TIP_LENGTH = 0.25
+
+
+def with_tips(mob: Mobject, length: float = TIP_LENGTH, width: float = TIP_LENGTH) -> Mobject:
+    """
+    A number line, or each axis of a set of axes, with an arrow tip added past its far end.
+
+    Manim's own include_tip puts the tip over the last stretch of the line, which leaves no
+    room for the last tick and number there and so drops them. Here the line keeps its whole
+    length, with every tick and number on it, and the tip carries on beyond, so a line from
+    0 to 4 still says 4. Numbers added afterwards (with_numbers) include the last one too.
+    """
+    lines = mob.get_axes() if isinstance(mob, CoordinateSystem) else [mob]
+    for line in lines:
+        start, end = line.get_points()[0], line.get_points()[-1]
+        direction = _unit_vector(end - start, RIGHT)
+        tip = ArrowTip(width=width, length=length)
+        tip.rotate(math.atan2(direction[1], direction[0]) - tip.get_angle())
+        tip.shift(end + length * direction - tip.get_tip_point())
+        tip.set_color(line.get_stroke_color())
+        tip.set_stroke(line.get_stroke_color(), line.get_stroke_width())
+        line.tip = tip
+        line.add(tip)
+    return mob
+
+
+def with_axis_labels(
+    axes: Mobject,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    z_label: str | None = None,
+    font_size: float = 36,
+    buff: float = MED_SMALL_BUFF,
+) -> Mobject:
+    """
+    Axes with a formula labelling the end of each axis given one, clear of its numbers.
+
+    On a pair of axes, x goes just past the right hand end of its axis (and its tip), level
+    with it, or where that would leave the frame, above the end; y goes to the right of the
+    top of its axis. The numbers are below the one and left of the other, so neither label
+    ever sits on one. On 3D axes each goes just past the end of its axis, along it, and is
+    facing_camera, so that it reads however the camera is turned.
+    """
+    if axes.dimension == 3:
+        for label, axis in zip((x_label, y_label, z_label), axes.get_axes()):
+            if label is None:
+                continue
+            mob = Tex(label, font_size=font_size)
+            end = axis.get_points()[-1]
+            direction = _unit_vector(end - axis.get_points()[0], RIGHT)
+            reach = max(mob.get_width(), mob.get_height()) / 2
+            mob.move_to(end + (buff + reach) * direction)
+            axes.add(facing_camera(mob))
+        return axes
+    if z_label is not None:
+        raise ValueError("Only 3D axes have a z axis to label")
     if x_label is not None:
-        axes.add(axes.get_x_axis_label(x_label, font_size=font_size))
+        label = Tex(x_label, font_size=font_size)
+        end = axes.get_x_axis().get_edge_center(RIGHT)
+        label.next_to(end, RIGHT, buff=buff)
+        if label.get_right()[0] > frame_shape()[0] / 2 - 0.1:
+            label.next_to(end, UL, buff=buff)
+        axes.add(label)
     if y_label is not None:
-        axes.add(axes.get_y_axis_label(y_label, font_size=font_size))
+        axes.add(axes.get_y_axis_label(y_label, font_size=font_size, buff=buff))
     return axes
+
+
+def _unit_vector(vect: np.ndarray, fallback: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vect)
+    return np.asarray(vect, dtype=float) / norm if norm > 1e-9 else np.asarray(fallback, dtype=float)
+
+
+# Facing the camera
+
+def facing_camera(mob: Mobject) -> Mobject:
+    """
+    mob, turning before every frame to face the camera of the scene being played, about its
+    own centre, so that it stays where it is in 3D but always shows its face. A dot seen from
+    the side would otherwise shrink to a line and vanish, and a label turn to be unreadable.
+    Nothing changes while the camera looks straight at the frame, as it does unless turned.
+    Something fixed in the frame (fix_in_frame) is left as it is, since it faces the camera
+    already.
+    """
+    mob.facing_rotation = np.identity(3)
+    mob.add_updater(_face_playing_camera)
+    return mob
+
+
+def face_camera(mob: Mobject, frame: Mobject) -> Mobject:
+    """
+    Turn mob, made by facing_camera, to face the camera whose frame is given: its own
+    right, up and out become the camera's, about the centre of its own points (a dot's disc,
+    rather than the disc and a label beside it), or of the whole of it when it has none.
+    Turning about that centre leaves it where it was, so however often it turns it stays put.
+    """
+    current = getattr(mob, "facing_rotation", np.identity(3))
+    wanted = np.identity(3) if mob.is_fixed_in_frame() else frame.get_orientation().as_matrix()
+    if np.allclose(wanted, current):
+        return mob
+    centre = _own_centre(mob)
+    mob.apply_matrix(wanted @ current.T, about_point=centre)
+    mob.facing_rotation = wanted
+    return mob
+
+
+def _face_playing_camera(mob: Mobject) -> None:
+    frame = _playing_frame()
+    if frame is not None:
+        face_camera(mob, frame)
+
+
+def _playing_frame() -> Mobject | None:
+    """
+    The camera frame of the scene whose updates are running: an updater is handed only its
+    mobject, so the scene is found as the nearest caller which is a Scene's method. None when
+    no scene is at work, as when a mobject is built outside one.
+    """
+    caller = sys._getframe(1)
+    while caller is not None:
+        owner = caller.f_locals.get("self")
+        if isinstance(owner, Scene):
+            return owner.frame
+        caller = caller.f_back
+    return None
+
+
+def _own_centre(mob: Mobject) -> np.ndarray:
+    """
+    A centre which turning about it leaves where it is: the middle of a dot's own points, a
+    disc being the same all round, or for anything else the mean of all its points. (The
+    middle of the box round a label moves as the label turns, and turning about it every
+    frame would walk the label away.)
+    """
+    points = mob.get_points()
+    if len(points):
+        return (points.min(axis=0) + points.max(axis=0)) / 2
+    return mob.get_all_points().mean(axis=0)
+
+
+# Parts of matrices
+
+def matrix_part(
+    matrix: Matrix,
+    row: int | None = None,
+    column: int | None = None,
+    entry: tuple[int, int] | None = None,
+    entries: Sequence[tuple[int, int]] | None = None,
+) -> VGroup:
+    """
+    Entries of a Matrix, counting rows and columns from 1 as a scene file does: a whole row,
+    a whole column, one entry as (row, column), or several. Only entries, never brackets.
+
+    The group is made afresh from the entries themselves, so it is wherever they are now.
+    Matrix.get_rows() and get_columns() hand back groups made when the matrix was, which
+    sit outside it and keep the bounds they had then, wherever the matrix has moved since.
+    """
+    given = [name for name, value in (("row", row), ("column", column), ("entry", entry), ("entries", entries))
+             if value is not None]
+    if len(given) != 1:
+        raise ValueError("Give one of row, column, entry or entries")
+    grid = _entry_grid(matrix)
+    rows, columns = len(grid), len(grid[0]) if grid else 0
+
+    def at(r: int, c: int) -> VMobject:
+        if not (1 <= r <= rows and 1 <= c <= columns):
+            raise IndexError(f"This matrix has {rows} rows and {columns} columns, counting from 1, so no entry ({r}, {c})")
+        return grid[r - 1][c - 1]
+
+    if row is not None:
+        if not 1 <= row <= rows:
+            raise IndexError(f"This matrix has rows 1 to {rows}, so no row {row}")
+        return VGroup(*grid[row - 1])
+    if column is not None:
+        if not 1 <= column <= columns:
+            raise IndexError(f"This matrix has columns 1 to {columns}, so no column {column}")
+        return VGroup(*(line[column - 1] for line in grid))
+    if entry is not None:
+        return VGroup(at(*entry))
+    return VGroup(*(at(r, c) for r, c in entries))
+
+
+def _entry_grid(matrix: Matrix) -> list[list[VMobject]]:
+    """
+    The matrix's entries row by row. They are read from `elements`, which a copy of a Matrix
+    points at its own entries, and cut into rows as long as the matrix was made with
+    (`mob_matrix`, which a copy still shares with the original, gives only that length).
+    """
+    elements = list(matrix.elements)
+    columns = len(matrix.mob_matrix[0]) if matrix.mob_matrix else len(elements)
+    return [elements[i:i + columns] for i in range(0, len(elements), columns)]
+
+
+# Angles, arcs and braces
+
+def angle_mark(
+    a: Sequence[float],
+    vertex: Sequence[float],
+    b: Sequence[float],
+    radius: float = 0.5,
+    right_angle: bool = False,
+    other_side: bool = False,
+    label: Mobject | None = None,
+    buff: float = 0.15,
+) -> VMobject:
+    """
+    The mark of the angle at `vertex` between the lines to `a` and to `b`: an Arc of `radius`
+    round the vertex from the one line to the other, the shorter way round unless other_side,
+    or with right_angle the corner of a square of that side against both lines (a rhombus,
+    should the lines not be square after all). Marked the other way round, a right angle is
+    three quarters of a turn, and gets an arc like any other.
+
+    A label is added to the mark as a submobject, beyond it along the line halving the angle.
+    The points may be anywhere in 3D; the mark lies in the plane of the two lines.
+    """
+    vertex = _point(vertex)
+    along_a = _unit_vector(_point(a) - vertex, RIGHT)
+    along_b = _unit_vector(_point(b) - vertex, along_a)
+    # A second axis in the plane of the lines, square to the first, on the side of b
+    across = along_b - np.dot(along_b, along_a) * along_a
+    if np.linalg.norm(across) < 1e-9:
+        # The lines are one line: the plane is the frame's, and the short way round is anticlockwise
+        across = np.cross(OUT, along_a)
+        if np.linalg.norm(across) < 1e-9:
+            across = RIGHT
+    across = _unit_vector(across, UP)
+    angle = math.atan2(np.dot(along_b, across), np.dot(along_b, along_a))
+    if right_angle and not other_side:
+        corners = [radius * along_a, radius * (along_a + along_b), radius * along_b]
+        mark = VMobject().set_points_as_corners([vertex + corner for corner in corners])
+        middle = along_a + along_b
+    else:
+        sweep = angle - TAU if other_side else angle
+        mark = Arc(angle=sweep, radius=radius)
+        basis = np.column_stack([along_a, across, np.cross(along_a, across)])
+        mark.apply_matrix(basis, about_point=ORIGIN)
+        mark.shift(vertex)
+        middle = math.cos(sweep / 2) * along_a + math.sin(sweep / 2) * across
+    if label is not None:
+        direction = _unit_vector(middle, across)
+        reach = np.linalg.norm(middle) * radius if right_angle and not other_side else radius
+        extent = (abs(direction[0]) * label.get_width() + abs(direction[1]) * label.get_height()) / 2
+        label.move_to(vertex + (reach + buff + extent) * direction)
+        mark.add(label)
+    return mark
+
+
+def with_arc_tip(arc: Arc, length: float = TIP_LENGTH, width: float = TIP_LENGTH) -> Arc:
+    """
+    An arc with an arrow tip at its end, the tip's point exactly where the arc ended. The arc
+    is cut back along its own circle to where the tip's base begins, rather than bent to fit
+    as manim's add_tip bends it, so what is left of it is still part of the same circle. On a
+    short arc the tip is made smaller, to a third of the arc at most.
+    """
+    end = arc.get_end().copy()
+    shrink = min(1.0, arc.get_arc_length() / 3 / length)
+    length, width = length * shrink, width * shrink
+    if length <= 1e-6:
+        return arc
+    whole = arc.copy()
+    # Where along the arc the tip's base goes: the proportion leaving a chord `length` long,
+    # measured as pointwise_become_partial measures it, curve by curve
+    low, high = 0.0, 1.0
+    for _ in range(50):
+        middle = (low + high) / 2
+        if np.linalg.norm(end - whole.quick_point_from_proportion(middle)) > length:
+            low = middle
+        else:
+            high = middle
+    arc.pointwise_become_partial(whole, 0, low)
+    base = arc.get_points()[-1]
+    direction = _unit_vector(end - base, RIGHT)
+    tip = ArrowTip(width=width, length=np.linalg.norm(end - base))
+    tip.rotate(math.atan2(direction[1], direction[0]) - tip.get_angle())
+    tip.shift(end - tip.get_tip_point())
+    tip.set_color(arc.get_stroke_color())
+    arc.tip = tip
+    arc.add(tip)
+    return arc
+
+
+def brace_part(part: Mobject, whole: Mobject, side: str = "down", buff: float = 0.1) -> Brace:
+    """
+    A brace as long as `part` is along `side`, but out beyond the whole of `whole` on that
+    side: a brace for a row or column of a matrix, which has to keep clear of its brackets.
+    """
+    direction = _direction(side)
+    # The axis the brace bulges out along, and the one it spans the part along
+    out = 0 if direction[0] != 0 else 1
+    span = 1 - out
+    low, _, high = part.get_bounding_box()
+    edge = whole.get_bounding_box()[2 if direction[out] > 0 else 0][out]
+    ends = [np.array(part.get_center(), dtype=float) for _ in range(2)]
+    for end, value in zip(ends, (low[span], high[span])):
+        end[span] = value
+        end[out] = edge
+    return Brace(Line(*ends), direction, buff=buff)
+
+
+# Clockwise from each side: where a brace goes when its line runs exactly towards `side`
+_SIDE_AFTER = {"down": "left", "left": "up", "up": "right", "right": "down"}
+
+
+def brace_between(
+    start: Sequence[float],
+    end: Sequence[float],
+    side: str = "down",
+    buff: float = 0.1,
+) -> Brace:
+    """
+    A brace spanning exactly from `start` to `end`, bulging out towards `side` of the screen.
+
+    Of the two sides of the line from start to end, the brace goes on the one facing most
+    nearly `side`: below a level line for "down", right of an upright one for "right", and
+    for a slanting line, whichever side of it is lower, or further right. A line running
+    exactly towards `side` or away from it faces it on neither side, and then the brace goes
+    on the side a quarter turn clockwise from `side`: "down" puts it left of an upright line,
+    "left" above a level one, "up" right, and "right" below. Which of the points is start and
+    which is end doesn't matter.
+    """
+    start, end = _point(start), _point(end)
+    if np.linalg.norm(end - start) < 1e-3:
+        # Two points in one place still get a brace, the smallest one that can be drawn
+        middle = (start + end) / 2
+        start, end = middle - 5e-4 * RIGHT, middle + 5e-4 * RIGHT
+    along = _unit_vector((end - start) * [1, 1, 0], RIGHT)
+    left_of_travel = np.array([-along[1], along[0], 0.0])
+    facing = np.dot(left_of_travel, _direction(side))
+    if abs(facing) < 1e-9:
+        facing = np.dot(left_of_travel, _direction(_SIDE_AFTER[side]))
+    return LineBrace(Line(start, end), UP if facing > 0 else DOWN, buff=buff)
 
 
 # Graphs

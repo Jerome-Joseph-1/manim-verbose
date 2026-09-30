@@ -20,8 +20,11 @@ Interface used by codegen.py and actions.py (keep these signatures):
     default_show_style(obj) -> str     one of write, draw, fade, grow; what "show" with style auto uses
     default_hide_style(obj) -> str     one of fade, uncreate, shrink; what "hide" with style auto uses
     part_selector(obj, part, ctx) -> str
-                                       expression selecting `part` of a text-like object built as
-                                       ctx.var(obj.id), for highlight steps
+                                       expression selecting `part` of the object built as
+                                       ctx.var(obj.id), for highlight steps: glyphs of a text,
+                                       title, quote or formula (every place the part occurs), or
+                                       entries of a matrix ("row 2", "column 1", "entry 2 1"
+                                       counting from 1, or an entry's text)
 
 What comes out is the code a person would write with manimlib, such as
 `Arrow(plane.c2p(0, 0), plane.c2p(1, 2), buff=0).set_color(YELLOW)`, falling back on the
@@ -34,15 +37,24 @@ what gets built, for code which acts on objects afterwards:
     bullets                  a VGroup of Texts, one per item
     matrix                   a Matrix
     number_plane, axes       a NumberPlane / Axes (VGroups, with c2p)
-    axes_3d, number_line     a ThreeDAxes / NumberLine
+    axes_3d, number_line     a ThreeDAxes / NumberLine; a tip is the line's (each axis's)
+                             `tip`, past the end of the line, which n2p and c2p don't count.
+                             3D axis labels are submobjects of the axes, facing_camera
     graph                    a VMobject, with any label as a submobject
-    dot                      a Dot, with any label as a submobject
+    dot                      a Dot, with any label as a submobject; in 3D (on 3D axes, at a
+                             point with a z, or in a scene which turns the camera) facing_camera
     vector                   an Arrow; label and coordinates are submobjects, so get_start,
                              get_end and GrowArrow still work
     line                     a Line, DashedLine or (with arrow) Arrow
+    angle                    an Arc round the vertex, or for a right angle a VMobject, the
+                             square's corner; any label is a submobject (see layout.angle_mark)
+    arc                      an Arc; with arrow the tip is its submobject `tip`, and get_start()
+                             and get_end() are where the arc starts and where the tip points
     polygon, circle, rectangle, square
                              a Polygon / Circle / Rectangle or RoundedRectangle / Square
-    brace                    a Brace, or VGroup(brace, label)
+    brace                    a Brace (between points, a LineBrace), or VGroup(brace, label);
+                             between points get_start()/get_end() aren't the points, but the
+                             brace spans exactly from one to the other
     box                      a SurroundingRectangle
     image                    an ImageMobject (not a VMobject)
     svg                      an SVGMobject
@@ -50,8 +62,16 @@ what gets built, for code which acts on objects afterwards:
 
 With `backdrop`, number planes, axes, 3D axes and matrices keep their type, the panel being
 their first submobject; anything else becomes VGroup(panel, object) (Group for an image), the
-object itself being [1]. part_selector and points on a number line look past the panel. With
-`fixed`, the whole object is fixed in the frame (fix_in_frame), so it ignores camera moves.
+object itself being [1]. The panel is the background color of the scene, or of the document,
+or manim's. part_selector and points on a number line look past the panel. With `fixed`, the
+whole object is fixed in the frame (fix_in_frame), so it ignores camera moves.
+
+A brace or box around a part of its target goes round the first place the part occurs (a
+highlight picks out every place). A brace for part of a matrix is as long as the part but sits
+out beyond the matrix, clear of its brackets (layout.brace_part). Parts which a highlight, brace or box picks out of a text,
+title or quote are marked out when it is built (as its own span, `local_configs`), and those of
+a formula isolated, so that selecting them is exact: counting characters instead goes wrong
+past anything which draws no glyph of its own, such as an emoji, which manim leaves out.
 
 Text a user typed is written into the code with repr (or as a raw string where that reads
 better and round-trips exactly), so nothing typed can become code. Characters which can't be
@@ -70,13 +90,13 @@ from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
 from manim_verbose.scenefile.expressions import check_expression
 from manim_verbose.scenefile.model import (
-    HEX_COLOR, Axes3DObject, AxesObject, BoxObject, BraceObject, BulletsObject, CircleObject, DotObject,
-    FreeObject, GraphObject, GroupObject, HighlightStep, ImageObject, LineObject, MatrixObject,
-    NumberLineObject, NumberPlaneObject, ObjectBase, PolygonObject, QuoteObject, RectangleObject,
-    SceneSpec, SquareObject, SvgObject, TexObject, TextObject, TitleObject, VectorObject,
+    HEX_COLOR, AngleObject, ArcObject, Axes3DObject, AxesObject, BoxObject, BraceObject, BulletsObject,
+    CameraStep, CircleObject, DotObject, FreeObject, GraphObject, GroupObject, HighlightStep, ImageObject,
+    LineObject, MatrixObject, NumberLineObject, NumberPlaneObject, ObjectBase, PolygonObject, QuoteObject,
+    RectangleObject, SceneSpec, SquareObject, SvgObject, TexObject, TextObject, TitleObject, VectorObject,
     iter_steps, manim_color_names,
 )
-from manim_verbose.scenefile.validate import object_refs
+from manim_verbose.scenefile.validate import matrix_entry_texts, object_refs, parse_matrix_part
 
 if TYPE_CHECKING:
     # Only for annotations: codegen.py imports this module, so importing it back here would be circular
@@ -252,15 +272,59 @@ def _point(values: Sequence[float], on: str | None, ctx: CodegenContext) -> str:
     return f"{var}.c2p({_nums(values)})"
 
 
-def _highlight_parts(obj: ObjectBase, ctx: CodegenContext) -> list[str]:
-    """Every part of obj some highlight step in the scene picks out, in order, once each."""
+def _picked_parts(obj: ObjectBase, ctx: CodegenContext) -> list[str]:
+    """
+    Every part of obj which something in the scene picks out, in order, once each: highlight
+    steps, and braces and boxes around a part of it.
+    """
+    wanted = [
+        step.part for step in iter_steps(ctx.scene.steps)
+        if isinstance(step, HighlightStep) and step.target == obj.id and step.part
+    ] + [
+        other.part for other in ctx.scene.objects
+        if isinstance(other, (BraceObject, BoxObject)) and other.target == obj.id and other.part
+    ]
     parts: list[str] = []
-    for step in iter_steps(ctx.scene.steps):
-        if isinstance(step, HighlightStep) and step.target == obj.id and step.part:
-            part = displayable(step.part)
-            if part and part not in parts:
-                parts.append(part)
+    for part in wanted:
+        part = displayable(part)
+        if part and part not in parts:
+            parts.append(part)
     return parts
+
+
+def _spans(text: str, part: str) -> list[tuple[int, int]]:
+    return [match.span() for match in re.finditer(re.escape(part), text)]
+
+
+def _partly_overlap(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    inside = (a[0] <= b[0] and b[1] <= a[1]) or (b[0] <= a[0] and a[1] <= b[1])
+    return a[0] < b[1] and b[0] < a[1] and not inside
+
+
+def _text_spans(text: str, parts: list[str], colored: Iterable[str]) -> list[str]:
+    """
+    Which of the parts picked out of a text to mark out as spans of their own: those which
+    draw something, leaving out any a colored part already marks, and any which would partly
+    overlap another span, which manim can't mark (it warns, and counts characters instead).
+    """
+    taken = [span for part in colored for span in _spans(text, part)]
+    chosen = []
+    for part in parts:
+        if not part.strip() or part in colored:
+            continue
+        spans = _spans(text, part)
+        if spans and not any(_partly_overlap(a, b) for a in spans for b in taken):
+            chosen.append(part)
+            taken += spans
+    return chosen
+
+
+def _marked_parts(text: str, parts: list[str], colored: Iterable[str] = ()) -> str | None:
+    """local_configs marking out each part as a span of its own, which is what makes selecting it exact."""
+    chosen = _text_spans(text, parts, list(colored))
+    if not chosen:
+        return None
+    return _kw("local_configs", "{" + ", ".join(f"{_str(part)}: {{}}" for part in chosen) + "}")
 
 
 def _is_vectorized(obj_id: str, ctx: CodegenContext, seen: frozenset[str] = frozenset()) -> bool:
@@ -292,10 +356,12 @@ def _text(obj: TextObject, ctx: CodegenContext) -> Built:
         args.append("weight=BOLD")
     if obj.italic:
         args.append("slant=ITALIC")
-    if obj.align != "center":
+    # Always said for text of several lines, since manim's own default is to the left
+    if obj.align != "center" or "\n" in displayable(obj.text):
         args.append(_kw("alignment", _literal(obj.align.upper())))
     if obj.colors:
         args.append(_kw("t2c", _color_map(obj.colors, _str)))
+    args.append(_marked_parts(displayable(obj.text), _picked_parts(obj, ctx), map(displayable, obj.colors)))
     # fill_color rather than a later set_color, which would paint over the colored parts
     if obj.color:
         args.append(_kw("fill_color", _color(obj.color)))
@@ -303,22 +369,79 @@ def _text(obj: TextObject, ctx: CodegenContext) -> Built:
 
 
 def _tex_object(obj: TexObject, ctx: CodegenContext) -> Built:
+    tex = displayable(obj.tex)
     args = [_tex(obj.tex)]
     if obj.font_size != 48:
         args.append(_kw("font_size", _num(obj.font_size)))
-    if obj.colors:
-        args.append(_kw("t2c", _color_map(obj.colors, _tex)))
-    # Parts a highlight picks out are isolated, which is what makes selecting them exact
-    parts = [p for p in _highlight_parts(obj, ctx) if p in displayable(obj.tex) and p not in obj.colors]
+    # Colored parts which would typeset differently set apart are colored once the formula is made
+    kept = {part: color for part, color in obj.colors.items() if isolates_cleanly(tex, displayable(part))}
+    if kept:
+        args.append(_kw("t2c", _color_map(kept, _tex)))
+    # Parts picked out are isolated, which is what makes selecting them exact, unless that
+    # would change how the formula is typeset
+    parts = [
+        p for p in _picked_parts(obj, ctx)
+        if p in tex and p not in obj.colors and isolates_cleanly(tex, p)
+    ]
     if parts:
         args.append(_kw("isolate", "[" + ", ".join(_tex(p) for p in parts) + "]"))
     if obj.color:
         args.append(_kw("fill_color", _color(obj.color)))
-    return _call("Tex", *args), {"color"}
+    expr = _call("Tex", *args)
+    for part, color in obj.colors.items():
+        if part not in kept:
+            expr += f".set_color_by_tex({_tex(part)}, {_color(color)})"
+    return expr, {"color"}
+
+
+# What TeX spaces differently once it is set apart in a group of its own, which is how manim
+# isolates a part of a formula: binary operators and relations (a group starting "+ 5" reads
+# as a sign, "3x+5"), punctuation, and operators such as \sum and \sin
+_SPACED_CHARACTERS = set("+-*=<>:,;")
+_SPACED_COMMANDS = set("""
+    pm mp times div cdot ast star circ bullet cap cup uplus sqcap sqcup vee wedge lor land setminus wr diamond
+    oplus ominus otimes oslash odot bigcirc dagger ddagger amalg triangleleft triangleright lhd rhd unlhd unrhd
+    leq le geq ge neq ne equiv approx sim simeq cong propto prec succ preceq succeq ll gg subset supset subseteq
+    supseteq sqsubseteq sqsupseteq in ni notin vdash dashv models perp mid parallel bowtie smile frown asymp doteq
+    to gets rightarrow leftarrow Rightarrow Leftarrow leftrightarrow Leftrightarrow iff implies impliedby mapsto
+    longrightarrow longleftarrow Longrightarrow Longleftarrow longleftrightarrow Longleftrightarrow longmapsto
+    hookrightarrow hookleftarrow uparrow downarrow nearrow searrow nwarrow swarrow coloneqq colon lt gt leqslant
+    geqslant nless ngtr not
+    sum prod coprod int iint iiint oint bigcup bigcap bigoplus bigotimes bigodot biguplus bigsqcup bigvee bigwedge
+    lim limsup liminf max min sup inf det gcd Pr sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh coth
+    log ln lg exp ker dim hom arg deg operatorname mathop mathbin mathrel quad qquad
+""".split())
+_TEX_TOKEN = re.compile(r"\\[A-Za-z]+|\\.|\S", re.S)
+
+
+def isolates_cleanly(tex: str, part: str) -> bool:
+    """
+    Whether `part` of a formula can be isolated (typeset in a group of its own, as manim does
+    to find it exactly) without the formula changing. It can't when it starts or ends with
+    something TeX spaces by what is beside it, such as + or = or \\sin, or when a superscript,
+    subscript or prime follows it, which set against a group sit differently. Such parts are
+    found by counting symbols instead, which leaves the formula as it is.
+    """
+    tokens = _TEX_TOKEN.findall(part)
+    if not tokens:
+        return False
+    for token in (tokens[0], tokens[-1]):
+        if token in _SPACED_CHARACTERS or (token.startswith("\\") and token[1:] in _SPACED_COMMANDS):
+            return False
+        if re.fullmatch(r"\\[,:;! ]", token):
+            return False
+    for match in re.finditer(re.escape(part), tex):
+        if re.match(r"\s*[\^_']", tex[match.end():]):
+            return False
+    return True
 
 
 def _title(obj: TitleObject, ctx: CodegenContext) -> Built:
-    text = _call("Text", _str(obj.text), _kw("font_size", _num(obj.font_size)))
+    text = _call(
+        "Text", _str(obj.text), _kw("font_size", _num(obj.font_size)),
+        'alignment="CENTER"' if "\n" in displayable(obj.text) else None,
+        _marked_parts(displayable(obj.text), _picked_parts(obj, ctx)),
+    )
     return (f"with_underline({text})" if obj.underline else text), set()
 
 
@@ -329,7 +452,10 @@ def _quote(obj: QuoteObject, ctx: CodegenContext) -> Built:
     words = displayable(obj.text)
     if not words or words[0] not in QUOTE_MARKS:
         words = f"“{words}”"
-    quote = _call("Text", _literal(words), _kw("font_size", _num(obj.font_size)), "slant=ITALIC")
+    quote = _call(
+        "Text", _literal(words), _kw("font_size", _num(obj.font_size)), "slant=ITALIC",
+        _marked_parts(words, _picked_parts(obj, ctx)),
+    )
     # An author which comes to nothing once what can't be drawn is left out is no author
     if not displayable(obj.author or ""):
         return f"VGroup({quote})", set()
@@ -398,18 +524,21 @@ def _axes(obj: AxesObject, ctx: CodegenContext) -> Built:
         args.append(_kw("width", _num(obj.width)))
     if obj.height:
         args.append(_kw("height", _num(obj.height)))
-    if obj.tips:
-        args.append("axis_config=dict(include_tip=True)")
     expr = _call("Axes", *args)
+    # Tips past the ends of the axes, rather than manim's include_tip, which drops the last numbers
+    if obj.tips:
+        expr = _call("with_tips", expr)
     if obj.numbers:
         expr = _with_numbers(expr, obj.x_range, obj.y_range)
-    if obj.x_label is not None or obj.y_label is not None:
-        labels = [
-            _kw(name, _tex(value)) for name, value in (("x_label", obj.x_label), ("y_label", obj.y_label))
-            if value is not None
-        ]
-        expr = _call("with_axis_labels", expr, *labels)
-    return expr, set()
+    return _with_axis_labels(expr, obj), set()
+
+
+def _with_axis_labels(expr: str, obj: AxesObject | Axes3DObject) -> str:
+    labels = [
+        _kw(name, _tex(getattr(obj, name))) for name in ("x_label", "y_label", "z_label")
+        if getattr(obj, name, None) is not None
+    ]
+    return _call("with_axis_labels", expr, *labels) if labels else expr
 
 
 def _axes_3d(obj: Axes3DObject, ctx: CodegenContext) -> Built:
@@ -419,7 +548,7 @@ def _axes_3d(obj: Axes3DObject, ctx: CodegenContext) -> Built:
     )
     if obj.numbers:
         expr = _with_numbers(expr, obj.x_range, obj.y_range)
-    return expr, set()
+    return _with_axis_labels(expr, obj), set()
 
 
 def _number_line(obj: NumberLineObject, ctx: CodegenContext) -> Built:
@@ -431,9 +560,8 @@ def _number_line(obj: NumberLineObject, ctx: CodegenContext) -> Built:
         places = _decimal_places(*_range_numbers(obj.x_range))
         if places:
             args.append(f"decimal_number_config=dict(num_decimal_places={places})")
-    if obj.tip:
-        args.append("include_tip=True")
-    return _call("NumberLine", *args), set()
+    expr = _call("NumberLine", *args)
+    return (_call("with_tips", expr) if obj.tip else expr), set()
 
 
 def _graph(obj: GraphObject, ctx: CodegenContext) -> Built:
@@ -459,7 +587,24 @@ def _dot(obj: DotObject, ctx: CodegenContext) -> Built:
     expr = _call("Dot", *args)
     if obj.label is not None:
         expr = _call("with_label", expr, _label(obj.label), _literal(obj.label_side))
+    if _in_3d(obj, ctx):
+        expr = _call("facing_camera", expr)
     return expr, set()
+
+
+def _in_3d(obj: DotObject, ctx: CodegenContext) -> bool:
+    """
+    Whether a dot is in 3D, and so has to keep facing the camera not to vanish edge on: it is
+    on 3D axes, or at a point given a z, or the scene turns the camera. Not when it is fixed
+    in the frame, which always faces the camera.
+    """
+    if obj.fixed:
+        return False
+    if obj.on is not None and _spec(ctx, obj.on).type == "axes_3d":
+        return True
+    if len(obj.point) == 3:
+        return True
+    return any(isinstance(step, CameraStep) and step.orientation is not None for step in iter_steps(ctx.scene.steps))
 
 
 def _vector(obj: VectorObject, ctx: CodegenContext) -> Built:
@@ -469,9 +614,15 @@ def _vector(obj: VectorObject, ctx: CodegenContext) -> Built:
     expr = _call("Arrow", *args)
     if obj.label is not None:
         expr = _call("with_tip_label", expr, _label(obj.label), _literal(obj.label_side))
-    if obj.show_coordinates:
-        expr = _call("with_coordinates", expr, _list(obj.tip))
-    return expr, set()
+    if not obj.show_coordinates:
+        return expr, set()
+    if not obj.coordinate_colors:
+        return _call("with_coordinates", expr, _list(obj.tip)), set()
+    # The vector's color first, so that the coordinates' own colors aren't painted over
+    if obj.color is not None:
+        expr += f".set_color({_color(obj.color)})"
+    colors = _kw("colors", "[" + ", ".join(_color(c) for c in obj.coordinate_colors) + "]")
+    return _call("with_coordinates", expr, _list(obj.tip), colors), {"color"}
 
 
 def _line(obj: LineObject, ctx: CodegenContext) -> Built:
@@ -534,15 +685,69 @@ def _square(obj: SquareObject, ctx: CodegenContext) -> Built:
     return f"Square(side_length={_num(obj.side)})" + _shape_style(obj), {"color", "opacity"}
 
 
+def _angle(obj: AngleObject, ctx: CodegenContext) -> Built:
+    args = [_point(p, obj.on, ctx) for p in obj.points]
+    if obj.radius != 0.5:
+        args.append(_kw("radius", _num(obj.radius)))
+    if obj.right_angle:
+        args.append("right_angle=True")
+    if obj.other_side:
+        args.append("other_side=True")
+    if obj.label is not None:
+        args.append(_kw("label", _label(obj.label)))
+    return _call("angle_mark", *args), set()
+
+
+def _degrees(value: float) -> str:
+    return "0" if value == 0 else f"{_num(value)} * DEGREES"
+
+
+def _arc(obj: ArcObject, ctx: CodegenContext) -> Built:
+    # Anticlockwise from start to end, or clockwise when end is the smaller, never more than a turn
+    sweep = max(-360.0, min(360.0, obj.end_angle - obj.start_angle))
+    args = []
+    if obj.start_angle != 0:
+        args.append(_kw("start_angle", _degrees(obj.start_angle)))
+    args.append(_kw("angle", _degrees(sweep)))
+    if obj.radius != 1:
+        args.append(_kw("radius", _num(obj.radius)))
+    if obj.on is not None or any(obj.center):
+        args.append(_kw("arc_center", _point(obj.center, obj.on, ctx)))
+    expr = _call("Arc", *args)
+    if obj.thickness is not None:
+        expr += f".set_stroke(width={_num(obj.thickness)})"
+    if obj.arrow:
+        expr = _call("with_arc_tip", expr)
+    return expr, set()
+
+
+def _part_of(target: ObjectBase, part: str, ctx: CodegenContext) -> str:
+    """The part of a target a brace or box goes round: a matrix's entries, or the first place a text's part occurs."""
+    selector = part_selector(target, part, ctx)
+    return selector if isinstance(target, MatrixObject) else f"{selector}[0]"
+
+
 def _brace(obj: BraceObject, ctx: CodegenContext) -> Built:
-    expr = _call("Brace", _var(ctx, obj.target), SIDE_NAMES[obj.side], _kw("buff", _num(obj.buff)))
+    if obj.target is None:
+        args = [_point(obj.start, obj.on, ctx), _point(obj.end, obj.on, ctx)]
+        if obj.side != "down":
+            args.append(_literal(obj.side))
+        expr = _call("brace_between", *args, _kw("buff", _num(obj.buff)))
+    elif obj.part is not None and isinstance(_spec(ctx, obj.target), MatrixObject):
+        # Out beyond the matrix, clear of its brackets
+        part = _part_of(_spec(ctx, obj.target), obj.part, ctx)
+        expr = _call("brace_part", part, _var(ctx, obj.target), _literal(obj.side), _kw("buff", _num(obj.buff)))
+    else:
+        subject = _var(ctx, obj.target) if obj.part is None else _part_of(_spec(ctx, obj.target), obj.part, ctx)
+        expr = _call("Brace", subject, SIDE_NAMES[obj.side], _kw("buff", _num(obj.buff)))
     if obj.label is not None:
         expr = _call("with_brace_label", expr, _label(obj.label))
     return expr, set()
 
 
 def _box(obj: BoxObject, ctx: CodegenContext) -> Built:
-    args = [_var(ctx, obj.target), _kw("buff", _num(obj.buff))]
+    subject = _var(ctx, obj.target) if obj.part is None else _part_of(_spec(ctx, obj.target), obj.part, ctx)
+    args = [subject, _kw("buff", _num(obj.buff))]
     if obj.color:
         args.append(_kw("color", _color(obj.color)))
     expr = _call("SurroundingRectangle", *args)
@@ -583,6 +788,7 @@ BUILDERS: dict[str, Callable[[ObjectBase, CodegenContext], Built]] = {
     "text": _text, "tex": _tex_object, "title": _title, "quote": _quote, "bullets": _bullets,
     "matrix": _matrix, "number_plane": _number_plane, "axes": _axes, "axes_3d": _axes_3d,
     "number_line": _number_line, "graph": _graph, "dot": _dot, "vector": _vector, "line": _line,
+    "angle": _angle, "arc": _arc,
     "polygon": _polygon, "circle": _circle, "rectangle": _rectangle, "square": _square,
     "brace": _brace, "box": _box, "image": _image, "svg": _svg, "group": _group,
 }
@@ -609,7 +815,8 @@ def object_expression(obj: ObjectBase, ctx: CodegenContext) -> str:
     # After color and opacity, which would otherwise repaint the panel, and before scale and
     # rotation, so the panel turns with what it is behind
     if isinstance(obj, FreeObject) and obj.backdrop:
-        expr = f"with_backdrop({expr})"
+        background = ctx.scene.background or ctx.doc.settings.background
+        expr = _call("with_backdrop", expr, _kw("color", _color(background)) if background else None)
     if obj.z:
         expr += f".set_z_index({int(obj.z)})"
     if isinstance(obj, FreeObject):
@@ -688,20 +895,24 @@ SHOW_STYLES = {
     "text": "write", "tex": "write", "title": "write", "quote": "write", "bullets": "write", "matrix": "write",
     "number_plane": "draw", "axes": "draw", "axes_3d": "draw", "number_line": "draw", "graph": "draw",
     "line": "draw", "polygon": "draw", "circle": "draw", "rectangle": "draw", "square": "draw",
-    "brace": "draw", "box": "draw",
+    "angle": "draw", "arc": "draw", "brace": "draw", "box": "draw",
     "dot": "grow", "vector": "grow",
     "image": "fade", "svg": "fade", "group": "fade",
 }
 
 HIDE_STYLES = {
     "graph": "uncreate", "line": "uncreate", "polygon": "uncreate", "circle": "uncreate",
-    "rectangle": "uncreate", "square": "uncreate", "brace": "uncreate", "box": "uncreate",
+    "rectangle": "uncreate", "square": "uncreate", "angle": "uncreate", "arc": "uncreate",
+    "brace": "uncreate", "box": "uncreate",
     "dot": "shrink",
 }
 
 
 def default_show_style(obj: ObjectBase) -> str:
-    """write for text and formulas, draw for shapes and coordinate systems, grow for dots, vectors and arrows, fade for the rest."""
+    """
+    write for text and formulas, draw for shapes, coordinate systems, angles and arcs (an arc's
+    tip drawn with it), grow for dots, vectors and arrows, fade for the rest.
+    """
     if isinstance(obj, LineObject) and obj.arrow:
         return "grow"
     return SHOW_STYLES.get(obj.type, "fade")
@@ -714,10 +925,15 @@ def default_hide_style(obj: ObjectBase) -> str:
 
 def part_selector(obj: ObjectBase, part: str, ctx: CodegenContext) -> str:
     """
-    An expression for the glyphs of `part` within the text-like object built as
-    ctx.var(obj.id), such as eq["c^2"]: every place the part occurs, as a VGroup of VGroups.
-    Formulas isolate the parts their highlights name (see _tex_object), which is what
-    makes this exact for them; plain text is exact without that.
+    An expression for `part` of the object built as ctx.var(obj.id).
+
+    Of a text, title, quote or formula, the glyphs of the part, such as eq["c^2"]: every place
+    it occurs, as a VGroup of VGroups. What something in the scene picks out is marked out or
+    isolated as the object is built (see _text and _tex_object), which makes this exact.
+
+    Of a matrix, its entries as a VGroup (never its brackets), through layout.matrix_part:
+    "row 2", "column 1" or "entry 2 1", counting from 1, or every entry whose text the part
+    is, such as "x" or "2".
     """
     var = _var(ctx, obj.id) + ("[1]" if _wrapped(obj) else "")
     if isinstance(obj, TexObject):
@@ -726,6 +942,31 @@ def part_selector(obj: ObjectBase, part: str, ctx: CodegenContext) -> str:
         return f"{var}[{_str(part)}]"
     if isinstance(obj, (TitleObject, QuoteObject)):
         return f"{var}[0][{_str(part)}]"
+    if isinstance(obj, MatrixObject):
+        return _matrix_part(var, obj, part)
     raise ValueError(
-        f"Only parts of text, formulas, titles and quotes can be picked out, and '{obj.id}' is a {obj.type}"
+        f"Only parts of text, formulas, titles, quotes and matrices can be picked out, and '{obj.id}' is a {obj.type}"
     )
+
+
+def _matrix_part(var: str, matrix: MatrixObject, part: str) -> str:
+    rows, columns = len(matrix.entries), len(matrix.entries[0])
+    parsed = parse_matrix_part(part)
+    if parsed is None:
+        found = [
+            (r + 1, c + 1) for r, line in enumerate(matrix.entries) for c, entry in enumerate(line)
+            if part in matrix_entry_texts(entry)
+        ]
+        if not found:
+            raise ValueError(f"'{part}' isn't an entry of '{matrix.id}'")
+        if len(found) == 1:
+            return f"matrix_part({var}, entry={found[0]})"
+        return f"matrix_part({var}, entries=[{', '.join(map(str, found))}])"
+    kind, first, second = parsed
+    if kind == "row" and 1 <= first <= rows:
+        return f"matrix_part({var}, row={first})"
+    if kind == "column" and 1 <= first <= columns:
+        return f"matrix_part({var}, column={first})"
+    if kind == "entry" and 1 <= first <= rows and 1 <= second <= columns:
+        return f"matrix_part({var}, entry=({first}, {second}))"
+    raise ValueError(f"'{matrix.id}' has {rows} rows and {columns} columns, counting from 1, so no {part.strip()}")

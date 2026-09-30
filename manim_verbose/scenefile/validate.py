@@ -309,6 +309,18 @@ def parse_matrix_part(part: str) -> tuple[str, int, int | None] | None:
     return kind, first, int(second) if second is not None else None
 
 
+def matrix_entry_texts(entry: str | float) -> set[str]:
+    """
+    What a part may say to name a matrix entry by its text: the text itself, or for a number
+    also the way it is shown, 2 rather than 2.0 (a file's 2 is read as the number 2.0).
+    """
+    if isinstance(entry, str):
+        return {entry}
+    number = float(entry)
+    shown = str(int(number)) if number.is_integer() and abs(number) < 1e15 else repr(number)
+    return {str(entry), shown}
+
+
 class SceneChecker:
     def __init__(self, scene: SceneSpec, loc: Loc, seen_steps: set[str], previous: SceneChecker | None = None):
         self.scene = scene
@@ -496,7 +508,7 @@ class SceneChecker:
         rows, columns = len(matrix.entries), len(matrix.entries[0])
         parsed = parse_matrix_part(part)
         if parsed is None:
-            texts = {str(entry) for row in matrix.entries for entry in row}
+            texts = {text for row in matrix.entries for entry in row for text in matrix_entry_texts(entry)}
             if part not in texts:
                 self.problem(
                     f"'{part}' isn't an entry of '{matrix.id}': give an entry's text, or \"row 2\", \"column 1\" or \"entry 2 1\"",

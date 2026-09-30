@@ -28,16 +28,17 @@ from manim_verbose.manim_import import import_manim
 import_manim()
 
 from manimlib import (  # noqa: E402
-    Arrow, Axes, Brace, Circle, DashedLine, Dot, Group, ImageMobject, Line, Matrix, Mobject, NumberLine,
+    Arc, Arrow, Axes, Brace, Circle, DashedLine, Dot, Group, ImageMobject, Line, Matrix, Mobject, NumberLine,
     NumberPlane, Polygon, Rectangle, RoundedRectangle, SVGMobject, Square, SurroundingRectangle, Tex, Text,
     ThreeDAxes, VGroup, VMobject,
 )
-from manimlib.constants import FRAME_HEIGHT, FRAME_WIDTH, YELLOW  # noqa: E402
+from manimlib.constants import FRAME_HEIGHT, FRAME_WIDTH, TAU, YELLOW  # noqa: E402
 from manimlib.utils.color import color_to_hex  # noqa: E402
 from PIL import Image  # noqa: E402
 
 from manim_verbose.scenefile.blocks import (  # noqa: E402
-    build_order, default_hide_style, default_show_style, displayable, object_expression, part_selector,
+    build_order, default_hide_style, default_show_style, displayable, isolates_cleanly, object_expression,
+    part_selector,
 )
 from manim_verbose.scenefile.codegen import CodegenContext  # noqa: E402
 from manim_verbose.scenefile.files import load_file  # noqa: E402
@@ -123,7 +124,7 @@ def near(a, b, tol=TOL):
 
 
 LATEX_KINDS = {"tex", "matrix", "brace"}
-LATEX_FIELDS = {"label", "x_label", "y_label", "show_coordinates"}
+LATEX_FIELDS = {"label", "x_label", "y_label", "z_label", "show_coordinates"}
 
 
 def needs_latex(kind: str, fields: dict, before: list[dict] = ()) -> bool:
@@ -161,6 +162,8 @@ LINE = {"id": "nl", "type": "number_line", "x_range": [0, 4, 0.5], "length": 8, 
 WORDS = {"id": "words", "type": "text", "text": "Some words", "place": [2, 1]}
 SHAPE = {"id": "sq", "type": "square", "side": 1.5, "place": [-3, 1]}
 IMAGE = {"id": "img", "type": "image", "path": "pic.png", "height": 1}
+EQ = {"id": "eq", "type": "tex", "tex": R"a^2 + b^2 = c^2", "place": [0, 2]}
+MATRIX = {"id": "m", "type": "matrix", "entries": [[1, 2, 3], ["x", "y", "z"]], "place": [-2, 0]}
 
 COMMON_FREE = {"color": "YELLOW", "opacity": 0.6, "z": 3, "scale": 1.5, "rotate": 30, "place": "top_left"}
 EVERYTHING_FREE = {**COMMON_FREE, "backdrop": True, "fixed": True}
@@ -201,7 +204,10 @@ CASES: list[tuple[str, dict, list[dict]]] = [
     ("axes", {"numbers": False, **EVERYTHING_FREE}, []),
     ("axes_3d", {}, []),
     ("axes_3d", {"x_range": [-2, 2, 1], "numbers": True, "color": "BLUE", "fixed": True}, []),
+    ("axes_3d", {"x_label": "x", "y_label": "y", "z_label": R"\zeta", "numbers": True}, []),
+    ("axes_3d", {"z_label": "z", **EVERYTHING_FREE}, []),
     ("number_line", {}, []),
+    ("number_line", {"x_range": [0, 4, 1], "tip": True, "numbers": True}, []),
     ("number_line", {"x_range": [-1, 1, 0.25], "length": 10, "tip": True, "numbers": False, "place": "bottom"}, []),
     ("number_line", {"x_range": [0, 3], **EVERYTHING_FREE}, []),
     ("graph", {"on": "ax", "function": "x^2 / 10"}, [AXES]),
@@ -219,11 +225,28 @@ CASES: list[tuple[str, dict, list[dict]]] = [
     ("vector", {"tip": [3, 60], "on": "ax", "label": "w", "label_side": "up", **COMMON_PLOTTED}, [AXES]),
     ("vector", {"tip": [1, 1, 1], "on": "ax3", "show_coordinates": True}, [AXES_3D]),
     ("vector", {"tip": [3], "on": "nl"} | {"tip": [3, 0]}, [LINE]),
+    ("vector", {"tip": [2, 1], "show_coordinates": True, "coordinate_colors": ["GREEN", "RED"], "label": "v", **COMMON_PLOTTED}, []),
+    ("vector", {"tip": [1, 2, 3], "on": "ax3", "show_coordinates": True, "coordinate_colors": ["GREEN", "RED", "BLUE", "PINK"]}, [AXES_3D]),
+    ("vector", {"tip": [1, 2], "coordinate_colors": ["GREEN"]}, []),
     ("line", {"start": [0, 0], "end": [2, 1]}, []),
     ("line", {"start": [0, 0], "end": [2, 1], "dashed": True, "thickness": 6}, []),
     ("line", {"start": [0, 0], "end": [2, 1], "arrow": True, "thickness": 6, "on": "plane"}, [PLANE]),
     ("line", {"start": [1, 0], "end": [1, 80], "dashed": True, "arrow": True, "on": "ax", **COMMON_PLOTTED}, [AXES]),
     ("line", {"start": [0, 0], "end": [0, 0]}, []),
+    ("angle", {"points": [[2, 0], [0, 0], [1, 1.5]]}, []),
+    ("angle", {"points": [[2, 0], [0, 0], [0, 1.5]], "right_angle": True, "radius": 0.3, "on": "plane"}, [SMALL_PLANE]),
+    ("angle", {"points": [[1, 0], [0, 0], [1, 1]], "other_side": True, "label": R"\theta", **COMMON_PLOTTED}, []),
+    ("angle", {"points": [[1, 0, 0], [0, 0, 0], [0, 1, 1]], "on": "ax3", "right_angle": True, "other_side": True}, [AXES_3D]),
+    ("angle", {"points": [[1, 0.5], [0.5, 0], [2, 0]], "on": "nl", "radius": 2}, [LINE]),
+    ("angle", {"points": [[0, 0], [0, 0], [0, 0]], "right_angle": True}, []),
+    ("angle", {"points": [[5, 50], [1, 10], [9, 10]], "on": "ax", "label": "a"}, [AXES]),
+    ("arc", {}, []),
+    ("arc", {"center": [1, 1], "radius": 2, "start_angle": 30, "end_angle": 300, "arrow": True, "thickness": 6}, []),
+    ("arc", {"start_angle": 90, "end_angle": -90, "arrow": True, "on": "plane", "center": [1, 0.5]}, [SMALL_PLANE]),
+    ("arc", {"start_angle": 10, "end_angle": 10, "arrow": True}, []),
+    ("arc", {"start_angle": 0, "end_angle": 1000, "arrow": True, **COMMON_PLOTTED}, []),
+    ("arc", {"center": [1, 2, 1], "on": "ax3", "radius": 0.5}, [AXES_3D]),
+    ("arc", {"center": [2, 0.5], "on": "nl", "radius": 0.3, "start_angle": -45, "end_angle": 45}, [LINE]),
     ("polygon", {"points": [[0, 0], [3, 0], [3, 2]]}, []),
     ("polygon", {"points": [[0, 0], [2, 0], [2, 1], [0, 1]], "on": "plane", "fill": "BLUE", "fill_opacity": 0.8}, [PLANE]),
     ("polygon", {"points": [[0, 0, 0], [1, 0, 1], [0, 1, 1]], "on": "ax3", "fill": "RED", **COMMON_PLOTTED}, [AXES_3D]),
@@ -238,9 +261,22 @@ CASES: list[tuple[str, dict, list[dict]]] = [
     ("brace", {"target": "words"}, [WORDS]),
     ("brace", {"target": "sq", "side": "left", "label": "n", "buff": 0.3, "color": "YELLOW"}, [SHAPE]),
     ("brace", {"target": "plane", "side": "up", **COMMON_PLOTTED}, [SMALL_PLANE]),
+    ("brace", {"start": [0, 0], "end": [3, 1]}, []),
+    ("brace", {"start": [0, 0], "end": [0, 2], "side": "left", "label": "h", "on": "plane", "buff": 0}, [SMALL_PLANE]),
+    ("brace", {"start": [1, 1], "end": [1, 1], "label": "0"}, []),
+    ("brace", {"start": [0, 0, 0], "end": [2, 1, 2], "on": "ax3", **COMMON_PLOTTED}, [AXES_3D]),
+    ("brace", {"start": [0.5, 0], "end": [3, 0], "on": "nl", "side": "up"}, [LINE]),
+    ("brace", {"target": "eq", "part": "b^2", "side": "up", "label": "b"}, [EQ]),
+    ("brace", {"target": "words", "part": "words", "side": "right"}, [WORDS]),
+    ("brace", {"target": "m", "part": "row 2", "side": "right", "label": "r"}, [MATRIX]),
+    ("brace", {"target": "m", "part": "3", "side": "up"}, [{**MATRIX, "backdrop": True, "bracket": "round"}]),
     ("box", {"target": "words"}, [WORDS]),
     ("box", {"target": "sq", "buff": 0.3, "corner_radius": 0.2, "fill_opacity": 0.3, "color": "TEAL", "opacity": 0.5}, [SHAPE]),
     ("box", {"target": "img", "fixed": True, "z": 1}, [IMAGE]),
+    ("box", {"target": "words", "part": "words", "corner_radius": 0.1}, [WORDS]),
+    ("box", {"target": "eq", "part": "c^2", "fill_opacity": 0.5}, [EQ]),
+    ("box", {"target": "m", "part": "column 1", "color": "RED"}, [MATRIX]),
+    ("box", {"target": "m", "part": "entry 2 3"}, [MATRIX]),
     ("image", {"path": "pic.png"}, []),
     ("image", {"path": "sub dir/it's.png", "height": 2, **EVERYTHING_FREE}, []),
     ("image", {"path": "sub dir\\it's.png"}, []),
@@ -255,7 +291,8 @@ CASES: list[tuple[str, dict, list[dict]]] = [
 EXPECTED_TYPES = {
     "text": Text, "tex": Tex, "title": (Text, VGroup), "quote": VGroup, "bullets": VGroup, "matrix": Matrix,
     "number_plane": NumberPlane, "axes": Axes, "axes_3d": ThreeDAxes, "number_line": NumberLine,
-    "graph": VMobject, "dot": Dot, "vector": Arrow, "line": (Line, Arrow, DashedLine), "polygon": Polygon,
+    "graph": VMobject, "dot": Dot, "vector": Arrow, "line": (Line, Arrow, DashedLine), "angle": (Arc, VMobject),
+    "arc": Arc, "polygon": Polygon,
     "circle": Circle, "rectangle": (Rectangle, RoundedRectangle), "square": Square, "brace": (Brace, VGroup),
     "box": SurroundingRectangle, "image": ImageMobject, "svg": SVGMobject, "group": (VGroup, Group),
 }
@@ -334,6 +371,69 @@ def test_readable_code():
         "l": 'place(Text("on the line"), at=[1, 1], on=n)',
         "a": "with_numbers(Axes(x_range=[0, 3, 1], y_range=[-1, 1, 0.5]), num_decimal_places=1)",
         "g": 'function_graph(a, "sin(x)", x_range=[0, 3])',
+    }
+
+
+def test_readable_code_for_angles_arcs_braces_and_parts():
+    code = codes([
+        PLANE,
+        {"id": "an", "type": "angle", "points": [[2, 0], [0, 0], [1, 1]], "on": "plane", "label": R"\theta"},
+        {"id": "sq", "type": "angle", "points": [[1, 0], [0, 0], [0, 1]], "right_angle": True, "radius": 0.3},
+        {"id": "big", "type": "angle", "points": [[1, 0], [0, 0], [0, 1]], "other_side": True, "color": "RED"},
+        {"id": "arc", "type": "arc", "center": [1, 0], "radius": 2, "start_angle": 30, "end_angle": 120, "arrow": True},
+        {"id": "cw", "type": "arc", "start_angle": 90, "end_angle": 0, "thickness": 6},
+        {"id": "whole", "type": "arc", "end_angle": 720, "on": "plane"},
+        {"id": "br", "type": "brace", "start": [0, 0], "end": [3, 1], "side": "up", "label": "n"},
+        {"id": "low", "type": "brace", "start": [0, 0], "end": [2, 0], "on": "plane"},
+    ])
+    assert code == {
+        "plane": "NumberPlane(x_range=[-8, 8, 1], y_range=[-4, 4, 1])",
+        "an": R'angle_mark(plane.c2p(2, 0), plane.c2p(0, 0), plane.c2p(1, 1), label=Tex(R"\theta", font_size=36))',
+        "sq": "angle_mark([1, 0, 0], [0, 0, 0], [0, 1, 0], radius=0.3, right_angle=True)",
+        "big": "angle_mark([1, 0, 0], [0, 0, 0], [0, 1, 0], other_side=True).set_color(RED)",
+        "arc": "with_arc_tip(Arc(start_angle=30 * DEGREES, angle=90 * DEGREES, radius=2, arc_center=[1, 0, 0]))",
+        "cw": "Arc(start_angle=90 * DEGREES, angle=-90 * DEGREES).set_stroke(width=6)",
+        "whole": "Arc(angle=360 * DEGREES, arc_center=plane.c2p(0, 0))",
+        "br": 'with_brace_label(brace_between([0, 0, 0], [3, 1, 0], "up", buff=0.1), Tex("n", font_size=36))',
+        "low": "brace_between(plane.c2p(0, 0), plane.c2p(2, 0), buff=0.1)",
+    }
+    parts = codes([
+        {"id": "eq", "type": "tex", "tex": R"a^2 + b^2 = c^2"},
+        {"id": "t", "type": "text", "text": "Some words"},
+        MATRIX,
+        {"id": "b1", "type": "brace", "target": "eq", "part": "c^2"},
+        {"id": "b2", "type": "box", "target": "t", "part": "words", "buff": 0.1},
+        {"id": "b3", "type": "brace", "target": "m", "part": "row 2", "side": "right", "buff": 0.2},
+        {"id": "b4", "type": "box", "target": "m", "part": "column 1"},
+        {"id": "b5", "type": "box", "target": "m", "part": "entry 2 3"},
+        {"id": "b6", "type": "box", "target": "m", "part": "y"},
+    ])
+    assert parts["eq"] == 'Tex("a^2 + b^2 = c^2", isolate=["c^2"])'
+    assert parts["t"] == 'Text("Some words", local_configs={"words": {}})'
+    assert parts["b1"] == 'Brace(eq["c^2"][0], DOWN, buff=0.1)'
+    assert parts["b2"] == 'SurroundingRectangle(t["words"][0], buff=0.1)'
+    assert parts["b3"] == 'brace_part(matrix_part(m, row=2), m, "right", buff=0.2)'
+    assert parts["b4"] == "SurroundingRectangle(matrix_part(m, column=1), buff=0.15)"
+    assert parts["b5"] == "SurroundingRectangle(matrix_part(m, entry=(2, 3)), buff=0.15)"
+    assert parts["b6"] == "SurroundingRectangle(matrix_part(m, entry=(2, 2)), buff=0.15)"
+    more = codes([
+        {"id": "nl", "type": "number_line", "x_range": [0, 4, 1], "tip": True},
+        {"id": "ax", "type": "axes", "tips": True, "numbers": False, "x_label": "t"},
+        {"id": "v", "type": "vector", "tip": [2, 1], "show_coordinates": True, "coordinate_colors": ["GREEN", "RED"],
+         "color": "YELLOW"},
+        {"id": "w", "type": "vector", "tip": [2, 1], "show_coordinates": True, "coordinate_colors": ["GREEN"]},
+        {"id": "ax3", "type": "axes_3d", "z_label": "z"},
+        {"id": "p", "type": "dot", "point": [1, 1, 1], "on": "ax3"},
+        {"id": "q", "type": "dot", "point": [1, 1], "fixed": True},
+    ])
+    assert more == {
+        "nl": "with_tips(NumberLine(x_range=[0, 4, 1], include_numbers=True))",
+        "ax": 'with_axis_labels(with_tips(Axes(x_range=[-6, 6, 1], y_range=[-3, 3, 1])), x_label="t")',
+        "v": "with_coordinates(Arrow([0, 0, 0], [2, 1, 0], buff=0).set_color(YELLOW), [2, 1], colors=[GREEN, RED])",
+        "w": "with_coordinates(Arrow([0, 0, 0], [2, 1, 0], buff=0), [2, 1], colors=[GREEN])",
+        "ax3": 'with_axis_labels(ThreeDAxes(x_range=[-5, 5, 1], y_range=[-5, 5, 1], z_range=[-3, 3, 1]), z_label="z")',
+        "p": "facing_camera(Dot(ax3.c2p(1, 1, 1)))",
+        "q": "Dot([1, 1, 0]).fix_in_frame()",
     }
 
 
@@ -456,6 +556,299 @@ def test_box_surrounds_its_target():
     built = build([WORDS, {"id": "b", "type": "box", "target": "words", "buff": 0.3}])
     wx0, wy0, wx1, wy1 = box(built["words"])
     assert box(built["b"]) == pytest.approx((wx0 - 0.3, wy0 - 0.3, wx1 + 0.3, wy1 + 0.3), abs=TOL)
+
+
+def boxes_of(mobs) -> tuple:
+    x0, y0, x1, y1 = zip(*(box(m) for m in mobs))
+    return min(x0), min(y0), max(x1), max(y1)
+
+
+def test_box_around_a_part_of_a_text_surrounds_its_first_occurrence():
+    text = {"id": "t", "type": "text", "text": "one two one two", "place": [0, 1]}
+    built = build([text, {"id": "b", "type": "box", "target": "t", "part": "two", "buff": 0.2}])
+    glyphs = built["t"].submobjects[3:6]
+    x0, y0, x1, y1 = boxes_of(glyphs)
+    assert box(built["b"]) == pytest.approx((x0 - 0.2, y0 - 0.2, x1 + 0.2, y1 + 0.2), abs=TOL)
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("part, entries", [
+    ("row 1", [0, 1, 2]), ("row 2", [3, 4, 5]), ("column 2", [1, 4]), ("entry 2 3", [5]), ("x", [3]), ("2", [1]),
+])
+@pytest.mark.parametrize("dressed", [{}, {"backdrop": True, "bracket": "round"}])
+def test_box_around_part_of_a_matrix_surrounds_just_those_entries(part, entries, dressed):
+    built = build([{**MATRIX, **dressed}, {"id": "b", "type": "box", "target": "m", "part": part, "buff": 0.1}])
+    elements = built["m"].elements
+    x0, y0, x1, y1 = boxes_of([elements[i] for i in entries])
+    assert box(built["b"]) == pytest.approx((x0 - 0.1, y0 - 0.1, x1 + 0.1, y1 + 0.1), abs=TOL)
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("part, side", [("row 1", "right"), ("row 2", "left"), ("column 3", "up"), ("entry 1 2", "down")])
+def test_brace_for_part_of_a_matrix_spans_it_clear_of_the_brackets(part, side):
+    built = build([MATRIX, {"id": "b", "type": "brace", "target": "m", "part": part, "side": side, "buff": 0.1}])
+    matrix, brace = built["m"], built["b"]
+    kind, *numbers = part.split()
+    index = {"row": lambda r: [3 * (r - 1) + c for c in range(3)], "column": lambda c: [c - 1, c + 2],
+             "entry": lambda r, c: [3 * (r - 1) + c - 1]}[kind](*map(int, numbers))
+    px0, py0, px1, py1 = boxes_of([matrix.elements[i] for i in index])
+    mx0, my0, mx1, my1 = box(matrix)
+    bx0, by0, bx1, by1 = box(brace)
+    if side in ("left", "right"):
+        assert (by0, by1) == pytest.approx((py0, py1), abs=TOL)
+        assert bx0 == pytest.approx(mx1 + 0.1, abs=TOL) if side == "right" else bx1 == pytest.approx(mx0 - 0.1, abs=TOL)
+    else:
+        assert (bx0, bx1) == pytest.approx((px0, px1), abs=TOL)
+        assert by0 == pytest.approx(my1 + 0.1, abs=TOL) if side == "up" else by1 == pytest.approx(my0 - 0.1, abs=TOL)
+    for bracket in matrix.brackets:
+        assert box(bracket)[2] < bx0 or box(bracket)[0] > bx1 or box(bracket)[3] < by0 or box(bracket)[1] > by1
+
+
+@pytest.mark.render
+def test_brace_for_part_of_a_formula_is_under_that_part():
+    built = build([EQ, {"id": "b", "type": "brace", "target": "eq", "part": "b^2", "buff": 0.2}])
+    part = built["eq"]["b^2"][0]
+    px0, py0, px1, py1 = box(part)
+    bx0, by0, bx1, by1 = box(built["b"])
+    assert (bx0, bx1) == pytest.approx((px0, px1), abs=TOL) and by1 == pytest.approx(py0 - 0.2, abs=TOL)
+
+
+# Angles, arcs and braces between points, where the file says
+
+def along_curve(mob, samples: int = 60) -> np.ndarray:
+    return np.array([mob.quick_point_from_proportion(t) for t in np.linspace(0, 1, samples)])
+
+
+@pytest.mark.parametrize("on, system", [(None, None), ("plane", SMALL_PLANE), ("ax", AXES), ("nl", LINE)])
+@pytest.mark.parametrize("other_side", [False, True])
+def test_angle_marks_are_between_the_lines_through_the_points(on, system, other_side):
+    coords = {None: [[2, 0.5], [0, 0], [-1, 2]], "plane": [[2, 0.5], [0, 0], [-1, 1.5]],
+              "ax": [[8, 20], [2, 10], [5, 90]], "nl": [[3, 0], [1, 0.5], [0.5, 1.5]]}[on]
+    objects = ([system] if system else []) + [
+        {"id": "a", "type": "angle", "points": coords, "radius": 0.4, "other_side": other_side, **({"on": on} if on else {})},
+    ]
+    built = build(objects)
+
+    def at(point):
+        if on is None:
+            return np.array([*point, 0])
+        if on == "nl":
+            return built["nl"].n2p(point[0]) + point[1] * np.array([0, 1, 0])
+        return built[on].c2p(*point)
+
+    a, vertex, b = (at(p) for p in coords)
+    points = along_curve(built["a"])
+    # At the radius, in frame units, from the vertex, from the line to a to the line to b,
+    # turning steadily one way: through the angle between them, or the rest of the turn
+    assert np.allclose(np.linalg.norm(points - vertex, axis=1), 0.4, rtol=1e-3)
+    along_a = (a - vertex) / np.linalg.norm(a - vertex)
+    along_b = (b - vertex) / np.linalg.norm(b - vertex)
+    assert near(points[0], vertex + 0.4 * along_a) and near(points[-1], vertex + 0.4 * along_b)
+    angles = np.unwrap(np.arctan2(points[:, 1] - vertex[1], points[:, 0] - vertex[0]))
+    steps = np.diff(angles)
+    assert (steps >= -1e-9).all() or (steps <= 1e-9).all()
+    between = math.acos(np.clip(np.dot(along_a, along_b), -1, 1))
+    assert abs(angles[-1] - angles[0]) == pytest.approx(TAU - between if other_side else between, abs=1e-3)
+
+
+@pytest.mark.parametrize("start, end, expected", [(0, 90, 90), (90, 0, -90), (30, 300, 270), (0, 360, 360),
+                                                  (0, 1000, 360), (0, -1000, -360), (-45, 45, 90), (10, 10, 0)])
+@pytest.mark.parametrize("arrow", [False, True])
+def test_arcs_start_and_end_at_their_angles(start, end, expected, arrow):
+    built = build([SMALL_PLANE, {"id": "c", "type": "arc", "on": "plane", "center": [1, -0.5], "radius": 1.5,
+                                 "start_angle": start, "end_angle": end, "arrow": arrow}])
+    arc, centre = built["c"], built["plane"].c2p(1, -0.5)
+    first = centre + 1.5 * np.array([math.cos(math.radians(start)), math.sin(math.radians(start)), 0])
+    last = centre + 1.5 * np.array([math.cos(math.radians(start + expected)), math.sin(math.radians(start + expected)), 0])
+    assert near(arc.get_start(), first) and near(arc.get_end(), last)
+    offsets = along_curve(arc) - centre
+    assert np.allclose(np.linalg.norm(offsets, axis=1), 1.5, rtol=1e-3)
+    angles = np.unwrap(np.arctan2(offsets[:, 1], offsets[:, 0]))
+    turned = math.degrees(angles[-1] - angles[0])
+    if arrow and expected:
+        # The arc itself stops short where the tip begins, still going the same way round
+        assert 0 < turned * np.sign(expected) < abs(expected)
+        assert near(arc.tip.get_tip_point(), last)
+    else:
+        assert turned == pytest.approx(expected, abs=0.1)
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("start, end, side, towards", [
+    ([0, 0], [3, 1], "down", [0, -1]), ([3, 1], [0, 0], "down", [0, -1]), ([0, 0], [0, 2], "left", [-1, 0]),
+    ([0, 0], [0, 2], "down", [-1, 0]), ([-1, 1], [2, 1], "up", [0, 1]), ([2, -1], [-1, 1], "right", [1, 0]),
+])
+def test_brace_between_points_on_a_plane_spans_them_on_its_side(start, end, side, towards):
+    """On a plane whose units aren't square, the brace is square to the line as it is drawn."""
+    built = build([SMALL_PLANE, {"id": "b", "type": "brace", "on": "plane", "start": start, "end": end,
+                                 "side": side, "buff": 0.15, "label": "d"}])
+    plane = built["plane"]
+    brace, label = built["b"]
+    s, e = plane.c2p(*start), plane.c2p(*end)
+    along = (e - s) / np.linalg.norm(e - s)
+    out = np.array([-along[1], along[0], 0])
+    if np.dot(out, [*towards, 0]) < 0:
+        out = -out
+    points = brace.get_all_points()
+    assert ((points - s) @ along).min() == pytest.approx(0, abs=TOL)
+    assert ((points - s) @ along).max() == pytest.approx(np.linalg.norm(e - s), abs=TOL)
+    assert ((points - s) @ out).min() == pytest.approx(0.15, abs=TOL)
+    # The label beyond the brace, on the same side
+    assert np.dot(label.get_center() - s, out) > ((points - s) @ out).max() - TOL
+
+
+# Tips, backdrops and coordinates
+
+def test_a_tip_on_a_number_line_or_axes_hides_no_number():
+    built = build([
+        {"id": "nl", "type": "number_line", "x_range": [0, 4, 1], "tip": True},
+        {"id": "ax", "type": "axes", "x_range": [0, 5, 1], "y_range": [0, 3, 1], "tips": True, "numbers": True},
+    ])
+    line, axes = built["nl"], built["ax"]
+    assert [round(float(n.get_value())) for n in line.numbers] == [0, 1, 2, 3, 4]
+    assert near(line.tip.get_base(), line.n2p(4)) and line.tip.get_tip_point()[0] > line.n2p(4)[0]
+    assert [round(float(n.get_value())) for n in axes.coordinate_labels[0]] == [1, 2, 3, 4, 5]
+    assert [round(float(n.get_value())) for n in axes.coordinate_labels[1]] == [1, 2, 3]
+    for number in [*line.numbers, *axes.coordinate_labels[0], *axes.coordinate_labels[1]]:
+        for tip in (line.tip, axes.get_x_axis().tip, axes.get_y_axis().tip):
+            nx0, ny0, nx1, ny1 = box(number)
+            tx0, ty0, tx1, ty1 = box(tip)
+            assert nx1 <= tx0 or tx1 <= nx0 or ny1 <= ty0 or ty1 <= ny0
+
+
+def backdrop_built(doc_background, scene_background):
+    data = {"scenes": [{"id": "s", **({"background": scene_background} if scene_background else {}), "objects": [
+        {"id": "t", "type": "text", "text": "over", "backdrop": True},
+        {"id": "p", "type": "number_plane", "backdrop": True, "x_range": [-2, 2, 1], "y_range": [-1, 1, 1]},
+    ]}]}
+    if doc_background:
+        data["settings"] = {"background": doc_background}
+    doc, problems = validate_data(data)
+    assert doc is not None and not has_errors(problems)
+    scene = doc.scenes[0]
+    ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+    namespace = dict(NAMESPACE)
+    code = {}
+    for obj in build_order(scene):
+        code[obj.id] = object_expression(obj, ctx)
+        namespace[obj.id] = eval(code[obj.id], namespace)
+    return code, namespace
+
+
+@pytest.mark.parametrize("doc_background, scene_background, expected", [
+    (None, None, None), ("#FFFFFF", None, "#FFFFFF"), (None, "WHITE", "#FFFFFF"), ("#000000", "#FFF8E7", "#FFF8E7"),
+])
+def test_a_backdrop_is_the_color_of_the_background(doc_background, scene_background, expected):
+    from manimlib.config import manim_config
+    code, built = backdrop_built(doc_background, scene_background)
+    if expected is None:
+        assert code["t"] == 'with_backdrop(Text("over"))'
+        expected = color_to_hex(manim_config.camera.background_color)
+    else:
+        assert "color=" in code["t"]
+    # What is drawn, rather than what BackgroundRectangle.get_fill_color says, which is always white
+    assert VMobject.get_fill_color(built["t"][0]).upper() == color_to_hex(expected)
+    assert VMobject.get_fill_color(built["p"].submobjects[0]).upper() == color_to_hex(expected)
+
+
+@pytest.mark.render
+def test_coordinate_colors_color_the_rows_and_leave_the_brackets():
+    built = build([PLANE, {"id": "v", "type": "vector", "on": "plane", "tip": [2, -1], "color": "YELLOW", "label": "v",
+                           "show_coordinates": True, "coordinate_colors": ["#00FF00", "#FF0000"]}])
+    arrow = built["v"]
+    matrix = next(m for m in arrow.submobjects if isinstance(m, Matrix))
+    label = next(m for m in arrow.submobjects if isinstance(m, Tex) and m is not matrix)
+    x, y = matrix.elements
+    assert {m.get_fill_color().upper() for m in x.family_members_with_points()} == {"#00FF00"}
+    assert {m.get_fill_color().upper() for m in y.family_members_with_points()} == {"#FF0000"}
+    yellow = color_to_hex(YELLOW).upper()
+    assert arrow.get_fill_color().upper() == yellow and label.get_fill_color().upper() == yellow
+    assert all(m.get_fill_color().upper() != yellow for m in matrix.brackets.family_members_with_points())
+
+
+# 3D
+
+def turned_scene(yaml_text: str):
+    from steps_helpers import doc_from, run_scene
+    scene = run_scene(doc_from(yaml_text))
+    scene.update_frame()
+    return scene
+
+
+def facing(mob, frame) -> float:
+    """How squarely a flat mobject faces the camera: 1 when it does."""
+    out = frame.get_orientation().as_matrix()[:, 2]
+    return abs(float(np.dot(mob.get_unit_normal(refresh=True), out)))
+
+
+def test_dots_in_3d_face_the_camera_the_scene_turns():
+    scene = turned_scene("""
+        scenes:
+          - id: s
+            objects:
+              - {id: ax, type: axes_3d, shown: true}
+              - {id: d, type: dot, point: [1, 2, 1], on: ax, radius: 0.2, shown: true}
+              - {id: flat, type: dot, point: [2, 1], radius: 0.2, shown: true}
+              - {id: pinned, type: dot, point: [-2, 1], radius: 0.2, shown: true, fixed: true}
+            steps:
+              - {do: camera, orientation: [-30, 70]}
+    """)
+    frame = scene.frame
+    assert facing(scene.objects["d"], frame) == pytest.approx(1, abs=1e-6)
+    assert facing(scene.objects["flat"], frame) == pytest.approx(1, abs=1e-6)
+    assert near(scene.objects["d"].get_center(), scene.objects["ax"].c2p(1, 2, 1))
+    assert near(scene.objects["flat"].get_center(), [2, 1, 0])
+    # Fixed in the frame, it faces the camera already
+    assert near(scene.objects["pinned"].get_unit_normal(refresh=True), [0, 0, 1])
+
+
+def test_dots_face_the_camera_again_when_it_turns_back():
+    scene = turned_scene("""
+        scenes:
+          - id: s
+            objects:
+              - {id: d, type: dot, point: [1, 2, 1], radius: 0.2, shown: true}
+            steps:
+              - {do: camera, orientation: [40, 60]}
+              - {do: camera, reset: true}
+    """)
+    flat = Dot([1, 2, 1], radius=0.2)
+    assert np.allclose(scene.objects["d"].get_points(), flat.get_points(), atol=1e-6)
+
+
+def test_flat_scenes_leave_their_dots_alone():
+    built = build([{"id": "d", "type": "dot", "point": [1, 2]}, {"id": "e", "type": "dot", "point": [1, 2], "on": "plane"}, PLANE])
+    assert not built["d"].has_updaters() and not built["e"].has_updaters()
+    turned = build([{"id": "d", "type": "dot", "point": [1, 2]}], [{"do": "camera", "orientation": [10, 20]}])
+    assert turned["d"].has_updaters()
+
+
+@pytest.mark.render
+def test_3d_axis_labels_face_the_camera_at_the_ends_of_their_axes():
+    scene = turned_scene("""
+        scenes:
+          - id: s
+            objects:
+              - {id: ax, type: axes_3d, x_label: x, y_label: y, z_label: z, shown: true}
+            steps:
+              - {do: camera, orientation: [-30, 70]}
+    """)
+    axes, frame = scene.objects["ax"], scene.frame
+    right, up, out = frame.get_orientation().as_matrix().T
+    labels = axes.submobjects[-3:]
+    for label, axis, name in zip(labels, axes.get_axes(), "xyz"):
+        assert isinstance(label, Tex)
+        # Flat to the camera, and as wide and tall as it sees it as the label is when flat
+        flat = Tex(name, font_size=36)
+        offsets = label.get_all_points() - label.get_all_points().mean(axis=0)
+        assert np.abs(offsets @ out).max() == pytest.approx(0, abs=1e-4)
+        assert np.ptp(offsets @ right) == pytest.approx(flat.get_width(), abs=1e-3)
+        assert np.ptp(offsets @ up) == pytest.approx(flat.get_height(), abs=1e-3)
+        # Just past the end of its axis, along it
+        end = axis.n2p(axis.x_max)
+        along = (end - axis.n2p(axis.x_min)) / np.linalg.norm(end - axis.n2p(axis.x_min))
+        offset = label.get_all_points().mean(axis=0) - end
+        assert np.dot(offset, along) > 0.2 and np.linalg.norm(offset - np.dot(offset, along) * along) < 0.05
 
 
 def test_group_arranges_its_members(media):
@@ -596,6 +989,10 @@ COLOR_CASES = [
     ("line", {"start": [0, 0], "end": [1, 1]}, [], "stroke"),
     ("line", {"start": [0, 0], "end": [1, 1], "dashed": True, "arrow": True}, [], "both"),
     ("line", {"start": [0, 0], "end": [1, 1], "arrow": True}, [], "fill"),
+    ("angle", {"points": [[2, 0], [0, 0], [1, 1.5]]}, [], "stroke"),
+    ("angle", {"points": [[2, 0], [0, 0], [0, 1.5]], "right_angle": True, "label": R"\theta"}, [], "both"),
+    ("arc", {}, [], "stroke"),
+    ("arc", {"arrow": True, "thickness": 7}, [], "both"),
     ("polygon", {"points": [[0, 0], [1, 0], [0, 1]]}, [], "stroke"),
     ("polygon", {"points": [[0, 0], [1, 0], [0, 1]], "fill": FILL_COLOR}, [], "outline and fill"),
     ("circle", {}, [], "stroke"),
@@ -605,8 +1002,11 @@ COLOR_CASES = [
     ("square", {}, [], "stroke"),
     ("square", {"fill": FILL_COLOR, "backdrop": True}, [], "outline and fill"),
     ("brace", {"target": "words", "label": "n"}, [WORDS], "fill"),
+    ("brace", {"start": [0, 0], "end": [2, 1], "label": "n"}, [], "fill"),
+    ("brace", {"target": "m", "part": "row 1"}, [MATRIX], "fill"),
     ("box", {"target": "words"}, [WORDS], "stroke"),
     ("box", {"target": "words", "fill_opacity": 0.3}, [WORDS], "both"),
+    ("box", {"target": "words", "part": "words"}, [WORDS], "stroke"),
     ("svg", {"path": "star.svg"}, [], "fill"),
     ("group", {"members": ["words", "sq"]}, [WORDS, SHAPE], "both"),
 ]
@@ -762,6 +1162,9 @@ STRING_FIELDS = [
     ("dot", lambda s: {"point": [0, 0], "label": s}),
     ("vector", lambda s: {"tip": [1, 1], "label": s}),
     ("brace", lambda s: {"target": "words", "label": s}),
+    ("brace", lambda s: {"start": [0, 0], "end": [1, 1], "label": s}),
+    ("angle", lambda s: {"points": [[1, 0], [0, 0], [0, 1]], "label": s}),
+    ("axes_3d", lambda s: {"x_label": s, "y_label": s, "z_label": s}),
     ("graph", lambda s: {"on": "ax", "function": "x", "label": s}),
     # Kept a relative path inside the scene's folder, which is all validation lets through
     ("image", lambda s: {"path": "pictures/" + re.sub(r"\.\.|[/\\:]", "_", s) + ".png"}),
@@ -778,6 +1181,9 @@ def benign_like(text: str, fields) -> str:
     if "font" in fields("x"):
         return "a" if re.sub(r"[^\w .,-]", "", text).strip() else ""
     shown = displayable(text)
+    if "tex" in fields("x") and "colors" in fields("x"):
+        # A colored part which TeX would space differently set apart is colored afterwards
+        return "a" if isolates_cleanly("x", shown) else "+"
     if not shown:
         return ""
     return "a\nb" if "\n" in shown else "a"
@@ -818,6 +1224,42 @@ def test_typed_text_is_drawn_exactly(text):
     assert built["c"].text == "x" + wanted
     for mob in built.mobs.values():
         assert_drawable(mob)
+
+
+def part_codes(text: str, part: str) -> dict[str, str]:
+    """The code for a text, and for a highlight's selection, a brace and a box which pick `part` out of it."""
+    doc = document([
+        {"id": "t", "type": "text", "text": text},
+        {"id": "b", "type": "brace", "target": "t", "part": part},
+        {"id": "x", "type": "box", "target": "t", "part": part},
+    ], [{"do": "highlight", "target": "t", "part": part}])
+    scene = doc.scenes[0]
+    ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+    codes_ = {obj.id: object_expression(obj, ctx) for obj in build_order(scene)}
+    codes_["selection"] = part_selector(scene.objects[0], part, ctx)
+    return codes_
+
+
+@pytest.mark.parametrize("part", [h for h in HOSTILE if h], ids=repr)
+def test_hostile_parts_never_change_the_code(part):
+    text = "<" + part + ">"
+    hostile = part_codes(text, part)
+    benign = part_codes("<a\nb>", "a\nb") if "\n" in displayable(part) else part_codes("<a>", "a")
+    for key, expr in hostile.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            compile(expr, "<it>", "eval")
+        if key != "t" or displayable(part).strip():
+            assert shape(expr) == shape(benign[key]), key
+        else:
+            # A part which draws nothing isn't marked out
+            assert "local_configs" not in expr
+
+
+@pytest.mark.parametrize("entry", [h for h in HOSTILE if h], ids=repr)
+def test_hostile_matrix_entries_as_parts_never_change_the_code(entry):
+    obj, ctx = matrix_ctx([[entry, "1"]])
+    assert part_selector(obj, entry, ctx) == "matrix_part(m, entry=(1, 1))"
 
 
 def test_hostile_part_and_function_strings():
@@ -932,6 +1374,103 @@ def test_formula_parts_are_the_right_glyphs(tex, part):
     assert picked == glyph_signatures(Tex(tex)) - glyph_signatures(Tex(phantom_of(tex, part)))
 
 
+@pytest.mark.parametrize("tex, part, clean", [
+    ("3x + 5 = 20", "5", True), ("3x + 5 = 20", "3x", True), ("3x + 5 = 20", "x + 5", True),
+    ("3x + 5 = 20", "+ 5", False), ("3x + 5 = 20", "3x +", False), ("3x + 5 = 20", "=", False),
+    ("3x + 5 = 20", "= 20", False), ("a - b", "- b", False), ("a < b", "a <", False),
+    (R"a \cdot b", R"\cdot b", False), (R"a \leq b", R"\leq", False), (R"2\sin x", R"\sin x", False),
+    (R"2\sin x", "x", True), (R"\sum_{n} a_n", R"\sum_{n}", False), ("f^2 + x^2", "f", False),
+    ("f^2 + x^2", "x", False), ("f^2 + x^2", "x^2", True), ("f_1 + V_2", "V", False), ("f'(x)", "f", False),
+    ("a, b, c", "a,", False), ("a, b, c", "b", True), ("a^2 + b^2 = c^2", "c^2", True),
+    (R"\frac{a}{b} + c", R"\frac{a}{b}", True), (R"e^{i\pi} + 1 = 0", R"i\pi", True), ("x", "", False),
+    ("x", "  ", False),
+])
+def test_which_parts_of_a_formula_can_be_isolated_without_changing_it(tex, part, clean):
+    assert isolates_cleanly(tex, part) == clean
+
+
+OPERATOR_PARTS = [
+    ("3x + 5 = 20", "+ 5"), ("3x + 5 = 20", "= 20"), ("3x + 5 = 20", "="), ("3x + 5 = 20", "3x +"),
+    (R"a \cdot b = c", R"\cdot b"), (R"a \leq b", R"\leq"), (R"2\sin x", R"\sin x"), ("f^2 + x^2", "f"),
+    ("f_1 + V_2", "V"), ("a, b, c", "a,"),
+]
+
+
+def glyph_centres(mob) -> np.ndarray:
+    return np.array([glyph.get_center() for glyph in mob.submobjects])
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("tex, part", OPERATOR_PARTS)
+def test_picking_out_part_of_a_formula_never_changes_how_it_is_set(tex, part):
+    plain = glyph_centres(Tex(tex))
+    highlighted, selection, expr = selected({"id": "eq", "type": "tex", "tex": tex}, part)
+    colored = build([{"id": "eq", "type": "tex", "tex": tex, "colors": {part: "#FF0000"}}])
+    boxed = build([{"id": "eq", "type": "tex", "tex": tex}, {"id": "b", "type": "box", "target": "eq", "part": part}])
+    for mob in (highlighted, colored["eq"], boxed["eq"]):
+        assert np.allclose(glyph_centres(mob), plain, atol=1e-6)
+    assert "isolate" not in colored.code["eq"] and "t2c" not in colored.code["eq"]
+    # The part is still the right glyphs, colored or picked out
+    indices = glyph_indices(highlighted, selection)
+    picked = Counter(glyph_signature(highlighted.submobjects[i]) for i in indices)
+    assert picked == glyph_signatures(Tex(tex)) - glyph_signatures(Tex(phantom_of(tex, part)))
+    red = [i for i, glyph in enumerate(colored["eq"].submobjects) if glyph.get_fill_color().upper() == "#FF0000"]
+    assert red == indices
+
+
+@pytest.mark.render
+def test_isolating_such_a_part_would_have_changed_the_formula():
+    """Why they aren't isolated: manim sets an isolated part in a group of its own, and 3x + 5 comes out 3x+5."""
+    assert not np.allclose(glyph_centres(Tex("3x + 5 = 20")), glyph_centres(Tex("3x + 5 = 20", isolate=["+ 5"])), atol=1e-3)
+
+
+def test_colors_which_would_change_a_formula_are_set_afterwards():
+    code = codes([{"id": "eq", "type": "tex", "tex": "3x + 5 = 20", "colors": {"x": "BLUE", "= 20": "RED"}}])["eq"]
+    assert code == 'Tex("3x + 5 = 20", t2c={"x": BLUE}).set_color_by_tex("= 20", RED)'
+
+
+# Lines of text
+
+LINES = "a short line\nand a much longer line\nmid line"
+
+
+def line_edges(mob, text: str) -> list[tuple[float, float]]:
+    """Left and right edge of each line of a Text, its glyphs counted off line by line."""
+    edges, start = [], 0
+    for line in text.split("\n"):
+        count = len(re.sub(r"\s", "", line))
+        glyphs = mob.submobjects[start:start + count]
+        start += count
+        edges.append((min(g.get_left()[0] for g in glyphs), max(g.get_right()[0] for g in glyphs)))
+    return edges
+
+
+@pytest.mark.parametrize("align", [None, "left", "center", "right"])
+def test_lines_of_text_line_up_as_asked(align):
+    obj = {"id": "t", "type": "text", "text": LINES, **({"align": align} if align else {})}
+    edges = line_edges(build([obj])["t"], LINES)
+    lefts, rights = [e[0] for e in edges], [e[1] for e in edges]
+    middles = [(a + b) / 2 for a, b in edges]
+    lined_up = {"left": lefts, "center": middles, "right": rights}
+    expected = align or "center"
+    assert np.ptp(lined_up[expected]) < 0.05
+    for other, values in lined_up.items():
+        if other != expected:
+            assert np.ptp(values) > 0.5
+
+
+def test_several_lines_of_a_title_are_centred_and_of_bullets_left():
+    built = build([
+        {"id": "h", "type": "title", "text": "A title\nwith a second, longer line", "underline": False},
+        {"id": "b", "type": "bullets", "items": ["one\nand a much longer one"]},
+    ])
+    title = line_edges(built["h"], "A title\nwith a second, longer line")
+    assert abs((title[0][0] + title[0][1]) - (title[1][0] + title[1][1])) / 2 < 0.02
+    bullet = line_edges(built["b"][0], "• one\nand a much longer one")
+    # Lined up by where each line starts, which leaves the ink of different letters a little apart
+    assert abs(bullet[0][0] - bullet[1][0]) < 0.05
+
+
 @pytest.mark.render
 def test_formula_part_in_every_place_it_occurs():
     mob, selection, _ = selected({"id": "eq", "type": "tex", "tex": R"x + y = x"}, "x")
@@ -961,13 +1500,176 @@ def test_formula_part_through_a_backdrop():
     assert glyph_indices(mob[1], selection) == [4]
 
 
-@pytest.mark.parametrize("kind, fields", [("circle", {}), ("bullets", {"items": ["a"]}), ("matrix", {"entries": [[1]]})])
+@pytest.mark.parametrize("kind, fields", [("circle", {}), ("bullets", {"items": ["a"]}), ("angle", {"points": [[1, 0], [0, 0], [0, 1]]})])
 def test_parts_of_other_kinds_are_refused(kind, fields):
     doc = document([{"id": "it", "type": kind, **fields}])
     scene = doc.scenes[0]
     ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
-    with pytest.raises(ValueError, match="Only parts of text, formulas, titles and quotes"):
+    with pytest.raises(ValueError, match="Only parts of text, formulas, titles, quotes and matrices"):
         part_selector(scene.objects[0], "a", ctx)
+
+
+def matrix_ctx(entries, **fields):
+    doc = document([{"id": "m", "type": "matrix", "entries": entries, **fields}])
+    scene = doc.scenes[0]
+    return scene.objects[0], CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+
+
+@pytest.mark.parametrize("part, code", [
+    ("row 1", "matrix_part(m, row=1)"),
+    ("Row 2", "matrix_part(m, row=2)"),
+    ("column 3", "matrix_part(m, column=3)"),
+    ("  column   1 ", "matrix_part(m, column=1)"),
+    ("entry 2 1", "matrix_part(m, entry=(2, 1))"),
+    ("entry 1, 3", "matrix_part(m, entry=(1, 3))"),
+    ("x", "matrix_part(m, entry=(2, 1))"),
+    ("2", "matrix_part(m, entry=(1, 2))"),
+    ("2.0", "matrix_part(m, entry=(1, 2))"),
+    ("0", "matrix_part(m, entries=[(1, 3), (2, 3)])"),
+    ("row", "matrix_part(m, entry=(2, 2))"),
+])
+def test_matrix_parts_are_written_as_the_entries_they_name(part, code):
+    obj, ctx = matrix_ctx([[1, 2, 0], ["x", "row", 0]])
+    assert part_selector(obj, part, ctx) == code
+
+
+@pytest.mark.parametrize("part, message", [
+    ("row 3", "has 2 rows and 3 columns, counting from 1, so no row 3"),
+    ("column 0", "no column 0"),
+    ("entry 1 4", "no entry 1 4"),
+    ("w", "'w' isn't an entry of 'm'"),
+    ("entry 2", "'entry 2' isn't an entry"),
+])
+def test_matrix_parts_which_arent_there_are_refused(part, message):
+    obj, ctx = matrix_ctx([[1, 2, 0], ["x", "y", 0]])
+    with pytest.raises(ValueError, match=re.escape(message)):
+        part_selector(obj, part, ctx)
+
+
+def test_matrix_parts_look_past_nothing_even_with_a_backdrop():
+    obj, ctx = matrix_ctx([[1, 2]], backdrop=True, bracket="round")
+    assert part_selector(obj, "column 2", ctx) == "matrix_part(m, column=2)"
+
+
+def test_the_format_accepts_a_numbers_entry_as_it_is_shown():
+    doc, problems = validate_data({"scenes": [{"id": "s", "objects": [
+        {"id": "m", "type": "matrix", "entries": [[1, 2.5], [-0.0, 1e20]]},
+    ], "steps": [{"do": "highlight", "target": "m", "part": part} for part in ["1", "1.0", "2.5", "0", "-0.0", "1e+20"]]}]})
+    assert doc is not None and not has_errors(problems), [str(p) for p in problems]
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("part, expected", [
+    ("row 1", [0, 1, 2]), ("row 2", [3, 4, 5]), ("column 1", [0, 3]), ("column 3", [2, 5]),
+    ("entry 1 1", [0]), ("entry 2 3", [5]), ("x", [3]), ("2", [1]), ("0", [2, 5]),
+])
+@pytest.mark.parametrize("dressed", [{}, {"backdrop": True}, {"bracket": "round", "row_colors": ["RED"]}])
+def test_matrix_parts_are_exactly_the_right_entries(part, expected, dressed):
+    matrix = {"id": "m", "type": "matrix", "entries": [[1, 2, 0], ["x", "y", 0]], **dressed}
+    mob, selection, _ = selected(matrix, part)
+    picked = [m for m in selection.submobjects]
+    assert len(picked) == len(expected)
+    assert all(a is mob.elements[i] for a, i in zip(picked, expected))
+    brackets = set(mob.brackets.get_family())
+    assert not set(selection.get_family()) & brackets
+
+
+@pytest.mark.render
+def test_matrix_parts_after_its_entries_change():
+    doc = document(
+        [{"id": "m", "type": "matrix", "entries": [[1, 2], [3, 4]]}],
+        [{"do": "change", "target": "m", "set": {"entries": [[1, 2], [3, 4], ["a", "b"]]}},
+         {"do": "highlight", "target": "m", "part": "a"}],
+    )
+    scene = doc.scenes[0]
+    ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+    from manim_verbose.scenefile.actions import changed_spec
+    ctx.objects["m"] = changed_spec(ctx.spec("m"), scene.steps[0].set)
+    assert part_selector(ctx.spec("m"), "a", ctx) == "matrix_part(m, entry=(3, 1))"
+
+
+# Parts of text past what draws nothing
+
+EMOJI_PARTS = [
+    ("emoji 🙂 ok", "ok"),
+    ("a🙂b", "b"),
+    ("🙂🙂 xy", "xy"),
+    ("x👍🏽 y", "y"),
+    ("a​b c", "c"),
+    ("ok 🙂 ok", "ok"),
+    ("Hi 🙂 there, friend", "friend"),
+    ("🙂 a 🙂 b 🙂", "b"),
+    ("café 🙂 naïve", "naïve"),
+    ("tab\there 🙂 now", "now"),
+]
+
+
+def glyphs_before(text: str, index: int) -> int:
+    """How many glyphs manim draws for the text before index, however it draws what comes before."""
+    before = text[:index]
+    return len(Text(before).submobjects) if before.strip() else 0
+
+
+@pytest.mark.parametrize("text, part", EMOJI_PARTS)
+def test_text_parts_past_an_emoji_are_the_right_glyphs(text, part):
+    mob, selection, _ = selected({"id": "t", "type": "text", "text": text}, part)
+    expected = []
+    for match in re.finditer(re.escape(part), text):
+        start = glyphs_before(text, match.start())
+        expected.append(list(range(start, start + len(Text(part).submobjects))))
+    assert [glyph_indices(mob, occurrence) for occurrence in selection] == expected
+
+
+@pytest.mark.parametrize("text, part", EMOJI_PARTS[:4])
+def test_marking_a_part_out_changes_nothing_drawn(text, part):
+    marked = build([{"id": "t", "type": "text", "text": text}], [{"do": "highlight", "target": "t", "part": part}])
+    assert "local_configs" in marked.code["t"]
+    plain = Text(text)
+    assert np.allclose(marked["t"].get_all_points(), plain.get_all_points(), atol=1e-6)
+
+
+@pytest.mark.parametrize("obj, part", [
+    ({"id": "h", "type": "title", "text": "A 🙂 title here"}, "here"),
+    ({"id": "h", "type": "title", "text": "A 🙂 title here", "underline": False}, "title"),
+    ({"id": "q", "type": "quote", "text": "brevity 🙂 is the soul", "author": "someone"}, "soul"),
+    ({"id": "t", "type": "text", "text": "over 🙂 a grid", "backdrop": True}, "grid"),
+])
+def test_parts_of_titles_and_quotes_past_an_emoji(obj, part):
+    mob, selection, _ = selected(obj, part)
+    text = [m for m in mob.get_family() if isinstance(m, Text)][0]
+    index = text.text.index(part)
+    start = glyphs_before(text.text, index)
+    assert glyph_indices(text, selection) == list(range(start, start + len(part)))
+
+
+@pytest.mark.parametrize("parts, marked", [
+    (["hello wo", "world"], ["hello wo"]),
+    (["world", "hello wo"], ["world"]),
+    (["hello world", "world", "lo"], ["hello world", "world", "lo"]),
+    ([" ", "o"], ["o"]),
+    (["lo w"], ["lo w"]),
+])
+def test_parts_which_would_partly_overlap_are_not_both_marked(parts, marked):
+    doc = document([{"id": "t", "type": "text", "text": "hello world"}],
+                   [{"do": "highlight", "target": "t", "part": part} for part in parts])
+    scene = doc.scenes[0]
+    ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+    code = object_expression(scene.objects[0], ctx)
+    configs = ast.literal_eval(code.split("local_configs=", 1)[1][:-1])
+    assert list(configs) == marked
+    mob = eval(code, dict(NAMESPACE))
+    for part in parts:
+        if part.strip():
+            selection = mob[part]
+            assert glyph_indices(mob, selection) == expected_text_glyphs("hello world", part)
+
+
+def test_a_colored_part_is_not_marked_twice():
+    doc = document([{"id": "t", "type": "text", "text": "hello world", "colors": {"world": "RED", "hel": "BLUE"}}],
+                   [{"do": "highlight", "target": "t", "part": "world"}, {"do": "highlight", "target": "t", "part": "llo"}])
+    scene = doc.scenes[0]
+    ctx = CodegenContext(doc=doc, scene=scene, objects={o.id: o for o in scene.objects})
+    assert "local_configs" not in object_expression(scene.objects[0], ctx)
 
 
 PART_TEXT = st.text(st.sampled_from("abcxyz019 ,.!?+-=\n"), min_size=1, max_size=30)
@@ -1056,12 +1758,16 @@ def test_default_styles():
         {"id": "l", "type": "line", "start": [0, 0], "end": [1, 1]}, {"id": "c", "type": "circle"},
         {"id": "i", "type": "image", "path": "p.png"}, {"id": "g", "type": "group", "members": ["t"]},
         {"id": "d", "type": "dot", "point": [0, 0]}, {"id": "p", "type": "number_plane"},
+        {"id": "an", "type": "angle", "points": [[1, 0], [0, 0], [0, 1]]},
+        {"id": "ar", "type": "arc", "arrow": True}, {"id": "ac", "type": "arc"},
+        {"id": "br", "type": "brace", "start": [0, 0], "end": [1, 0]},
     ])
     styles = {o.id: (default_show_style(o), default_hide_style(o)) for o in doc.scenes[0].objects}
     assert styles == {
         "t": ("write", "fade"), "e": ("write", "fade"), "v": ("grow", "fade"), "a": ("grow", "uncreate"),
         "l": ("draw", "uncreate"), "c": ("draw", "uncreate"), "i": ("fade", "fade"), "g": ("fade", "fade"),
-        "d": ("grow", "shrink"), "p": ("draw", "fade"),
+        "d": ("grow", "shrink"), "p": ("draw", "fade"), "an": ("draw", "uncreate"), "ar": ("draw", "uncreate"),
+        "ac": ("draw", "uncreate"), "br": ("draw", "uncreate"),
     }
 
 
@@ -1144,7 +1850,9 @@ ANCHORS = [
     {"id": "ax3", "type": "axes_3d", "x_range": [-5, 5, 1], "y_range": [-5, 5, 1], "z_range": [-4, 4, 1]},
     {"id": "nl", "type": "number_line", "x_range": [-5, 5, 1]},
     {"id": "pic", "type": "image", "path": "pic.png"},
+    {"id": "words", "type": "text", "text": "some 🙂 words here", "place": [-3, -2]},
 ]
+WORD_PARTS = st.sampled_from(["some", "words", "me 🙂 wo", "here", "e", "ds h"])
 
 KIND_FIELDS = {
     "text": maybe(font_size=st.floats(10, 80), bold=st.booleans(), italic=st.booleans(),
@@ -1165,7 +1873,8 @@ KIND_FIELDS = {
                           faded=st.booleans(), numbers=st.booleans()),
     "axes": maybe(x_range=ranges, y_range=ranges, width=st.floats(1, 14), height=st.floats(1, 8), numbers=st.booleans(),
                   tips=st.booleans(), x_label=formulas_tex, y_label=formulas_tex),
-    "axes_3d": maybe(x_range=ranges, y_range=ranges, z_range=ranges, numbers=st.booleans()),
+    "axes_3d": maybe(x_range=ranges, y_range=ranges, z_range=ranges, numbers=st.booleans(),
+                     x_label=formulas_tex, y_label=formulas_tex, z_label=formulas_tex),
     "number_line": maybe(x_range=ranges, length=st.floats(1, 14), numbers=st.booleans(), tip=st.booleans()),
     "graph": st.tuples(st.sampled_from(["ax", "plane"]), st.sampled_from(["sin(x)", "1/x", "sqrt(x)", "x^2 - 2", "floor(x)", "log(x)"]),
                        maybe(x_range=st.tuples(numbers, numbers).map(sorted).map(list), label=formulas_tex))
@@ -1173,10 +1882,19 @@ KIND_FIELDS = {
     "dot": st.tuples(point, systems, maybe(radius=st.floats(0.01, 1), label=formulas_tex, label_side=sides))
     .map(lambda t: {"point": t[0], **({"on": t[1]} if t[1] else {}), **t[2]}),
     "vector": st.tuples(point, point, systems, maybe(thickness=st.floats(0.5, 10), label=formulas_tex, label_side=sides,
-                                                     show_coordinates=st.booleans()))
+                                                     show_coordinates=st.booleans(),
+                                                     coordinate_colors=st.lists(colors, max_size=4)))
     .map(lambda t: {"tip": t[0], "tail": t[1], **({"on": t[2]} if t[2] else {}), **t[3]}),
     "line": st.tuples(point, point, systems, maybe(dashed=st.booleans(), arrow=st.booleans(), thickness=st.floats(0.5, 10)))
     .map(lambda t: {"start": t[0], "end": t[1], **({"on": t[2]} if t[2] else {}), **t[3]}),
+    "angle": st.tuples(st.lists(point, min_size=3, max_size=3), systems,
+                       maybe(radius=st.floats(0.01, 5), right_angle=st.booleans(), other_side=st.booleans(),
+                             label=formulas_tex))
+    .map(lambda t: {"points": t[0], **({"on": t[1]} if t[1] else {}), **t[2]}),
+    "arc": st.tuples(point, systems,
+                     maybe(radius=st.floats(0.01, 5), start_angle=st.floats(-1000, 1000), end_angle=st.floats(-1000, 1000),
+                           arrow=st.booleans(), thickness=st.floats(0.1, 12)))
+    .map(lambda t: {"center": t[0], **({"on": t[1]} if t[1] else {}), **t[2]}),
     "polygon": st.tuples(st.lists(point, min_size=3, max_size=6), systems,
                          maybe(fill=colors, fill_opacity=st.floats(0, 1)))
     .map(lambda t: {"points": t[0], **({"on": t[1]} if t[1] else {}), **t[2]}),
@@ -1184,11 +1902,21 @@ KIND_FIELDS = {
     "rectangle": maybe(width=st.floats(0.05, 8), height=st.floats(0.05, 6), corner_radius=st.floats(0, 3), fill=colors,
                        fill_opacity=st.floats(0, 1), thickness=st.floats(0, 10)),
     "square": maybe(side=st.floats(0.05, 6), fill=colors, fill_opacity=st.floats(0, 1), thickness=st.floats(0, 10)),
-    "brace": st.tuples(st.sampled_from(["anchor", "plane", "pic"]), maybe(side=sides, label=formulas_tex, buff=st.floats(0, 1)))
-    .map(lambda t: {"target": t[0], **t[1]}),
-    "box": st.tuples(st.sampled_from(["anchor", "nl", "pic"]),
-                     maybe(buff=st.floats(0, 1), corner_radius=st.floats(0, 0.5), fill_opacity=st.floats(0, 1)))
-    .map(lambda t: {"target": t[0], **t[1]}),
+    "brace": st.one_of(
+        st.tuples(st.sampled_from(["anchor", "plane", "pic", "words"]), maybe(side=sides, label=formulas_tex, buff=st.floats(0, 1)))
+        .map(lambda t: {"target": t[0], **t[1]}),
+        st.tuples(WORD_PARTS, maybe(side=sides, label=formulas_tex, buff=st.floats(0, 1)))
+        .map(lambda t: {"target": "words", "part": t[0], **t[1]}),
+        st.tuples(point, point, systems, maybe(side=sides, label=formulas_tex, buff=st.floats(0, 1)))
+        .map(lambda t: {"start": t[0], "end": t[1], **({"on": t[2]} if t[2] else {}), **t[3]}),
+    ),
+    "box": st.one_of(
+        st.tuples(st.sampled_from(["anchor", "nl", "pic", "words"]),
+                  maybe(buff=st.floats(0, 1), corner_radius=st.floats(0, 0.5), fill_opacity=st.floats(0, 1)))
+        .map(lambda t: {"target": t[0], **t[1]}),
+        st.tuples(WORD_PARTS, maybe(buff=st.floats(0, 1), corner_radius=st.floats(0, 0.5), fill_opacity=st.floats(0, 1)))
+        .map(lambda t: {"target": "words", "part": t[0], **t[1]}),
+    ),
     "image": maybe(height=st.floats(0.1, 6)).map(lambda d: {"path": "pic.png", **d}),
     "svg": maybe(height=st.floats(0.1, 6)).map(lambda d: {"path": "star.svg", **d}),
     "group": st.tuples(st.lists(st.sampled_from(["anchor", "plane", "pic", "nl"]), min_size=1, max_size=4),
@@ -1196,7 +1924,7 @@ KIND_FIELDS = {
     .map(lambda t: {"members": t[0], **t[1]}),
 }
 
-PLOTTED_KINDS = {"graph", "dot", "vector", "line", "polygon"}
+PLOTTED_KINDS = {"graph", "dot", "vector", "line", "polygon", "angle", "arc"}
 ANNOTATION_KINDS = {"brace", "box"}
 
 
@@ -1215,7 +1943,7 @@ def without_latex(fields: dict) -> dict:
 RANDOM_CASES = [
     *(pytest.param(kind, False, id=kind) for kind in sorted(OBJECT_MODELS) if kind not in LATEX_KINDS),
     *(pytest.param(kind, True, id=f"{kind}-latex", marks=pytest.mark.render)
-      for kind in sorted(LATEX_KINDS | {"axes", "graph", "dot", "vector"})),
+      for kind in sorted(LATEX_KINDS | {"axes", "axes_3d", "graph", "dot", "vector", "angle"})),
 ]
 
 

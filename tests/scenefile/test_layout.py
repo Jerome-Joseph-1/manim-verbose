@@ -18,17 +18,19 @@ from manim_verbose.manim_import import import_manim
 import_manim()
 
 from manimlib import (  # noqa: E402
-    DOWN, FRAME_HEIGHT, FRAME_WIDTH, LEFT, RIGHT, UP, Arrow, Axes, BackgroundRectangle, Brace, Dot, Group,
-    ImageMobject, Matrix, NumberLine, NumberPlane, Rectangle, Tex, Text, VGroup, VMobject,
+    DEGREES, DOWN, FRAME_HEIGHT, FRAME_WIDTH, LEFT, OUT, PI, RIGHT, TAU, UP, Arc, Arrow, Axes, BackgroundRectangle,
+    Brace, Dot, Group, ImageMobject, Line, Matrix, NumberLine, NumberPlane, Rectangle, Tex, Text, ThreeDAxes,
+    Transform, VGroup, VMobject,
 )
+from manimlib.camera.camera_frame import CameraFrame  # noqa: E402
 from PIL import Image  # noqa: E402
 
 from manim_verbose.scenefile import layout  # noqa: E402
 from manim_verbose.scenefile.expressions import ExpressionError  # noqa: E402
 from manim_verbose.scenefile.layout import (  # noqa: E402
-    EDGES, function_graph, place, set_frame_shape, frame_shape, with_axis_labels, with_backdrop, with_brace_label,
-    with_coordinates, with_label, with_numbers, with_round_brackets, with_row_colors, with_tip_label,
-    with_underline,
+    EDGES, angle_mark, brace_between, brace_part, face_camera, facing_camera, function_graph, matrix_part, place,
+    set_frame_shape, frame_shape, with_arc_tip, with_axis_labels, with_backdrop, with_brace_label, with_coordinates,
+    with_label, with_numbers, with_round_brackets, with_row_colors, with_tip_label, with_tips, with_underline,
 )
 
 TOL = 1e-3
@@ -450,6 +452,561 @@ def test_with_axis_labels():
     assert x_label.get_center()[0] > 2 and abs(x_label.get_center()[1]) < 1
     assert y_label.get_center()[1] > 1.5 and abs(y_label.get_center()[0]) < 1.5
     assert len(with_axis_labels(Axes(), y_label="y").submobjects) == before + 1
+
+
+def test_only_3d_axes_have_a_z_label():
+    with pytest.raises(ValueError, match="Only 3D axes"):
+        with_axis_labels(Axes(), z_label="z")
+
+
+def test_with_backdrop_takes_the_background_color():
+    from manimlib.config import manim_config
+    from manimlib.utils.color import color_to_hex
+    # What is drawn, rather than what BackgroundRectangle.get_fill_color says, which is always white
+    def drawn(panel):
+        return VMobject.get_fill_color(panel).upper()
+
+    for color in ["#FFFFFF", "#123456"]:
+        assert drawn(with_backdrop(Text("x"), color=color)[0]) == color
+        plane = with_backdrop(NumberPlane(x_range=[-1, 1, 1], y_range=[-1, 1, 1]), color=color)
+        assert drawn(plane.submobjects[0]) == color
+    assert drawn(with_backdrop(Text("x"))[0]) == color_to_hex(manim_config.camera.background_color)
+
+
+@pytest.mark.render
+def test_with_coordinates_colors_its_rows_and_not_its_brackets():
+    arrow = Arrow([0, 0, 0], [2, 1, 0], buff=0).set_color("#FFFF00")
+    with_coordinates(arrow, [2, 1, 3], colors=["#00FF00", "#FF0000"])
+    matrix = arrow.submobjects[-1]
+    x, y, z = matrix.elements
+    assert {m.get_fill_color().upper() for m in x.family_members_with_points()} == {"#00FF00"}
+    assert {m.get_fill_color().upper() for m in y.family_members_with_points()} == {"#FF0000"}
+    # A row given no color, and the brackets, stay as they were
+    plain = Matrix([["3"]])
+    assert z.get_fill_color().upper() == plain.elements[0].get_fill_color().upper()
+    assert {m.get_fill_color().upper() for m in matrix.brackets.family_members_with_points()} == {
+        plain.brackets[0].get_fill_color().upper()
+    }
+    assert arrow.get_fill_color().upper() == "#FFFF00"
+
+
+# Tips past the ends of number lines and axes
+
+TIP_RANGES = [[0, 4, 1], [-1, 1, 0.25], [-3, 3, 0.5], [2, 5, 1], [-10, 10, 5]]
+
+
+def number_values(numbers) -> list[float]:
+    return [round(float(number.get_value()), 6) for number in numbers]
+
+
+@pytest.mark.parametrize("x_range", TIP_RANGES)
+def test_a_tip_goes_past_the_end_and_hides_no_number(x_range):
+    plain = NumberLine(x_range=x_range, width=6, include_numbers=True)
+    line = with_tips(NumberLine(x_range=x_range, width=6, include_numbers=True))
+    # Every number and tick is still there, the last ones too, and the line means what it did
+    assert number_values(line.numbers) == number_values(plain.numbers)
+    assert number_values(line.numbers)[-1] == pytest.approx(x_range[1])
+    assert len(line.ticks) == len(plain.ticks)
+    for x in np.linspace(x_range[0], x_range[1], 7):
+        assert np.allclose(line.n2p(x), plain.n2p(x), atol=TOL)
+    # The tip starts where the line ends, points on past it, and covers no number
+    tip = line.tip
+    assert line.has_tip() and tip in line.submobjects
+    end = line.n2p(x_range[1])
+    assert np.allclose(tip.get_base(), end, atol=TOL)
+    assert np.allclose(tip.get_tip_point(), end + layout.TIP_LENGTH * RIGHT, atol=TOL)
+    for number in line.numbers:
+        assert_apart(number, tip)
+    assert tip.get_fill_color().upper() == line.get_stroke_color().upper()
+
+
+def test_manims_own_tip_is_what_hid_the_last_number():
+    """Why with_tips exists: include_tip leaves out the last tick and number."""
+    line = NumberLine(x_range=[0, 4, 1], include_numbers=True, include_tip=True)
+    assert 4 not in number_values(line.numbers)
+
+
+def test_tips_on_axes_keep_every_number_and_every_coordinate():
+    plain = Axes(x_range=[0, 5, 1], y_range=[0, 3, 1], width=5, height=3)
+    axes = with_numbers(with_tips(Axes(x_range=[0, 5, 1], y_range=[0, 3, 1], width=5, height=3)))
+    x_numbers, y_numbers = axes.coordinate_labels
+    assert number_values(x_numbers) == [1, 2, 3, 4, 5]
+    assert number_values(y_numbers) == [1, 2, 3]
+    for axis, numbers in zip(axes.get_axes(), (x_numbers, y_numbers)):
+        assert axis.has_tip()
+        end = axis.n2p(axis.x_max)
+        direction = (end - axis.n2p(axis.x_min)) / np.linalg.norm(end - axis.n2p(axis.x_min))
+        assert np.allclose(axis.tip.get_tip_point(), end + layout.TIP_LENGTH * direction, atol=TOL)
+        for number in numbers:
+            assert_apart(number, axis.tip)
+    for coords in [(0, 0), (5, 3), (2.5, 1)]:
+        assert np.allclose(axes.c2p(*coords), plain.c2p(*coords), atol=TOL)
+
+
+LABELLED_AXES = [
+    dict(x_range=[0, 5, 1], y_range=[0, 3, 1], width=5, height=3),
+    dict(x_range=[-6, 6, 1], y_range=[-3, 3, 1]),
+    dict(x_range=[-1, 1, 0.25], y_range=[-2, 2, 0.5], width=10, height=6),
+    dict(x_range=[-7, 7, 1], y_range=[-4, 4, 1], width=14, height=8),
+    dict(x_range=[-5, 0, 1], y_range=[0, 10, 2], width=6, height=5),
+]
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("kwargs", LABELLED_AXES)
+@pytest.mark.parametrize("tips", [False, True])
+@pytest.mark.parametrize("x_label", ["t", R"\text{time}", R"\frac{x}{2}"])
+def test_axis_labels_keep_clear_of_every_number(kwargs, tips, x_label):
+    axes = Axes(**kwargs)
+    if tips:
+        with_tips(axes)
+    # Wide numbers, the harder to keep clear of
+    with_numbers(axes, num_decimal_places=2)
+    with_axis_labels(axes, x_label=x_label, y_label="y")
+    x_label_mob, y_label_mob = axes.submobjects[-2:]
+    for number in [*axes.coordinate_labels[0], *axes.coordinate_labels[1]]:
+        assert_apart(x_label_mob, number, gap=0.05)
+        assert_apart(y_label_mob, number, gap=0.05)
+    for label in (x_label_mob, y_label_mob):
+        assert_inside_frame(label, 0)
+    # At the ends of their axes: x past its end, level with it, or where there is no room, above it
+    x_end = axes.get_x_axis().get_right()
+    if box(x_label_mob)[0] >= x_end[0]:
+        assert x_label_mob.get_center()[1] == pytest.approx(x_end[1], abs=TOL)
+    else:
+        assert box(x_label_mob)[1] > x_end[1] and box(x_label_mob)[2] <= x_end[0] + TOL
+    assert y_label_mob.get_center()[1] > axes.c2p(0, kwargs["y_range"][1])[1] - 0.5
+
+
+@pytest.mark.render
+def test_an_x_label_goes_past_the_end_of_its_axis_and_its_tip():
+    axes = with_axis_labels(with_tips(Axes(x_range=[0, 5, 1], y_range=[0, 3, 1], width=5, height=3)), x_label="t")
+    label, axis = axes.submobjects[-1], axes.get_x_axis()
+    assert box(label)[0] == pytest.approx(box(axis.tip)[2] + 0.25, abs=TOL)
+    assert label.get_center()[1] == pytest.approx(axis.get_center()[1], abs=TOL)
+
+
+# Parts of matrices
+
+def grid() -> Matrix:
+    return Matrix([["a", "b", "c"], ["d", "e", "f"]])
+
+
+def same(group, expected) -> bool:
+    return len(group) == len(expected) and all(a is b for a, b in zip(group, expected))
+
+
+@pytest.mark.render
+def test_matrix_part_picks_out_exactly_the_entries():
+    matrix = grid()
+    a, b, c, d, e, f = matrix.elements
+    assert same(matrix_part(matrix, row=1), [a, b, c])
+    assert same(matrix_part(matrix, row=2), [d, e, f])
+    assert same(matrix_part(matrix, column=1), [a, d])
+    assert same(matrix_part(matrix, column=3), [c, f])
+    assert same(matrix_part(matrix, entry=(2, 1)), [d])
+    assert same(matrix_part(matrix, entries=[(1, 3), (2, 2)]), [c, e])
+    brackets = set(matrix.brackets.get_family())
+    for part in [matrix_part(matrix, row=1), matrix_part(matrix, column=2), matrix_part(matrix, entry=(1, 1))]:
+        assert isinstance(part, VGroup)
+        assert not set(part.get_family()) & brackets
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("kwargs, message", [
+    (dict(row=3), "rows 1 to 2, so no row 3"),
+    (dict(row=0), "rows 1 to 2"),
+    (dict(column=4), "columns 1 to 3"),
+    (dict(entry=(3, 1)), "2 rows and 3 columns"),
+    (dict(entries=[(1, 1), (1, 0)]), "2 rows and 3 columns"),
+    (dict(), "Give one of"),
+    (dict(row=1, column=1), "Give one of"),
+])
+def test_matrix_part_refuses_what_isnt_there(kwargs, message):
+    with pytest.raises((IndexError, ValueError), match=message):
+        matrix_part(grid(), **kwargs)
+
+
+@pytest.mark.render
+def test_matrix_part_is_where_the_entries_are_after_a_move():
+    matrix = grid()
+    # Once a row group has been measured, as coloring a row does, a move (which plays a
+    # transform) leaves it measured where the row was
+    matrix.get_rows()[0].get_center()
+    move = Transform(matrix, matrix.copy().shift(2 * UP + RIGHT))
+    move.begin()
+    move.interpolate(1)
+    move.finish()
+    row = matrix_part(matrix, row=1)
+    entries = matrix.elements[:3]
+    assert box(row) == pytest.approx((
+        min(box(m)[0] for m in entries), min(box(m)[1] for m in entries),
+        max(box(m)[2] for m in entries), max(box(m)[3] for m in entries),
+    ), abs=TOL)
+    assert not np.allclose(matrix.get_rows()[0].get_center(), row.get_center(), atol=TOL)
+
+
+@pytest.mark.render
+def test_matrix_part_of_a_copy_and_of_dressed_up_matrices():
+    matrix = grid()
+    copy = matrix.copy()
+    part = matrix_part(copy, column=2)
+    assert all(m in copy.get_family() for m in part) and not any(m in matrix.get_family() for m in part)
+    round_matrix = with_round_brackets(grid())
+    assert same(matrix_part(round_matrix, row=2), round_matrix.elements[3:])
+    panelled = with_backdrop(grid())
+    assert same(matrix_part(panelled, entry=(1, 1)), panelled.elements[:1])
+
+
+# Angles
+
+def own_curve(mob, samples: int = 80) -> np.ndarray:
+    """Points along the mobject's own path (not its submobjects'), from its start to its end."""
+    return np.array([mob.quick_point_from_proportion(t) for t in np.linspace(0, 1, samples)])
+
+
+def pad(point) -> np.ndarray:
+    return np.array([*point, 0, 0][:3], dtype=float)
+
+
+def unit(vect) -> np.ndarray:
+    return np.asarray(vect, dtype=float) / np.linalg.norm(vect)
+
+
+def turning(points, centre, first, second) -> np.ndarray:
+    """The angle of each point round centre, from `first` towards `second`, unwrapped so that it runs on."""
+    offsets = points - centre
+    return np.unwrap(np.arctan2(offsets @ second, offsets @ first))
+
+
+ANGLES = [
+    ([2, 0], [0, 0], [1, 1.5]),
+    ([1, 0], [0, 0], [-1, 1]),
+    ([0, 2], [0, 0], [2, 0]),
+    ([3, 1], [1, 1], [1, -2]),
+    ([-1, -1], [0.5, 0.5], [2, -0.5]),
+    ([1, 0], [0, 0], [-1, 0]),
+    ([1, 0, 0], [0, 0, 0], [0, 1, 1]),
+    ([1, 2, 3], [0, 1, -1], [-2, 0, 1]),
+]
+
+
+@pytest.mark.parametrize("a, vertex, b", ANGLES)
+@pytest.mark.parametrize("other_side", [False, True])
+@pytest.mark.parametrize("radius", [0.3, 1])
+def test_angle_arc_lies_between_the_lines_at_its_radius(a, vertex, b, other_side, radius):
+    a, vertex, b = pad(a), pad(vertex), pad(b)
+    mark = angle_mark(a, vertex, b, radius=radius, other_side=other_side)
+    assert isinstance(mark, Arc)
+    along_a, along_b = unit(a - vertex), unit(b - vertex)
+    points = own_curve(mark)
+    # On the circle of that radius round the vertex, from the one line to the other
+    assert np.allclose(np.linalg.norm(points - vertex, axis=1), radius, rtol=1e-3)
+    assert np.allclose(points[0], vertex + radius * along_a, atol=TOL)
+    assert np.allclose(points[-1], vertex + radius * along_b, atol=TOL)
+    # In the plane of the two lines, turning steadily one way from a to b: the short way
+    # round, through the angle between them, or with other_side the long way
+    across = along_b - np.dot(along_b, along_a) * along_a
+    across = unit(across) if np.linalg.norm(across) > 1e-9 else unit(np.cross(OUT, along_a))
+    assert np.allclose((points - vertex) @ np.cross(along_a, across), 0, atol=TOL)
+    angles = turning(points, vertex, along_a, across)
+    steps = np.diff(angles)
+    assert (steps >= -1e-9).all() or (steps <= 1e-9).all()
+    between = math.acos(np.clip(np.dot(along_a, along_b), -1, 1))
+    assert angles[-1] == pytest.approx(between - TAU if other_side else between, abs=1e-3)
+
+
+@pytest.mark.parametrize("a, vertex, b", [
+    ([2, 0], [0, 0], [0, 3]),
+    ([1, 1], [0, 0], [-1, 1]),
+    ([0, -1], [1, 1], [3, 0]),
+    ([1, 0, 0], [0, 0, 0], [0, 0, 2]),
+])
+@pytest.mark.parametrize("radius", [0.2, 0.5])
+def test_right_angle_mark_is_a_square_in_the_corner(a, vertex, b, radius):
+    a, vertex, b = pad(a), pad(vertex), pad(b)
+    mark = angle_mark(a, vertex, b, radius=radius, right_angle=True)
+    along_a, along_b = unit(a - vertex), unit(b - vertex)
+    corners = [mark.get_start()]
+    for point in mark.get_anchors():
+        if not np.allclose(point, corners[-1]):
+            corners.append(point)
+    expected = [vertex + radius * along_a, vertex + radius * (along_a + along_b), vertex + radius * along_b]
+    assert np.allclose(corners, expected, atol=TOL)
+    # Sides as long as the radius, square to each other, and with the vertex the fourth corner
+    sides = np.diff(corners, axis=0)
+    assert np.linalg.norm(sides, axis=1) == pytest.approx([radius, radius], abs=TOL)
+    assert np.dot(*sides) == pytest.approx(0, abs=TOL)
+    assert np.allclose(corners[0] + corners[2] - corners[1], vertex, atol=TOL)
+
+
+def test_a_right_angle_marked_the_other_way_round_is_three_quarters_of_a_turn():
+    mark = angle_mark([2, 0, 0], [0, 0, 0], [0, 2, 0], radius=0.5, right_angle=True, other_side=True)
+    assert isinstance(mark, Arc)
+    angles = turning(own_curve(mark), np.zeros(3), RIGHT, UP)
+    assert angles[-1] == pytest.approx(-3 * PI / 2, abs=1e-3)
+
+
+@pytest.mark.parametrize("a, vertex, b", [
+    ([0, 0], [0, 0], [0, 0]),
+    ([1, 0], [1, 0], [2, 2]),
+    ([1, 1], [0, 0], [1, 1]),
+    ([1, 1, 1], [0, 0, 0], [2, 2, 2]),
+    ([0, 0, 1], [0, 0, 0], [0, 0, -1]),
+])
+@pytest.mark.parametrize("options", [{}, {"right_angle": True}, {"other_side": True}])
+def test_angles_between_lines_that_arent_there_still_draw(a, vertex, b, options):
+    mark = angle_mark(pad(a), pad(vertex), pad(b), **options)
+    assert np.isfinite(mark.get_all_points()).all() and mark.has_points()
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("options", [{}, {"right_angle": True}, {"other_side": True}, {"radius": 1.5}])
+def test_angle_label_is_beyond_the_mark_halving_the_angle(options):
+    label = Tex(R"\theta")
+    mark = angle_mark([2, 0, 0], [0, 0, 0], [1, 1.5, 0], label=label, **options)
+    assert mark.submobjects[-1] is label
+    along_a, along_b = unit([2, 0, 0]), unit([1, 1.5, 0])
+    halfway = unit(along_a + along_b)
+    if options.get("other_side"):
+        halfway = -halfway
+    centre = label.get_center()
+    assert np.dot(unit(centre), halfway) == pytest.approx(1, abs=1e-6)
+    # Clear of the mark
+    x0, y0, x1, y1 = box(label)
+    points = own_curve(mark)
+    assert not ((points[:, 0] > x0) & (points[:, 0] < x1) & (points[:, 1] > y0) & (points[:, 1] < y1)).any()
+
+
+# Arcs with tips
+
+ARCS = [
+    (0, 90, 1, [0, 0]),
+    (30, 270, 2, [1, -1]),
+    (90, -90, 1.5, [0, 0]),
+    (0, 360, 1, [-2, 1]),
+    (200, -300, 0.8, [0, 0]),
+    (45, 60, 0.3, [2, 2]),
+    (10, 5, 0.1, [0, 0]),
+]
+
+
+@pytest.mark.parametrize("start, sweep, radius, centre", ARCS)
+def test_an_arc_tip_ends_where_the_arc_did_and_leaves_the_rest_on_its_circle(start, sweep, radius, centre):
+    centre = pad(centre)
+    arc = Arc(start_angle=start * DEGREES, angle=sweep * DEGREES, radius=radius, arc_center=centre)
+    first, last, length = arc.get_start().copy(), arc.get_end().copy(), arc.get_arc_length()
+    assert with_arc_tip(arc) is arc
+    assert arc.has_tip() and arc.tip in arc.submobjects
+    assert np.allclose(arc.get_start(), first, atol=TOL) and np.allclose(arc.get_end(), last, atol=TOL)
+    assert np.allclose(arc.tip.get_tip_point(), last, atol=TOL)
+    # What is left of the arc is on the same circle, and the tip carries on from where it stops
+    assert np.allclose(np.linalg.norm(own_curve(arc) - centre, axis=1), radius, rtol=1e-3)
+    assert np.allclose(arc.tip.get_base(), arc.get_points()[-1], atol=TOL)
+    # Pointing the way the arc goes round, and no more than a third of it
+    tangent = np.sign(sweep) * np.cross(OUT, unit(last - centre))
+    assert np.dot(unit(arc.tip.get_vector()), tangent) > 0.95
+    assert arc.tip.get_length() <= length / 3 + TOL
+
+
+def test_an_arc_too_short_for_any_tip_is_left_alone():
+    arc = Arc(angle=0, radius=1)
+    points = arc.get_points().copy()
+    with_arc_tip(arc)
+    assert not arc.has_tip() and np.allclose(arc.get_points(), points)
+
+
+# Braces between points
+
+BRACE_SIDES = [
+    # start, end, side, and the way the brace should bulge on screen
+    ([0, 0], [3, 0], "down", DOWN), ([0, 0], [3, 0], "up", UP),
+    ([3, 0], [0, 0], "down", DOWN), ([3, 0], [0, 0], "up", UP),
+    ([0, 0], [0, 3], "left", LEFT), ([0, 0], [0, 3], "right", RIGHT),
+    ([0, 3], [0, 0], "left", LEFT), ([0, 3], [0, 0], "right", RIGHT),
+    ([0, 0], [3, 1], "down", [1, -3]), ([0, 0], [3, 1], "up", [-1, 3]),
+    ([0, 0], [3, 1], "right", [1, -3]), ([0, 0], [3, 1], "left", [-1, 3]),
+    ([3, 1], [0, 0], "down", [1, -3]), ([3, 1], [0, 0], "left", [-1, 3]),
+    ([0, 0], [1, 3], "down", [3, -1]), ([0, 0], [1, 3], "left", [-3, 1]),
+    ([-1, 2], [1, -1], "up", [3, 2]), ([-1, 2], [1, -1], "left", [-3, -2]),
+    # Running exactly towards the side asked for: a quarter turn clockwise from it
+    ([0, 0], [3, 0], "left", UP), ([0, 0], [3, 0], "right", DOWN),
+    ([3, 0], [0, 0], "left", UP), ([0, 0], [0, 3], "down", LEFT), ([0, 3], [0, 0], "up", RIGHT),
+]
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("start, end, side, bulge", BRACE_SIDES)
+@pytest.mark.parametrize("buff", [0, 0.2])
+def test_brace_between_points_spans_them_on_the_stated_side(start, end, side, bulge, buff):
+    start, end, out = pad(start), pad(end), unit(pad(bulge))
+    brace = brace_between(start, end, side, buff=buff)
+    assert isinstance(brace, Brace)
+    along = unit(end - start)
+    points = brace.get_all_points()
+    reach = (points - start) @ along
+    assert reach.min() == pytest.approx(0, abs=TOL) and reach.max() == pytest.approx(np.linalg.norm(end - start), abs=TOL)
+    offsets = (points - start) @ out
+    assert offsets.min() == pytest.approx(buff, abs=TOL) and offsets.max() > buff + 0.1
+    assert np.dot(brace.get_direction(), out) > 0.9
+
+
+@pytest.mark.render
+def test_brace_between_one_point_and_itself_still_draws_with_its_label():
+    group = with_brace_label(brace_between([1, 1, 0], [1, 1, 0]), Tex("0"))
+    assert np.isfinite(group.get_all_points()).all()
+    assert np.isfinite(group[1].get_center()).all()
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("side", SIDES)
+def test_brace_part_spans_the_part_out_beyond_the_whole(side):
+    matrix = grid()
+    part = matrix_part(matrix, entry=(1, 2))
+    brace = brace_part(part, matrix, side, buff=0.1)
+    bx0, by0, bx1, by1 = box(brace)
+    px0, py0, px1, py1 = box(part)
+    mx0, my0, mx1, my1 = box(matrix)
+    if side in ("up", "down"):
+        assert (bx0, bx1) == pytest.approx((px0, px1), abs=TOL)
+        assert by0 == pytest.approx(my1 + 0.1, abs=TOL) if side == "up" else by1 == pytest.approx(my0 - 0.1, abs=TOL)
+    else:
+        assert (by0, by1) == pytest.approx((py0, py1), abs=TOL)
+        assert bx0 == pytest.approx(mx1 + 0.1, abs=TOL) if side == "right" else bx1 == pytest.approx(mx0 - 0.1, abs=TOL)
+
+
+# Facing the camera
+
+ORIENTATIONS = [(-30, 70), (60, 90), (0, 45, 20), (120, 10), (-90, 180)]
+
+
+def camera_axes(frame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The camera's right, up and out (towards the viewer), in the scene's coordinates."""
+    rotation = frame.get_orientation().as_matrix()
+    return rotation[:, 0], rotation[:, 1], rotation[:, 2]
+
+
+@pytest.mark.parametrize("orientation", ORIENTATIONS)
+def test_face_camera_turns_a_dot_to_face_the_camera_and_back(orientation):
+    frame = CameraFrame()
+    dot = facing_camera(Dot([1, 2, 3], radius=0.3))
+    flat = dot.get_points().copy()
+    frame.reorient(*orientation)
+    face_camera(dot, frame)
+    right, up, out = camera_axes(frame)
+    # A disc square to the camera's line of sight, where it was, and as wide as ever from there
+    assert abs(np.dot(dot.get_unit_normal(refresh=True), out)) == pytest.approx(1, abs=1e-6)
+    offsets = dot.get_points() - [1, 2, 3]
+    assert np.abs(offsets @ right).max() == pytest.approx(0.3, abs=1e-3)
+    assert np.abs(offsets @ up).max() == pytest.approx(0.3, abs=1e-3)
+    assert np.abs(offsets @ out).max() == pytest.approx(0, abs=1e-6)
+    # Turned again from wherever it is, and back to flat when the camera is
+    frame.reorient(10, 30)
+    face_camera(dot, frame)
+    assert abs(np.dot(dot.get_unit_normal(refresh=True), camera_axes(frame)[2])) == pytest.approx(1, abs=1e-6)
+    frame.reorient(0, 0, 0)
+    face_camera(dot, frame)
+    assert np.allclose(dot.get_points(), flat, atol=1e-6)
+
+
+def test_face_camera_leaves_what_is_fixed_in_the_frame():
+    frame = CameraFrame()
+    dot = facing_camera(Dot([1, 1, 0])).fix_in_frame()
+    points = dot.get_points().copy()
+    frame.reorient(-30, 70)
+    face_camera(dot, frame)
+    assert np.allclose(dot.get_points(), points)
+
+
+def test_facing_camera_does_nothing_outside_a_scene():
+    dot = facing_camera(Dot([1, 1, 1]))
+    points = dot.get_points().copy()
+    dot.update(0)
+    assert dot.has_updaters() and np.allclose(dot.get_points(), points)
+    # Copies keep facing the camera
+    assert dot.copy().has_updaters()
+
+
+@pytest.mark.render
+def test_a_dot_label_stays_above_the_dot_as_the_camera_sees_it():
+    dot = facing_camera(with_label(Dot([1, 1, 1]), Tex("P"), "up"))
+    label = dot.submobjects[-1]
+    flat = label.get_all_points().mean(axis=0) - [1, 1, 1]
+    assert flat[1] > 0.2
+    frame = CameraFrame()
+    frame.reorient(-30, 70)
+    face_camera(dot, frame)
+    # The disc stays put, and the label keeps where it was beside it, as the camera sees it
+    assert np.allclose(VMobject().set_points(dot.get_points()).get_center(), [1, 1, 1], atol=TOL)
+    offset = label.get_all_points().mean(axis=0) - [1, 1, 1]
+    assert np.array(camera_axes(frame)) @ offset == pytest.approx(flat, abs=TOL)
+
+
+def turn_round_and_back(mob) -> None:
+    """Face the camera frame after frame as it goes round, then as it looks straight at the frame again."""
+    frame = CameraFrame()
+    for theta in np.linspace(0, 360, 90):
+        frame.reorient(theta, 60 + 20 * math.sin(math.radians(theta)))
+        face_camera(mob, frame)
+    frame.reorient(0, 0, 0)
+    face_camera(mob, frame)
+
+
+def test_turning_a_dot_frame_after_frame_never_walks_it_away():
+    dot = facing_camera(Dot([1, -2, 0.5], radius=0.2))
+    flat = dot.get_points().copy()
+    turn_round_and_back(dot)
+    assert np.allclose(dot.get_points(), flat, atol=1e-4)
+
+
+@pytest.mark.render
+def test_turning_a_label_frame_after_frame_never_walks_it_away():
+    for label in labels_3d()[1]:
+        flat = label.get_all_points().copy()
+        turn_round_and_back(label)
+        assert np.allclose(label.get_all_points(), flat, atol=1e-4)
+
+
+def labels_3d():
+    axes = ThreeDAxes(x_range=[-3, 3, 1], y_range=[-2, 2, 1], z_range=[-1, 2, 1])
+    before = len(axes.submobjects)
+    with_axis_labels(axes, x_label="x", y_label="y", z_label=R"\zeta")
+    return axes, axes.submobjects[before:]
+
+
+@pytest.mark.render
+def test_3d_axis_labels_sit_just_past_the_ends_of_their_axes():
+    axes, labels = labels_3d()
+    assert len(labels) == 3
+    for label, axis in zip(labels, axes.get_axes()):
+        end = axis.n2p(axis.x_max)
+        along = unit(end - axis.n2p(axis.x_min))
+        offset = label.get_center() - end
+        # Out along the axis, far enough to clear its end however it is turned
+        assert np.linalg.norm(offset - np.dot(offset, along) * along) == pytest.approx(0, abs=TOL)
+        assert label.get_all_points().mean(axis=0) == pytest.approx(label.get_center(), abs=0.05)
+        assert np.dot(offset, along) >= max(label.get_width(), label.get_height()) / 2 + 0.2
+        assert label.has_updaters()
+    assert len(with_axis_labels(ThreeDAxes(), z_label="z").submobjects) == len(ThreeDAxes().submobjects) + 1
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("orientation", ORIENTATIONS)
+def test_3d_axis_labels_face_the_camera_where_they_are(orientation):
+    axes, labels = labels_3d()
+    frame = CameraFrame()
+    frame.reorient(*orientation)
+    right, up, out = camera_axes(frame)
+    for label in labels:
+        centre, width, height = label.get_all_points().mean(axis=0), label.get_width(), label.get_height()
+        face_camera(label, frame)
+        offsets = label.get_all_points() - centre
+        # Turned where it is, so that turning it again and again never moves it
+        assert np.allclose(label.get_all_points().mean(axis=0), centre, atol=1e-5)
+        # Flat to the camera, reading left to right and upright as it looks
+        assert np.abs(offsets @ out).max() == pytest.approx(0, abs=1e-4)
+        assert np.ptp(offsets @ right) == pytest.approx(width, abs=1e-3)
+        assert np.ptp(offsets @ up) == pytest.approx(height, abs=1e-3)
 
 
 # Graphs

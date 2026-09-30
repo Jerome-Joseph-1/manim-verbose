@@ -34,6 +34,8 @@ OBJECT_TEMPLATES: dict[str, dict[str, Any]] = {
     "vector": {"type": "vector", "tip": [2, 1]},
     "line": {"type": "line", "start": [-2, 0], "end": [2, 0]},
     "polygon": {"type": "polygon", "points": [[-1, -1], [1, -1], [0, 1]]},
+    "angle": {"type": "angle", "points": [[2, 0], [0, 0], [1, 1.5]]},
+    "arc": {"type": "arc", "radius": 1, "start_angle": 0, "end_angle": 90, "arrow": True},
     "circle": {"type": "circle", "radius": 1},
     "rectangle": {"type": "rectangle", "width": 3, "height": 2},
     "square": {"type": "square", "side": 2},
