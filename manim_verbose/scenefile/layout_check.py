@@ -21,33 +21,39 @@ measured (from Pango's layout, see caption_band), which is all the band's size d
 What an object is, for this: the pieces it draws which no object registered inside it (a
 member of a group, say) draws instead, each of them one of
 
-    text   a letter or symbol of text or a formula (anything under a Text or Tex), as its box
+    text   a letter or symbol, as its box: anything under a Text or Tex (a vector's label,
+           say), and every piece of a text-like object (TEXT_KINDS: a matrix's brackets too)
     line   the outline of anything else: lines, arrows, the edges of shapes, even unstroked
            filled ones, since the edge of a fill is as visible as a line
     fill   the inside of a filled shape (or picture) opaque enough to hide what is beneath it
 
 Pieces hardly visible (opacity under VISIBLE) count for nothing.
 
-The checks, in order (see FRAME_RULE, CAPTION_RULE and COLLISIONS below, and EXEMPTIONS):
+The checks, each problem a warning:
 
-- off the frame: any part of an object beyond the frame's edge by more than FRAME_TOLERANCE
-  (number planes excepted: a grid is meant to run to the edges and past them).
-- under the captions: text of an object in the caption band (its area over MIN_OVERLAP), or
-  lines of it (longer than MIN_CROSSING), while a caption is showing. The band is the dark
-  panel behind the words, or the words themselves when captions have no background.
-  Backgrounds (number planes, axes, number lines) are excepted: captions are meant to sit
-  on them.
+- off the frame: any part of an object past the frame's edge by more than FRAME_TOLERANCE,
+  or all of it outside. FRAME_RULE_SKIPS leaves number planes alone (a grid is meant to run
+  past the edges), and axes and number lines while the camera is zoomed, moved or turned.
+- under the captions: text of an object in the caption band (more than MIN_OVERLAP of it),
+  or lines of it (longer than MIN_CROSSING), while a caption is showing. The band is the
+  dark panel behind the words, or the words themselves when captions have no background.
+  CAPTION_RULE_SKIPS leaves coordinate systems alone: captions are meant to sit on them.
 - collisions: see COLLISIONS. Words and formulas are what a collision spoils, so every
-  collision involves text: text on text, a line through text, a fill drawn over text. Lines
+  collision involves text: text on text, a fill drawn over text, a line through text. Lines
   crossing lines and shapes meeting shapes are what geometry is made of, and are left alone,
-  as is text on a panel drawn beneath it.
+  as is text on a panel drawn beneath it. EXEMPTIONS lists the pairs let off, and which of
+  these each lets them off.
+
+A turned 3D camera is handled by projecting, not by skipping: every point goes through the
+camera's projection, so boxes are where things land on the screen, while objects fixed in
+the frame (captions, and `fixed: true`) stay where they are.
 
 A problem which lasts for several steps in a row is reported once, naming the first and last
 of them; one which goes away and comes back is reported again. A collision is reported on
 whichever of the two objects arrived or moved last, since that is most likely the one to
 move. A problem's loc is the object (its `carry` entry for one carried from the scene
 before), or the object's `place` when the object is where its placement put it: no step has
-moved it, and the camera hasn't moved.
+moved it, and (for the frame and the captions) the camera hasn't moved.
 """
 from __future__ import annotations
 
@@ -58,7 +64,8 @@ import logging
 import math
 import os
 import re
-from contextlib import contextmanager
+import sys
+from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -97,8 +104,9 @@ COVER_STEP = 0.04
 # Coordinate systems, which everything else is drawn on
 BACKGROUND_KINDS = frozenset({"number_plane", "axes", "axes_3d", "number_line"})
 # Kinds of object all of whose pieces are text: a matrix's brackets are as much a part of
-# the formula as its entries. (Pieces under a Text or Tex are text in any object.)
-TEXT_KINDS = frozenset({"text", "tex", "title", "quote", "bullets", "matrix"})
+# the formula as its entries. (Pieces under a Text or Tex are text in any object; a title's
+# underline is not, and is a line.)
+TEXT_KINDS = frozenset({"text", "tex", "quote", "bullets", "matrix"})
 # When the frame check leaves a kind alone: a grid is made to run past the frame's edges, and
 # once the camera has zoomed, moved or turned, so are axes and number lines. Anything else
 # is checked whatever the camera does.
@@ -319,11 +327,9 @@ def _next_to_of(step: StepBase) -> str | None:
     return None
 
 
-# Changing any of these moves an object off where its placement put it
-_MOVING_CHANGES = frozenset({
-    "place", "scale", "rotate", "tip", "tail", "start", "end", "point", "points", "center",
-    "radius", "width", "height", "side", "font_size", "text", "tex", "entries", "items",
-})
+# Changing any of these moves an object off where its placement put it. (A change of words
+# or size leaves it placed as before, so its placement is still the thing to fix.)
+_MOVING_CHANGES = frozenset({"place", "scale", "rotate", "tip", "tail", "start", "end", "point", "points", "center"})
 
 
 def _moves_things(step: StepBase) -> bool:
@@ -666,31 +672,30 @@ def caption_band(text: str, style, frame_width: float) -> Band | None:
         outer = sign * FRAME_HEIGHT / 2
         inner = outer - sign * band_height
         half = (frame_width + 0.2) / 2
-        return Band((-half, min(outer, inner), half, max(outer, inner)), style.edge)
+        return Band((-half, float(min(outer, inner)), half, float(max(outer, inner))), style.edge)
     centre = sign * (FRAME_HEIGHT / 2 - 0.35 - height / 2)
     pad = 0.1
-    return Band((-width / 2 - pad, centre - height / 2 - pad, width / 2 + pad, centre + height / 2 + pad), style.edge)
-
-
-_word_sizes: dict[tuple, tuple[float, float]] = {}
+    box = (-width / 2 - pad, centre - height / 2 - pad, width / 2 + pad, centre + height / 2 + pad)
+    return Band(tuple(float(v) for v in box), style.edge)
 
 
 def caption_words_size(text: str, font_size: float, line_width: float) -> tuple[float, float]:
     """
     Width and height of Text(text, font_size, alignment="CENTER", line_width) in manim units,
-    as manim would build it, without building it: Pango lays the text out as an SVG (which
-    manim caches on disk), and the extent of its glyphs is read from that, each glyph's
-    outline measured once.
+    as manim would build it with the font it is set to use, without building it: Pango lays
+    the text out as an SVG (which manim caches on disk), and the extent of its glyphs is read
+    from that, each glyph's outline measured once.
     """
     from manimlib.config import manim_config
-    key = (text, float(font_size), float(line_width), manim_config.text.font)
-    if key not in _word_sizes:
-        from manimlib.mobject.svg.text_mobject import get_text_mob_scale_factor
-        svg = _caption_svg(text, font_size, line_width)
-        box = _svg_extent(svg)
-        scale = get_text_mob_scale_factor()
-        _word_sizes[key] = ((box[2] - box[0]) * scale, (box[3] - box[1]) * scale)
-    return _word_sizes[key]
+    return _words_size(text, float(font_size), float(line_width), manim_config.text.font)
+
+
+@lru_cache(maxsize=4096)
+def _words_size(text: str, font_size: float, line_width: float, font: str) -> tuple[float, float]:
+    from manimlib.mobject.svg.text_mobject import get_text_mob_scale_factor
+    box = _svg_extent(_caption_svg(text, font_size, line_width))
+    scale = get_text_mob_scale_factor()
+    return float((box[2] - box[0]) * scale), float((box[3] - box[1]) * scale)
 
 
 def _caption_svg(text: str, font_size: float, line_width: float) -> str:
@@ -1024,9 +1029,11 @@ def check_document_layout(doc: Document, problems: Iterable[Problem], base_dir: 
     if None in broken:
         return []
     found: list[Problem] = []
-    for scene in doc.scenes:
-        if scene.id not in broken:
-            found.extend(check_layout(doc, scene.id, base_dir))
+    # LaTeX's progress is printed as formulas are first typeset; stdout is kept for results
+    with redirect_stdout(sys.stderr):
+        for scene in doc.scenes:
+            if scene.id not in broken:
+                found.extend(check_layout(doc, scene.id, base_dir))
     return found
 
 

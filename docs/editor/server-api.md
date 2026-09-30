@@ -127,6 +127,56 @@ stills. Clips go ahead of exports waiting to start, and never wait for stills.
 for the document as saved; `revision` says which saved revision it describes. `scene_id` is
 required.
 
+## Layout
+
+`POST /api/layout` with `{ "document": {...}, "scene_id": "intro", "revision": 7 }` → `200`
+```json
+{
+  "problems": [
+    { "message": "After step 12 ('intro_12'), 'label' runs off the right edge of the frame",
+      "severity": "warning", "loc": ["scenes", 0, "objects", 4, "place"],
+      "path": "scenes[0].objects[4].place", "scene_id": "intro", "item_id": "label" }
+  ],
+  "revision": 7
+}
+```
+Layout mistakes in one scene, found by building it without drawing it and looking at it
+before its first step and after each top level step, through the camera as it stands then.
+`revision` is optional: when the request has one (a whole number), the answer echoes it, so
+the editor can tell which version of the document an answer is about. Every problem is a
+warning about one object:
+
+- off the frame: part of it past the frame's edge by more than 0.05 units, or all of it
+  outside (`'x' runs off the top and right edges of the frame`, `'x' is entirely off the
+  frame`). Number planes are left alone, and axes and number lines while the camera is
+  zoomed, moved or turned; everything else is checked wherever the camera is.
+- under the captions: text or lines of it in the caption band while a caption shows
+  (`'x' is under the caption at the bottom of the frame`). Coordinate systems are left alone.
+- collisions, which always involve text: text on text (`'a' and 'b' overlap`), a fill drawn
+  over text (`'box' covers 'label'`), a line or the edge of a shape through text
+  (`'v' crosses 'label'`). Shapes meeting shapes aren't collisions, nor is text on a panel
+  drawn beneath it. Never reported: anything against a number plane, axes or number line; a
+  group against what it holds; a box or brace against its target; what a transform turns
+  into against what it started from; objects given different `z` where the lower is filled;
+  and lines of a shape touching an object placed `next_to` it.
+
+A problem lasting several steps is reported once, as `After steps 12 to 15 ('intro_12' to
+'intro_15'), ...` (steps counted from 1, as the editor lists them; `At the start of the
+scene` and `From the start of the scene through step 3 (...)` before the first). A collision
+is reported on whichever of the two objects arrived or moved last. `loc` is the object
+(`["scenes", i, "objects", j]`), or its `place` when that is what put it there (no step has
+moved it, and for the frame and captions the camera hasn't either); for an object carried
+from the scene before, its entry in `carry` (`["scenes", i, "carry", k]`).
+
+As for stills: errors in the scene (or in no scene) refuse the request with `422` and the
+document's problems, while errors in other scenes don't stop it; a scene which can't be built
+(a formula LaTeX refuses, say) is `422` with the problem on the field at fault. Checks run in
+a worker process of their own, one at a time, so they never wait on stills or exports, nor
+those on them. Answers are cached by the scene's content (and, for a scene with `carry`, the
+scenes before it), across restarts of the server too; a request for a check already running
+shares its answer. The same checks run from the command line with
+`manimgl-scene validate --layout lesson.yaml`.
+
 ## Export
 
 `POST /api/export` with `{ "document": {...}, "quality": "hd" }` → `202 { "job_id": "…" }`
@@ -192,6 +242,7 @@ wrong methods `405`, both with problems.
 | Still width | 64 to 3840 pixels | `422`, `loc: ["width"]` |
 | Time to draw a still | 60 s | `422`, a problem on the scene |
 | Time to render a clip | 5 min | `422`, a problem on the scene |
+| Time to check a scene's layout | 2 min | `422`, a problem on the scene |
 | Time to render an export | 4 h | the job fails |
 | Exports waiting or running | 10 | `429` |
 

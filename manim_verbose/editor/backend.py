@@ -49,6 +49,9 @@ class Backend(Protocol):
 
     def code(self, doc: Document, scene_ids: list[str] | None, base_dir: Path) -> str: ...
 
+    def layout(self, doc: Document, scene_id: str, base_dir: Path) -> Sequence[Any]:
+        """Layout problems (Problems, or problem dicts) in one scene. Runs in a worker process."""
+
 
 class RenderBackend:
     """The real renderer: scenefile/render.py for pictures and timings, codegen.py for code."""
@@ -100,6 +103,16 @@ class RenderBackend:
     def code(self, doc, scene_ids, base_dir):
         from manim_verbose.scenefile.codegen import document_to_python
         return document_to_python(doc, base_dir=base_dir, scene_ids=scene_ids)
+
+    def layout(self, doc, scene_id, base_dir):
+        """Layout warnings for one scene (scenefile/layout_check.py); a RenderError if it can't be built."""
+        from manim_verbose.scenefile.layout_check import check_layout
+        from manim_verbose.scenefile.render import RenderError
+        problems = check_layout(doc, scene_id, base_dir=base_dir)
+        errors = [p for p in problems if p.severity == "error"]
+        if errors:
+            raise RenderError(errors)
+        return problems
 
 
 # Run in worker processes
