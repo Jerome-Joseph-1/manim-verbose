@@ -146,7 +146,8 @@ class SafeFunction:
             raise TypeError(f"{self!r} takes {len(self.variables)} input(s), not {len(args)}")
         if any(getattr(a, "ndim", 0) > 0 for a in args):
             import numpy as np
-            return np.vectorize(self._scalar, otypes=[float])(*args)
+            with np.errstate(invalid="ignore"):
+                return np.vectorize(self._scalar, otypes=[float])(*args)
         return self._scalar(*args)
 
     def _scalar(self, *args: Any) -> float:

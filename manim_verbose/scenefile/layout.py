@@ -231,14 +231,16 @@ def with_brace_label(brace: Mobject, label: Mobject, buff: float = 0.15) -> VGro
 
 def with_round_brackets(matrix: VMobject) -> VMobject:
     """A Matrix with its square brackets swapped for round ones of the same size."""
-    rows = matrix.get_rows()
-    parens = Tex(R"\left(\begin{array}{c}" + len(rows) * R"\quad \\" + R"\end{array}\right)")
+    # A group made afresh, since Matrix.rows sits outside the matrix's family and keeps the
+    # bounding box it had before the matrix was centred
+    entries = VGroup(*matrix.elements)
+    parens = Tex(R"\left(\begin{array}{c}" + len(matrix.get_rows()) * R"\quad \\" + R"\end{array}\right)")
     half = len(parens) // 2
     new = VGroup(VGroup(*parens[:half]), VGroup(*parens[half:]))
     for bracket, old, side in zip(new, matrix.brackets, (LEFT, RIGHT)):
-        gap = abs(old.get_edge_center(-side)[0] - rows.get_edge_center(side)[0])
+        gap = abs(old.get_edge_center(-side)[0] - entries.get_edge_center(side)[0])
         bracket.set_height(old.get_height())
-        bracket.next_to(rows, side, buff=gap)
+        bracket.next_to(entries, side, buff=gap)
         bracket.match_style(old)
     matrix.remove(*matrix.brackets)
     matrix.add(*new)
