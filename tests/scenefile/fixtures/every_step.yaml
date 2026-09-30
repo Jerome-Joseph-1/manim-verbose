@@ -1,0 +1,40 @@
+version: 1
+title: Every kind of step
+settings:
+  captions: {font_size: 28}
+scenes:
+  - id: basics
+    title: Showing, moving and changing
+    objects:
+      - {id: title, type: text, text: Every step, place: top}
+      - {id: eq, type: tex, tex: "a^2 + b^2 = c^2", colors: {"c^2": YELLOW}}
+      - {id: eq2, type: tex, tex: "c^2 = a^2 + b^2", place: {at: [0, -1.5]}}
+      - {id: ring, type: circle, radius: 1, color: BLUE, place: {at: [-4, 0]}}
+      - {id: box, type: square, side: 1.5, color: GREEN, fill: GREEN, place: {at: [4, 0]}}
+      - {id: pair, type: group, members: [ring, box]}
+      - {id: dot, type: dot, point: [0, 2], color: RED, shown: true}
+    steps:
+      - {id: s_show, do: show, target: title, caption: "Showing things"}
+      - {id: s_show_many, do: show, target: [ring, box], style: draw, lag: 0.5}
+      - {id: s_add, do: add, target: eq}
+      - {id: s_highlight, do: highlight, target: eq, part: "c^2", style: indicate}
+      - {id: s_recolor, do: highlight, target: eq, part: "a^2", style: recolor, color: RED}
+      - {id: s_move_by, do: move, target: pair, by: [0, -1]}
+      - {id: s_move_to, do: move, target: title, to: bottom_left}
+      - {id: s_change, do: change, target: ring, set: {color: ORANGE, radius: 0.6}, caption: "Changing things"}
+      - {id: s_transform, do: transform, target: eq, into: eq2}
+      - {id: s_wait, do: wait, duration: 0.5}
+      - {id: s_remove, do: remove, target: dot}
+      - {id: s_hide, do: hide, target: title, style: fade_down}
+      - {id: s_clear, do: clear, caption: ""}
+  - id: plane_view
+    objects:
+      - {id: plane, type: number_plane, shown: true}
+      - {id: v, type: vector, on: plane, tip: [1, 2], color: YELLOW}
+      - {id: w, type: vector, on: plane, tip: [2, -1], color: TEAL}
+    steps:
+      - {id: p_together, do: together, lag: 0.5, steps: [{do: show, target: v}, {do: show, target: w, style: fade}], caption: "Two vectors"}
+      - {id: p_matrix, do: apply_matrix, target: [plane, v, w], matrix: [[1, 1], [0, 1]]}
+      - {id: p_camera, do: camera, zoom: 2, focus: v}
+      - {id: p_flash, do: highlight, target: v, style: flash}
+      - {id: p_reset, do: camera, reset: true, run_time: 1}
