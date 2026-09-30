@@ -90,6 +90,10 @@ class StepCode:
     # How several animations of the step are staggered, from 0 (all at once) to 1 (in turn)
     lag: float = 0.0
     duration: float = 0.0
+    # Which step inside a together each line of `before` and `after` came from, as the path
+    # of indices down to it; left empty, every line is the step's own
+    before_from: list[tuple[int, ...]] = field(default_factory=list)
+    after_from: list[tuple[int, ...]] = field(default_factory=list)
 
     def play_line(self) -> str | None:
         """The one play of the step, or a wait where it has nothing to animate but takes time."""
@@ -119,14 +123,25 @@ class StepCode:
         return Anim.call("AnimationGroup", pieces)
 
     def lines(self) -> list[str]:
+        return [line for line, _ in self.lines_from()]
+
+    def lines_from(self) -> list[tuple[str, tuple[int, ...]]]:
+        """The lines, each with the path to the step inside a together it came from, () for the step itself."""
         play = self.play_line()
-        return self.before + ([play] if play else []) + self.after
+        before = zip(self.before, self.before_from or [()] * len(self.before))
+        after = zip(self.after, self.after_from or [()] * len(self.after))
+        return [*before, *([(play, ())] if play else []), *after]
 
 
 # The interface
 
 def step_lines(step: StepBase, ctx: CodegenContext) -> list[str]:
     return step_code(step, ctx).lines()
+
+
+def step_lines_from(step: StepBase, ctx: CodegenContext) -> list[tuple[str, tuple[int, ...]]]:
+    """step_lines, each line with the path to the step inside a together it came from, for codegen's line map."""
+    return step_code(step, ctx).lines_from()
 
 
 def default_run_time(step: StepBase, ctx: CodegenContext) -> float:
@@ -456,9 +471,11 @@ def _together(step: TogetherStep, ctx: CodegenContext) -> StepCode:
         part.duration = _inner_duration(inner, ctx)
     before = [line for part in parts for line in part.before]
     after = [line for part in parts for line in part.after]
+    before_from = [(i, *path) for i, part in enumerate(parts) for path in (part.before_from or [()] * len(part.before))]
+    after_from = [(i, *path) for i, part in enumerate(parts) for path in (part.after_from or [()] * len(part.after))]
     moving = [part for part in parts if part.anims and part.duration > 0]
     duration = step.run_time if step.run_time is not None else _together_time([p.duration for p in parts], step.lag)
-    code = StepCode(before=before, after=after, duration=duration)
+    code = StepCode(before=before, after=after, duration=duration, before_from=before_from, after_from=after_from)
     if not moving:
         return code
     if len(moving) == 1 and step.run_time is None:

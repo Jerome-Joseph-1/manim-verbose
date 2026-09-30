@@ -145,8 +145,13 @@ def cmd_code(args) -> int:
     doc = load_or_report(args.file)
     if doc is None:
         return 1
-    from manim_verbose.scenefile.codegen import document_to_python
-    code = document_to_python(doc, base_dir=args.file.parent.resolve(), scene_ids=args.scene)
+    from manim_verbose.scenefile.codegen import CodegenError, document_to_python
+    try:
+        code = document_to_python(doc, base_dir=args.file.parent.resolve(), scene_ids=args.scene)
+    except CodegenError as err:
+        ref = err.ref
+        report([Problem(err.message, list(ref.loc), "error", ref.scene_id, ref.item_id)], args.file)
+        return 1
     if args.output:
         args.output.write_text(code, encoding="utf-8")
     else:
@@ -186,6 +191,10 @@ def cmd_render(args) -> int:
         print(file=sys.stderr)
         report(err.problems, args.file)
         return 1
+    except KeyboardInterrupt:
+        # The scenes finished so far are kept in the cache, so running it again picks up there
+        print("\nStopped", file=sys.stderr)
+        return 130
     print(f"\nWrote {path}", file=sys.stderr)
     return 0
 

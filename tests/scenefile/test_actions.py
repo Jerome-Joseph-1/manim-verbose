@@ -11,7 +11,7 @@ import pytest
 
 from fake_blocks import blocks_impl, fake_blocks  # noqa: F401  (fixtures)
 from steps_helpers import (
-    STEP_CASES, away_from_edges, case_doc, difference, doc_from, frame_count, image, lossless,  # noqa: F401
+    STEP_CASES, away_from_edges, case_doc, case_params, difference, doc_from, image, lossless,  # noqa: F401
     render_cache, run_scene, video_frames,
 )
 
@@ -21,11 +21,12 @@ from manim_verbose.scenefile.actions import (
 )
 from manim_verbose.scenefile.codegen import CodegenContext
 
-SHOWN = {"t", "eq", "g", "c", "sq"}
+SHOWN = {"t", "u", "g", "c", "sq"}
 
 # What is on screen once each case's last step has run, by the format's definition of it
 ON_SCREEN: dict[str, set[str]] = {
-    "show_auto": {"eq"},
+    "show_auto": {"u"},
+    "show_auto_tex": {"eq"},
     "show_write": {"t"},
     "show_draw": {"c"},
     "show_fade": {"sq"},
@@ -36,31 +37,36 @@ ON_SCREEN: dict[str, set[str]] = {
     "show_many": {"c", "sq", "d", "g"},
     "show_many_lagged": {"c", "sq", "d", "g"},
     "show_group": {"g", "c", "sq"},
-    "hide_auto": SHOWN - {"eq"},
+    "hide_auto": SHOWN - {"u"},
     "hide_fade_down": SHOWN - {"t"},
     "hide_uncreate": SHOWN - {"c", "g"},
     "hide_shrink": SHOWN - {"sq", "g"},
-    "hide_many_lagged": SHOWN - {"t", "eq"},
-    "hide_group": {"t", "eq"},
+    "hide_many_lagged": SHOWN - {"t", "u"},
+    "hide_group": {"t", "u"},
     "add": {"t", "d"},
     "add_held": {"d"},
-    "remove": SHOWN - {"eq"},
+    "remove": SHOWN - {"u"},
     "remove_member": SHOWN - {"c", "g"},
     "clear": set(),
-    "transform_auto_tex": SHOWN - {"eq"} | {"eq2"},
+    "transform_auto_text": SHOWN - {"t"} | {"w"},
+    "transform_auto_tex": {"eq2"},
     "transform_morph": SHOWN - {"c", "g"} | {"d"},
     "transform_match_shapes": SHOWN - {"sq", "g"} | {"d"},
-    "transform_fade": SHOWN - {"t"} | {"eq2"},
-    "transform_keep": SHOWN | {"eq2"},
+    "transform_fade": SHOWN - {"t"} | {"w"},
+    "transform_keep": SHOWN | {"w"},
+    "transform_keep_tex": {"eq", "eq2"},
     "transform_keep_fade": SHOWN | {"d"},
-    "move_to_on_plane": {"plane", "eq"},
+    "move_to_on_plane": {"plane", "u"},
+    "change_tex": {"eq"},
+    "highlight_indicate_tex_part": {"eq"},
+    "highlight_recolor_tex": {"eq"},
     "camera_reset": {"t"},
     "apply_matrix_plane": {"plane", "v"},
     "together": {"t", "c"},
     "together_lagged": {"t", "c", "sq", "g", "d"},
-    "together_run_time": SHOWN - {"eq"},
-    "together_instant": SHOWN - {"eq"} | {"d"},
-    "together_all_instant": SHOWN - {"eq"} | {"d"},
+    "together_run_time": SHOWN - {"u"},
+    "together_instant": SHOWN - {"u"} | {"d"},
+    "together_all_instant": SHOWN - {"u"} | {"d"},
     "together_clear": {"d"},
     "caption": {"t"},
     "caption_on_wait": set(),
@@ -85,11 +91,12 @@ def stray_mobjects(scene) -> list:
     ]
 
 
-@pytest.mark.parametrize("name", sorted(STEP_CASES))
+@pytest.mark.parametrize("name", case_params())
 def test_every_step_leaves_the_screen_as_the_format_says(name, blocks_impl):
     doc = case_doc(name)
     scene = run_scene(doc)
-    assert set(scene.registered_on_screen()) == expected_on_screen(name)
+    present = {obj.id for obj in doc.scenes[0].objects}
+    assert set(scene.registered_on_screen()) == expected_on_screen(name) & present
     assert stray_mobjects(scene) == [], "a step left something on screen which isn't an object of the file"
     timings = render.timeline(doc, "case")
     assert [r.step_id for r in scene.step_records] == [t.step_id for t in timings]
@@ -111,38 +118,38 @@ def test_move_by_moves_by_exactly_that_much(blocks_impl):
 def test_moving_several_by_moves_each(blocks_impl):
     before = run_scene(case_doc("move_by_many"), last_step=0)
     after = run_scene(case_doc("move_by_many"))
-    for obj_id in ("t", "eq"):
+    for obj_id in ("t", "u"):
         assert centre(after, obj_id) == pytest.approx(centre(before, obj_id) + [0, 1])
 
 
 def test_move_to_an_edge_puts_it_against_the_edge_centred_along_it(blocks_impl):
     scene = run_scene(case_doc("move_to_edge"))
-    eq = scene.objects["eq"]
-    assert eq.get_bottom()[1] == pytest.approx(-4 + 0.25, abs=1e-3)
-    assert eq.get_center()[0] == pytest.approx(0, abs=1e-3)
+    u = scene.objects["u"]
+    assert u.get_bottom()[1] == pytest.approx(-4 + 0.25, abs=1e-3)
+    assert u.get_center()[0] == pytest.approx(0, abs=1e-3)
 
 
 def test_move_to_a_point(blocks_impl):
-    assert centre(run_scene(case_doc("move_to_point")), "eq") == pytest.approx([2, 1])
+    assert centre(run_scene(case_doc("move_to_point")), "u") == pytest.approx([2, 1])
 
 
 def test_move_to_a_point_on_a_coordinate_system(blocks_impl):
     scene = run_scene(case_doc("move_to_on_plane"))
-    assert centre(scene, "eq") == pytest.approx(scene.objects["plane"].c2p(2, 1)[:2])
+    assert centre(scene, "u") == pytest.approx(scene.objects["plane"].c2p(2, 1)[:2])
 
 
 def test_move_next_to_another(blocks_impl):
     scene = run_scene(case_doc("move_to_next_to"))
-    assert scene.objects["eq"].get_top()[1] == pytest.approx(scene.objects["t"].get_bottom()[1] - 0.5, abs=1e-3)
+    assert scene.objects["u"].get_top()[1] == pytest.approx(scene.objects["t"].get_bottom()[1] - 0.5, abs=1e-3)
 
 
 def test_moving_several_to_a_place_moves_them_as_one(blocks_impl):
     before = run_scene(case_doc("move_to_many"), last_step=0)
     after = run_scene(case_doc("move_to_many"))
-    gap_before = centre(before, "eq") - centre(before, "t")
-    assert centre(after, "eq") - centre(after, "t") == pytest.approx(gap_before)
-    right = max(after.objects[i].get_right()[0] for i in ("t", "eq"))
-    bottom = min(after.objects[i].get_bottom()[1] for i in ("t", "eq"))
+    gap_before = centre(before, "u") - centre(before, "t")
+    assert centre(after, "u") - centre(after, "t") == pytest.approx(gap_before)
+    right = max(after.objects[i].get_right()[0] for i in ("t", "u"))
+    bottom = min(after.objects[i].get_bottom()[1] for i in ("t", "u"))
     assert right == pytest.approx(after.frame.get_width() / 2 - 0.25, abs=1e-3)
     assert bottom == pytest.approx(-4 + 0.25, abs=1e-3)
 
@@ -229,17 +236,24 @@ def test_a_recolor_lasts_and_later_changes_keep_it(blocks_impl):
 
 def test_recolor_whole_and_part(blocks_impl):
     scene = run_scene(case_doc("highlight_recolor"))
-    assert scene.objects["eq"]["a^2"].get_fill_color().upper() == "#FF8800"
+    assert scene.objects["t"]["there"].get_fill_color().upper() == "#FF8800"
+    assert scene.objects["t"]["Hello"].get_fill_color().upper() == "#FFFFFF"
     scene = run_scene(case_doc("highlight_recolor_whole"))
-    assert scene.objects["t"].get_fill_color().upper() == "#FFFF00"
+    assert scene.objects["u"].get_fill_color().upper() == "#FFFF00"
 
 
-@pytest.mark.parametrize("name", ["highlight_indicate", "highlight_indicate_part", "highlight_flash", "highlight_box",
-                                  "highlight_underline", "highlight_wiggle"])
+@pytest.mark.render
+def test_recolor_part_of_a_formula(blocks_impl):
+    scene = run_scene(case_doc("highlight_recolor_tex"))
+    assert scene.objects["eq"]["a^2"].get_fill_color().upper() == "#FFFF00"
+
+
+@pytest.mark.parametrize("name", case_params(["highlight_indicate", "highlight_indicate_part", "highlight_indicate_tex_part",
+                                              "highlight_flash", "highlight_box", "highlight_underline", "highlight_wiggle"]))
 def test_momentary_highlights_leave_the_object_as_it_was(name, blocks_impl):
     before = run_scene(case_doc(name), last_step=0)
     after = run_scene(case_doc(name))
-    for obj_id in SHOWN:
+    for obj_id in before.registered_on_screen():
         a, b = before.objects[obj_id], after.objects[obj_id]
         assert np.allclose(a.get_all_points(), b.get_all_points(), atol=1e-6), obj_id
         assert a.get_color() == b.get_color()
@@ -309,13 +323,47 @@ def test_something_hidden_comes_back_as_it_was(style, blocks_impl):
         assert first.objects[obj_id].get_opacity() == again.objects[obj_id].get_opacity()
 
 
+def test_hiding_what_isnt_shown_leaves_it_whole(blocks_impl):
+    """Found by the random documents below: uncreating a hidden plane emptied it for good."""
+    doc = doc_from("""
+        scenes:
+          - id: s
+            objects: [{id: plane, type: number_plane}, {id: c, type: circle}]
+            steps:
+              - {do: hide, target: [plane, c], style: uncreate}
+              - {do: hide, target: c, style: shrink}
+              - {do: apply_matrix, target: plane, matrix: [[1, 1], [0, 1]]}
+              - {do: show, target: [plane, c]}
+    """)
+    before = run_scene(doc, last_step=-1)
+    after = run_scene(doc)
+    assert after.registered_on_screen() == ["plane", "c"]
+    assert np.allclose(before.objects["c"].get_all_points(), after.objects["c"].get_all_points())
+    assert after.objects["plane"].c2p(1, 1)[:2] == pytest.approx([2, 1])
+
+
+def test_changes_to_what_is_hidden_last(blocks_impl):
+    doc = doc_from("""
+        scenes:
+          - id: s
+            objects: [{id: c, type: circle, place: [1, 0]}]
+            steps:
+              - {do: move, target: c, by: [0, 2]}
+              - {do: change, target: c, set: {radius: 2}}
+              - {do: show, target: c}
+    """)
+    scene = run_scene(doc)
+    assert centre(scene, "c") == pytest.approx([1, 2])
+    assert scene.objects["c"].get_width() == pytest.approx(4)
+
+
 def test_transforming_there_and_back(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
             objects:
-              - {id: a, type: tex, tex: "x + y", shown: true}
-              - {id: b, type: tex, tex: "y + x + z"}
+              - {id: a, type: text, text: "x + y", shown: true}
+              - {id: b, type: text, text: "y + x + z"}
               - {id: c, type: circle}
             steps:
               - {do: transform, target: a, into: b}
@@ -353,20 +401,23 @@ def ctx_for(doc) -> CodegenContext:
     ("hide_shrink", ["self.play(ShrinkToCenter(sq, remover=True), run_time=1)"]),
     ("add", ["self.add(t, d)"]),
     ("add_held", ["self.add(d)", "self.wait(1)"]),
-    ("remove", ["self.remove(eq)"]),
+    ("remove", ["self.remove(u)"]),
     ("clear", ["self.play(FadeOut(self.everything_on_screen()), run_time=1)"]),
+    ("transform_auto_text", ["self.play(TransformMatchingStrings(t, w), run_time=1.5)"]),
     ("transform_auto_tex", ["self.play(TransformMatchingTex(eq, eq2), run_time=1.5)"]),
     ("transform_morph", ["self.play(ReplacementTransform(c, d), run_time=1.5)"]),
-    ("transform_keep", ["self.play(TransformMatchingTex(eq.copy(), eq2), run_time=1.5)"]),
+    ("transform_keep", ["self.play(TransformMatchingStrings(t.copy(), w), run_time=1.5)"]),
+    ("transform_keep_tex", ["self.play(TransformMatchingTex(eq.copy(), eq2), run_time=1.5)"]),
     ("transform_keep_fade", ["self.play(FadeTransform(c.copy(), d), run_time=1.5)"]),
     ("move_by", ["self.play(t.animate.shift([1, -1, 0]), run_time=1)"]),
-    ("move_to_edge", ['self.play(eq.animate.move_to(place(eq.copy(), edge="bottom")), run_time=1)']),
-    ("move_to_on_plane", ["self.play(eq.animate.move_to(place(eq.copy(), at=[2, 1], on=plane)), run_time=1)"]),
-    ("move_to_many", ["moving = Group(t, eq)",
+    ("move_to_edge", ['self.play(u.animate.move_to(place(u.copy(), edge="bottom")), run_time=1)']),
+    ("move_to_on_plane", ["self.play(u.animate.move_to(place(u.copy(), at=[2, 1], on=plane)), run_time=1)"]),
+    ("move_to_many", ["moving = Group(t, u)",
                       'self.play(moving.animate.move_to(place(moving.copy(), edge="bottom_right")), run_time=1)']),
-    ("highlight_box", ['self.play(ShowCreationThenFadeAround(eq["b^2"], stroke_color=GREEN), run_time=1.5)']),
+    ("highlight_box", ['self.play(ShowCreationThenFadeAround(t["Hello"], stroke_color=GREEN), run_time=1.5)']),
     ("highlight_underline", ["self.play(ShowCreationThenFadeOut(Underline(t, stroke_color=YELLOW)), run_time=1.5)"]),
-    ("highlight_recolor", ['self.play(eq["a^2"].animate.set_color("#FF8800"), run_time=1)']),
+    ("highlight_recolor", ['self.play(t["there"].animate.set_color("#FF8800"), run_time=1)']),
+    ("highlight_recolor_tex", ['self.play(eq["a^2"].animate.set_color(YELLOW), run_time=1)']),
     ("wait", ["self.wait(0.5)"]),
     ("camera_focus", ["self.play(self.frame.animate.set_height(FRAME_HEIGHT / 1.5).move_to(sq), run_time=2)"]),
     ("camera_orientation_gamma", ["self.play(self.frame.animate.reorient(-30, 70, 10).set_height(FRAME_HEIGHT), run_time=2)"]),
@@ -375,9 +426,9 @@ def ctx_for(doc) -> CodegenContext:
     ("together", ["self.play(AnimationGroup(Write(t, run_time=1.5), ShowCreation(c, run_time=2)), run_time=2)"]),
     ("together_lagged", ["self.play(LaggedStart(Write(t, run_time=1.5), AnimationGroup(ShowCreation(c, run_time=1), "
                          "ShowCreation(sq, run_time=1), run_time=1.5), ShowCreation(d, run_time=1.5), lag_ratio=0.5), run_time=3)"]),
-    ("together_run_time", ["self.play(t.animate.shift([0, -1, 0]), FadeOut(eq), run_time=3)"]),
-    ("together_instant", ["self.add(d)", "self.remove(eq)", "self.play(Indicate(t), run_time=1)"]),
-    ("together_all_instant", ["self.add(d)", "self.remove(eq)"]),
+    ("together_run_time", ["self.play(t.animate.shift([0, -1, 0]), FadeOut(u), run_time=3)"]),
+    ("together_instant", ["self.add(d)", "self.remove(u)", "self.play(Indicate(t), run_time=1)"]),
+    ("together_all_instant", ["self.add(d)", "self.remove(u)"]),
 ])
 def test_step_lines(name, expected, fake_blocks):
     doc = case_doc(name)
@@ -452,3 +503,187 @@ def test_every_step_renders_for_as_long_as_its_timeline_and_ends_on_its_still(na
     worst, mean = difference(reference, last)
     assert away_from_edges(reference, last) == 0, (worst, mean)
     assert mean < 1.0, (worst, mean)
+
+
+# Random documents
+
+from hypothesis import HealthCheck, assume, given, settings, strategies as st  # noqa: E402
+
+WORDS = ["alpha", "beta", "gamma", "delta"]
+COLORS = ["RED", "BLUE", "YELLOW", "#FF8800"]
+MATRICES = [[[1, 1], [0, 1]], [[2, 0], [0, 1]], [[0, -1], [1, 0]], [[1, 0], [0.5, 1]]]
+coord = st.sampled_from([-3, -1.5, 0, 1, 2.5])
+placements = st.one_of(
+    st.sampled_from(["top", "bottom", "left", "right", "top_left", "bottom_right", "center"]),
+    st.lists(coord, min_size=2, max_size=2),
+)
+run_times = st.one_of(st.none(), st.sampled_from([0.25, 0.37, 1, 1.5]))
+captions = st.one_of(st.none(), st.none(), st.sampled_from(["", "Some words", "Other words"]))
+
+
+@st.composite
+def random_documents(draw):
+    """A small valid scene: a few objects of kinds needing no LaTeX, and a few steps of any kind on them."""
+    objects = []
+    for i in range(draw(st.integers(1, 4))):
+        kind = draw(st.sampled_from(["text", "circle", "square", "dot"]))
+        obj = {"id": f"o{i}", "type": kind, "shown": draw(st.booleans())}
+        if kind == "text":
+            obj["text"] = " ".join(draw(st.lists(st.sampled_from(WORDS), min_size=1, max_size=2, unique=True)))
+        if kind == "dot":
+            obj["point"] = [draw(coord), draw(coord)]
+        elif draw(st.booleans()):
+            obj["place"] = draw(placements)
+        if draw(st.booleans()):
+            obj["color"] = draw(st.sampled_from(COLORS))
+        objects.append(obj)
+    leaves = [obj["id"] for obj in objects]
+    if len(leaves) >= 2 and draw(st.booleans()):
+        members = draw(st.lists(st.sampled_from(leaves), min_size=2, max_size=2, unique=True))
+        objects.append({"id": "grp", "type": "group", "members": members,
+                        "arrange": draw(st.sampled_from(["none", "row", "column"]))})
+    if draw(st.booleans()):
+        objects.append({"id": "plane", "type": "number_plane", "shown": draw(st.booleans())})
+        objects.append({"id": "vec", "type": "vector", "on": "plane", "tip": [draw(coord) or 1, draw(coord)]})
+    steps = draw(st.lists(random_step(objects), max_size=6))
+    return {"settings": {"resolution": [256, 144], "fps": 15}, "scenes": [{"id": "s", "objects": objects, "steps": steps}]}
+
+
+def random_step(objects, inside_together: bool = False):
+    by_id = {obj["id"]: obj for obj in objects}
+    ids = list(by_id)
+
+    def leaves(obj_id):
+        obj = by_id[obj_id]
+        return {m for member in obj.get("members", []) for m in leaves(member)} if obj["type"] == "group" else {obj_id}
+
+    @st.composite
+    def step(draw):
+        kinds = ["show", "hide", "add", "remove", "change", "move", "highlight", "camera", "apply_matrix"]
+        if not inside_together:
+            kinds += ["clear", "wait", "together"] + (["transform"] if len(ids) >= 2 else [])
+        kind = draw(st.sampled_from(kinds))
+        some = st.lists(st.sampled_from(ids), min_size=1, max_size=2, unique=True)
+        one = st.sampled_from(ids)
+        out: dict = {"do": kind}
+        if kind == "show":
+            out.update(target=draw(some), style=draw(st.sampled_from(["auto", "fade", "fade_up", "grow", "pop", "draw"])),
+                       lag=draw(st.sampled_from([0, 0.5])))
+        elif kind == "hide":
+            out.update(target=draw(some), style=draw(st.sampled_from(["auto", "fade", "fade_down", "uncreate", "shrink"])))
+        elif kind in ("add", "remove"):
+            out.update(target=draw(some))
+        elif kind == "transform":
+            a, b = draw(st.lists(st.sampled_from(ids), min_size=2, max_size=2, unique=True))
+            assume(not (leaves(a) & leaves(b)))
+            out.update(target=a, into=b, style=draw(st.sampled_from(["auto", "morph", "match", "fade"])),
+                       keep=draw(st.booleans()))
+        elif kind == "change":
+            target = draw(one)
+            obj = by_id[target]
+            options = [{"color": draw(st.sampled_from(COLORS))}]
+            if obj["type"] == "circle":
+                options.append({"radius": draw(st.sampled_from([0.5, 2]))})
+            if obj["type"] == "text":
+                options.append({"text": draw(st.sampled_from(WORDS))})
+            if obj["type"] == "group":
+                options.append({"arrange": draw(st.sampled_from(["row", "column"]))})
+            if obj["type"] == "vector":
+                options.append({"tip": [draw(coord), draw(coord) or 1]})
+            out.update(target=target, set=draw(st.sampled_from(options)))
+        elif kind == "move":
+            if draw(st.booleans()):
+                out.update(target=draw(some), by=[draw(coord), draw(coord)])
+            else:
+                out.update(target=draw(some), to=draw(placements))
+        elif kind == "highlight":
+            target = draw(one)
+            out.update(target=target, style=draw(st.sampled_from(["indicate", "flash", "box", "underline", "wiggle", "recolor"])))
+            if by_id[target]["type"] == "text" and draw(st.booleans()):
+                out["part"] = draw(st.sampled_from(by_id[target]["text"].split()))
+        elif kind == "wait":
+            out["duration"] = draw(st.sampled_from([0.2, 1]))
+        elif kind == "camera":
+            out.update(draw(st.sampled_from([{"zoom": 2}, {"center": [1, 1]}, {"reset": True}, {"zoom": 1.5, "focus": ids[0]},
+                                             {"orientation": [-20, 60]}])))
+        elif kind == "apply_matrix":
+            out.update(target=draw(some), matrix=draw(st.sampled_from(MATRICES)))
+        elif kind == "together":
+            # Each step inside on different objects, so that none of them undoes another
+            inner = draw(st.lists(random_step(objects, inside_together=True), min_size=2, max_size=3))
+            touched = [set(leaves(t)) for s in inner for t in ([s["target"]] if isinstance(s.get("target"), str) else s.get("target", []))]
+            assume(sum(len(t) for t in touched) == len(set().union(*touched)) if touched else True)
+            out.update(steps=inner, lag=draw(st.sampled_from([0, 0.5])))
+        if kind not in ("wait", "together", "add", "remove") and not inside_together:
+            run_time = draw(run_times)
+            if run_time is not None:
+                out["run_time"] = run_time
+        caption = draw(captions)
+        if caption is not None and not inside_together:
+            out["caption"] = caption
+        return out
+
+    return step()
+
+
+def expected_after(doc) -> set[str]:
+    """What the format says is on screen after every step, worked out without manim."""
+    scene = doc.scenes[0]
+    by_id = {obj.id: obj for obj in scene.objects}
+
+    def leaves(obj_id):
+        obj = by_id[obj_id]
+        return {m for member in obj.members for m in leaves(member)} if obj.type == "group" else {obj_id}
+
+    def targets(step):
+        return [step.target] if isinstance(step.target, str) else list(step.target)
+
+    def apply(step, shown):
+        if step.do in ("show", "add"):
+            return shown | {leaf for t in targets(step) for leaf in leaves(t)}
+        if step.do in ("hide", "remove"):
+            return shown - {leaf for t in targets(step) for leaf in leaves(t)}
+        if step.do == "clear":
+            return set()
+        if step.do == "transform":
+            return (shown if step.keep else shown - leaves(step.target)) | leaves(step.into)
+        if step.do == "together":
+            for inner in step.steps:
+                shown = apply(inner, shown)
+        return shown
+
+    shown = {leaf for obj in scene.objects if obj.shown for leaf in leaves(obj.id)}
+    for step in scene.steps:
+        shown = apply(step, shown)
+    return {obj_id for obj_id in by_id if leaves(obj_id) <= shown and leaves(obj_id)}
+
+
+@settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture,
+                                                                   HealthCheck.too_slow, HealthCheck.filter_too_much])
+@given(data=random_documents())
+def test_random_documents_compile_run_and_leave_what_the_format_says(data, fake_blocks):
+    from manim_verbose.scenefile.codegen import document_to_python
+    from manim_verbose.scenefile.validate import has_errors, validate_data, assign_step_ids
+    doc, problems = validate_data(data)
+    assume(doc is not None and not has_errors(problems))
+    assign_step_ids(doc)
+    compile(document_to_python(doc), "random.py", "exec")
+    scene = run_scene(doc)
+    assert set(scene.registered_on_screen()) == expected_after(doc)
+    assert stray_mobjects(scene) == []
+    timings = render.timeline(doc, "s")
+    assert [r.duration for r in scene.step_records] == pytest.approx([t.duration for t in timings])
+
+
+@settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture,
+                                                                   HealthCheck.too_slow, HealthCheck.filter_too_much])
+@given(data=random_documents())
+def test_random_documents_come_to_as_many_frames_as_their_timeline(data, fake_blocks):
+    from manim_verbose.scenefile.runtime import RenderPlan, _frame_at
+    from manim_verbose.scenefile.validate import has_errors, validate_data, assign_step_ids
+    doc, problems = validate_data(data)
+    assume(doc is not None and not has_errors(problems))
+    assign_step_ids(doc)
+    job = render.prepare_job(doc, "s")
+    scene = render.run_job(job, RenderPlan(headless=True), 256, 144, 15)
+    assert scene.frames_emitted == _frame_at(render.scene_duration(doc, "s"), 15)

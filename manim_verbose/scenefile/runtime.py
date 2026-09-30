@@ -37,10 +37,13 @@ import_manim()
 
 from manimlib.animation.animation import Animation
 from manimlib.animation.composition import AnimationGroup
-from manimlib.animation.fading import FadeIn, FadeOut
-from manimlib.animation.growing import GrowArrow, GrowFromCenter
+from manimlib.animation.creation import DrawBorderThenFill, ShowCreation, ShowIncreasingSubsets
+from manimlib.animation.fading import FadeIn, FadeOut, FadeTransform, VFadeIn
+from manimlib.animation.growing import GrowArrow, GrowFromCenter, GrowFromPoint
 from manimlib.animation.indication import Flash
-from manimlib.animation.transform import ReplacementTransform
+from manimlib.animation.transform import ReplacementTransform, Transform
+from manimlib.animation.transform_matching_parts import TransformMatchingParts
+from manimlib.camera.camera import Camera
 from manimlib.constants import BLACK, DOWN, FRAME_HEIGHT, FRAME_WIDTH, OUT, UP, WHITE, YELLOW
 from manimlib.mobject.geometry import Arrow, Line, Rectangle
 from manimlib.mobject.mobject import Group, Mobject
@@ -79,6 +82,9 @@ class RenderPlan:
     last_step: int | None = None
     # Skip every animation: only the state where the scene ends matters, as for a still
     still: bool = False
+    # Draw nothing at all, with a camera which needs no graphics device, for runs which only
+    # want to know what the steps leave where, or how many frames they would come to
+    headless: bool = False
     # Called as frames are written, with the nominal seconds of the scene done so far and
     # the index of the step being played
     progress: Callable[[float, int], None] | None = None
@@ -125,7 +131,17 @@ class DocScene(Scene):
         self.plan = plan or RenderPlan()
         if self.plan.still or self.plan.first_step > 0:
             kwargs["skip_animations"] = True
-        super().__init__(**kwargs)
+        if self.plan.headless:
+            # Scene.__init__ makes its camera from the Camera named in its own module
+            import manimlib.scene.scene as scene_module
+            real = scene_module.Camera
+            scene_module.Camera = HeadlessCamera
+            try:
+                super().__init__(**kwargs)
+            finally:
+                scene_module.Camera = real
+        else:
+            super().__init__(**kwargs)
         self.objects: dict[str, Mobject] = {}
         self.step_records: list[StepRecord] = []
         # Nominal seconds since the scene began, advanced by exactly each play's run_time
@@ -271,12 +287,23 @@ class DocScene(Scene):
     # Keeping the scene tidy
 
     def add(self, *new_mobjects: Mobject):
+        # The camera's frame stays where it is, first and on its own, even when an animation
+        # moving it is grouped with others (as a together groups them) and the group added
+        new_mobjects = tuple(piece for mob in new_mobjects for piece in self._without_frame(mob))
         held = {
             sm for mob in new_mobjects for sm in mob.get_family()[1:]
-        } - set(new_mobjects)
+        } - set(new_mobjects) - {self.frame}
         if held:
             self.mobjects, _ = recursive_mobject_remove(self.mobjects, held)
         return super().add(*new_mobjects)
+
+    def _without_frame(self, mobject: Mobject) -> list[Mobject]:
+        """A mobject, or where it holds the camera's frame, what it holds besides."""
+        if mobject is self.frame:
+            return [] if self.frame in self.mobjects else [mobject]
+        if self.frame not in mobject.get_family():
+            return [mobject]
+        return [piece for sub in mobject.submobjects for piece in self._without_frame(sub)]
 
     def play(self, *proto_animations, run_time: float | None = None, **kwargs):
         if not proto_animations:
@@ -296,20 +323,43 @@ class DocScene(Scene):
             return self.play(*self._caption_transition(self._next_caption, duration), run_time=duration)
         return super().wait(duration, *args, **kwargs)
 
+    def begin_animations(self, animations) -> None:
+        """
+        As Scene's, except that only animations which bring something on screen (writing,
+        drawing, fading or growing it in, or transforming into it) leave it there. Manim adds
+        whatever is animated to the scene, so without this a change, move or highlight of an
+        object which isn't on screen would show it, when all it should do is update it for
+        whenever it is shown.
+        """
+        before = set(self.get_mobject_family_members())
+        # Taken before the animations begin, since beginning a transform can give an object
+        # new pieces (to match what it is turning into), which are on screen if it is
+        hidden = {mob for obj in self.objects.values() for mob in obj.get_family()} - before
+        super().begin_animations(animations)
+        introduced = set(extract_mobject_family_members(_introduced_by(animations)))
+        stray = [
+            mob for mob in self.get_mobject_family_members()
+            if mob in hidden and mob not in introduced and mob.has_points()
+        ]
+        if stray:
+            self.remove(*stray)
+
     @staticmethod
     def _as_animation(anim) -> Animation:
         from manimlib.animation.animation import prepare_animation
         return prepare_animation(anim)
 
     def _snapshot_animated(self, animations: list[Animation]) -> None:
-        """Copies of registered objects about to be animated, taken before anything moves them."""
-        animated = set(extract_mobject_family_members([anim.mobject for anim in animations]))
-        in_scene = set(self.get_mobject_family_members())
+        """
+        Copies of the registered objects these animations take off screen, taken before they
+        start on them. Only those: an object changed, moved or recolored while it is hidden
+        is meant to keep what was done to it.
+        """
+        departing = set(extract_mobject_family_members(_taken_away_by(animations)))
+        if not departing:
+            return
         for obj_id, mob in self.objects.items():
-            if obj_id in self._snapshots:
-                continue
-            family = mob.get_family()
-            if any(m in animated for m in family) and self.is_on_screen(mob, in_scene):
+            if obj_id not in self._snapshots and any(m in departing for m in mob.get_family()):
                 self._snapshots[obj_id] = mob.copy()
 
     def _restore_departed(self) -> None:
@@ -431,6 +481,66 @@ class DocScene(Scene):
             self.file_writer.write_frame()
             self.frames_emitted += 1
         super().tear_down()
+
+
+class HeadlessCamera(Camera):
+    """
+    A camera which draws nothing and so needs no graphics device: everything about where the
+    frame is and how big a picture of it would be, and no pictures.
+    """
+
+    def init_renderer(self) -> None:
+        self.gpu = None
+        self.renderer = None
+
+    def init_target(self) -> None:
+        self.pixel_shape = tuple(self.default_pixel_shape)
+
+    def capture(self, *mobjects: Mobject) -> None:
+        pass
+
+    def refresh_uniforms(self) -> None:
+        pass
+
+    def get_image(self):
+        from PIL import Image
+        return Image.new("RGBA", self.pixel_shape)
+
+
+def _taken_away_by(animations) -> list[Mobject]:
+    """What these animations take off screen: whatever they remove, and whatever they turn into something else."""
+    found: list[Mobject] = []
+    for anim in animations:
+        if isinstance(anim, TransformMatchingParts):
+            found.append(anim.source)
+        elif isinstance(anim, AnimationGroup):
+            found += _taken_away_by(anim.animations)
+            if anim.is_remover():
+                found.append(anim.mobject)
+        elif isinstance(anim, FadeTransform):
+            found.append(anim.mobject[0])
+        elif anim.is_remover() or (isinstance(anim, Transform) and anim.replace_mobject_with_target_in_scene):
+            found.append(anim.mobject)
+    return found
+
+
+def _introduced_by(animations) -> list[Mobject]:
+    """What these animations bring on screen, as opposed to whatever else they move about."""
+    found: list[Mobject] = []
+    for anim in animations:
+        if isinstance(anim, TransformMatchingParts):
+            found.append(anim.target)
+        elif isinstance(anim, AnimationGroup):
+            found += _introduced_by(anim.animations)
+        elif isinstance(anim, FadeTransform):
+            found.append(anim.to_add_on_completion)
+        elif isinstance(anim, Transform) and anim.replace_mobject_with_target_in_scene:
+            found.append(anim.target_mobject)
+        elif anim.is_remover():
+            continue
+        elif isinstance(anim, (DrawBorderThenFill, ShowCreation, FadeIn, VFadeIn, GrowFromPoint, ShowIncreasingSubsets)):
+            found.append(anim.mobject)
+    return found
 
 
 def _frame_at(seconds: float, fps: float) -> int:

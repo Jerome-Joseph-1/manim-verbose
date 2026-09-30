@@ -211,7 +211,7 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
         ref = SourceRef(scene.id, scene_loc + ("steps", step_index), step.id, "step")
         writer.ref = ref
         try:
-            lines = actions.step_lines(step, ctx)
+            lines = actions.step_lines_from(step, ctx)
         except Exception as err:
             raise CodegenError(_describe(err), ref) from err
         caption = step_caption(step)
@@ -219,12 +219,22 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
         if caption is not None:
             opening += f", caption={py_str(caption)}"
         writer.line(opening + "):")
-        for line in lines or ["pass"]:
+        for line, path in lines or [("pass", ())]:
+            writer.ref = _inner_ref(step, ref, path)
             writer.line("            " + line)
 
     if len(writer.lines) == body_start:
         writer.ref = scene_ref
         writer.line("        pass")
+
+
+def _inner_ref(step: StepBase, ref: SourceRef, path: tuple[int, ...]) -> SourceRef:
+    """The step inside a together (inside a together...) which a line came from."""
+    loc = ref.loc
+    for index in path:
+        step = step.steps[index]
+        loc = loc + ("steps", index)
+    return SourceRef(ref.scene_id, loc, step.id, "step") if path else ref
 
 
 def step_caption(step: StepBase) -> str | None:

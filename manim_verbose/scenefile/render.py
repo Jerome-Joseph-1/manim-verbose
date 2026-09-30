@@ -527,15 +527,30 @@ def _tracebacks(err: BaseException):
 
 
 def _failing_latex(err: BaseException) -> str | None:
-    """The LaTeX being compiled when this went wrong, if it went wrong compiling LaTeX."""
+    """
+    The LaTeX being worked on when this went wrong, if it went wrong over a formula: either
+    compiling it, or in manim's own reading of it beforehand (for unbalanced braces, say).
+    An empty string where it was a formula but which one can't be told; None otherwise.
+    """
     from manimlib.utils.tex_file_writing import LatexError
     is_latex = any(isinstance(e, LatexError) for e in _chain(err))
+    found = None
     for tb in _tracebacks(err):
         while tb is not None:
             frame = tb.tb_frame
-            if frame.f_code.co_name == "latex_to_svg" and isinstance(frame.f_locals.get("latex"), str):
+            name = frame.f_code.co_name
+            if name == "latex_to_svg" and isinstance(frame.f_locals.get("latex"), str):
                 return frame.f_locals["latex"]
+            if Path(frame.f_code.co_filename).name == "tex_mobject.py":
+                is_latex = True
+                if found is None and isinstance(frame.f_locals.get("tex_string"), str):
+                    found = frame.f_locals["tex_string"]
+            if name == "__init__" and Path(frame.f_code.co_filename).name == "string_mobject.py" and is_latex:
+                if isinstance(frame.f_locals.get("string"), str):
+                    found = frame.f_locals["string"]
             tb = tb.tb_next
+    if found is not None:
+        return found
     return "" if is_latex else None
 
 
@@ -736,9 +751,9 @@ class _Progress:
 def _render_in_workers(pending, width, height, fps, workers, done, durations, tick, cancel) -> None:
     """
     Renders each pending scene in a process of its own, `workers` at a time. Workers are
-    plain subprocesses running this module (see worker_main), each in a process group of its
-    own, so that stopping one stops the ffmpeg it is writing through too, and so that nothing
-    about the caller, such as its main module, has to be importable a second time.
+    plain subprocesses running this module (see worker_main), so that nothing about the
+    caller, such as its main module, has to be importable a second time. They stay in the
+    caller's process group, so that whatever stops the caller that way stops them too.
     """
     scratch = cache_dir() / "tmp" / uuid.uuid4().hex
     scratch.mkdir(parents=True, exist_ok=True)
@@ -802,13 +817,14 @@ class _Worker:
         with open(self.log_path, "wb") as log_file:
             self.process = subprocess.Popen(
                 [sys.executable, "-m", "manim_verbose.scenefile.render"],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log_file,
-                env=env, start_new_session=True,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log_file, env=env,
             )
-        payload = dict(job=job, width=width, height=height, fps=fps,
-                       scratch=str(scratch / f"{final.stem}.mp4"), final=str(final))
-        self.process.stdin.write(pickle.dumps(payload))
-        self.process.stdin.close()
+        payload = pickle.dumps(dict(job=job, width=width, height=height, fps=fps,
+                                    scratch=str(scratch / f"{final.stem}.mp4"), final=str(final)))
+        # The job goes first, its length ahead of it; stdin then stays open for as long as
+        # this process lives, and the worker takes it closing as word to stop
+        self.process.stdin.write(len(payload).to_bytes(8, "big") + payload)
+        self.process.stdin.flush()
         self.reader = threading.Thread(target=self._read, args=(messages,), daemon=True)
         self.reader.start()
 
@@ -825,22 +841,27 @@ class _Worker:
 
     def finish(self) -> None:
         self.process.wait()
+        self._close_stdin()
         self.reader.join(timeout=5)
 
     def stop(self) -> None:
-        """Stops the worker and everything it started, at once."""
-        for sig in (signal.SIGTERM, signal.SIGKILL):
+        """Stops the worker, which stops the ffmpeg it is writing through on its way out."""
+        for stop in (self.process.terminate, self.process.kill):
             if self.process.poll() is not None:
                 break
-            try:
-                os.killpg(self.process.pid, sig)
-            except ProcessLookupError:
-                break
+            stop()
             try:
                 self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 continue
+        self._close_stdin()
         self.reader.join(timeout=5)
+
+    def _close_stdin(self) -> None:
+        try:
+            self.process.stdin.close()
+        except OSError:
+            pass
 
 
 def worker_main() -> int:
@@ -854,18 +875,25 @@ def worker_main() -> int:
     devnull = os.open(os.devnull, os.O_WRONLY)
     os.dup2(devnull, 1)
     sys.stdout = open(os.devnull, "w")
-    payload = pickle.loads(sys.stdin.buffer.read())
+    size = int.from_bytes(_read_exactly(sys.stdin.buffer, 8), "big")
+    payload = pickle.loads(_read_exactly(sys.stdin.buffer, size))
     job: RenderJob = payload["job"]
 
     def say(message: dict) -> None:
         channel.write(json.dumps(message) + "\n")
 
-    def stop(signum, frame):
+    def stop(signum=None, frame=None):
         if _running_scene is not None:
             _abandon_movie(_running_scene)
         os._exit(1)
 
+    def stop_when_orphaned():
+        # stdin closes when the process which started this one is gone, however it went
+        sys.stdin.buffer.read()
+        stop()
+
     signal.signal(signal.SIGTERM, stop)
+    threading.Thread(target=stop_when_orphaned, daemon=True).start()
     last_sent = [0.0]
 
     def progress(seconds: float, step_index: int) -> None:
@@ -886,6 +914,16 @@ def worker_main() -> int:
         traceback.print_exc()
         say({"error": [_problem_data(Problem(f"Rendering scene '{job.scene_id}' failed: {err}", scene_id=job.scene_id))]})
     return 0
+
+
+def _read_exactly(stream, size: int) -> bytes:
+    data = b""
+    while len(data) < size:
+        chunk = stream.read(size - len(data))
+        if not chunk:
+            raise EOFError("the job for this worker was cut short")
+        data += chunk
+    return data
 
 
 def _problem_data(problem: Problem) -> dict[str, Any]:
