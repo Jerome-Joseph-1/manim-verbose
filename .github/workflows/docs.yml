@@ -12,6 +12,10 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     name: build up document and deploy
+    env:
+      # Secrets can't be tested in an `if:` directly. A fork, or a clone without the token,
+      # builds the docs but has nothing to deploy with.
+      HAS_DEPLOY_TOKEN: ${{ secrets.DOC_DEPLOY_TOKEN != '' }}
 
     steps:
     - name: Checkout
@@ -33,7 +37,7 @@ jobs:
         make html
         
     - name: Deploy to GitHub pages
-      if: ${{ github.event_name == 'push' }}
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && env.HAS_DEPLOY_TOKEN == 'true' }}
       uses: JamesIves/github-pages-deploy-action@3.7.1
       with:
         ACCESS_TOKEN: ${{ secrets.DOC_DEPLOY_TOKEN }}
