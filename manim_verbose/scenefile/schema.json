@@ -80,6 +80,146 @@
       "type": "object",
       "x-label": "Add"
     },
+    "AngleObject": {
+      "additionalProperties": false,
+      "description": "The angle at the middle of three points, drawn as an arc between the two lines, or as a\nsmall square when it is a right angle.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "angle",
+          "title": "Type",
+          "type": "string"
+        },
+        "points": {
+          "description": "[a, vertex, b]: the angle at the vertex, from a round to b",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 2,
+            "type": "array",
+            "x-widget": "point"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Points",
+          "type": "array"
+        },
+        "radius": {
+          "default": 0.5,
+          "exclusiveMinimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "right_angle": {
+          "default": false,
+          "description": "Draw the square mark of a right angle rather than an arc",
+          "title": "Right Angle",
+          "type": "boolean"
+        },
+        "other_side": {
+          "default": false,
+          "description": "Mark the angle the other way round, the larger one",
+          "title": "Other Side",
+          "type": "boolean"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "points"
+      ],
+      "title": "AngleObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Angle"
+    },
     "ApplyMatrixStep": {
       "additionalProperties": false,
       "description": "Apply a linear transformation, given as a matrix, to objects such as a number plane and vectors on it.",
@@ -170,6 +310,147 @@
       "title": "ApplyMatrixStep",
       "type": "object",
       "x-label": "Apply matrix"
+    },
+    "ArcObject": {
+      "additionalProperties": false,
+      "description": "Part of a circle, counterclockwise from `start_angle` to `end_angle`, in degrees.",
+      "properties": {
+        "id": {
+          "description": "Name steps use to refer to this object",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "z": {
+          "default": 0,
+          "description": "Drawing order; higher is drawn on top",
+          "title": "Z",
+          "type": "integer"
+        },
+        "shown": {
+          "default": false,
+          "description": "On screen from the start of the scene, without being animated in",
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "fixed": {
+          "default": false,
+          "description": "Stays put on the screen when the camera moves or turns, as labels in a 3D scene should",
+          "title": "Fixed",
+          "type": "boolean"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system the points are on; frame units if left out",
+          "title": "On"
+        },
+        "type": {
+          "const": "arc",
+          "title": "Type",
+          "type": "string"
+        },
+        "center": {
+          "default": [
+            0,
+            0
+          ],
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Center",
+          "type": "array",
+          "x-widget": "point"
+        },
+        "radius": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "start_angle": {
+          "default": 0,
+          "title": "Start Angle",
+          "type": "number"
+        },
+        "end_angle": {
+          "default": 90,
+          "title": "End Angle",
+          "type": "number"
+        },
+        "arrow": {
+          "default": false,
+          "description": "Put an arrow tip on the end",
+          "title": "Arrow",
+          "type": "boolean"
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "ArcObject",
+      "type": "object",
+      "x-category": "Geometry",
+      "x-label": "Arc"
     },
     "Axes3DObject": {
       "additionalProperties": false,
@@ -324,6 +605,48 @@
           "default": false,
           "title": "Numbers",
           "type": "boolean"
+        },
+        "x_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LaTeX label at the end of the x axis, kept facing the camera",
+          "title": "X Label"
+        },
+        "y_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LaTeX label at the end of the y axis, kept facing the camera",
+          "title": "Y Label"
+        },
+        "z_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-widget": "tex"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LaTeX label at the end of the z axis, kept facing the camera",
+          "title": "Z Label"
         }
       },
       "required": [
@@ -608,6 +931,19 @@
           "type": "string",
           "x-widget": "object-ref"
         },
+        "part": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)",
+          "title": "Part"
+        },
         "buff": {
           "default": 0.15,
           "minimum": 0,
@@ -640,7 +976,7 @@
     },
     "BraceObject": {
       "additionalProperties": false,
-      "description": "A curly brace along one side of another object, with an optional label.",
+      "description": "A curly brace, with an optional label: along one side of another object (or of a part of\nit), or between two points, bulging towards `side` of the line between them.",
       "properties": {
         "id": {
           "description": "Name steps use to refer to this object",
@@ -700,10 +1036,89 @@
           "type": "string"
         },
         "target": {
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-          "title": "Target",
-          "type": "string",
-          "x-widget": "object-ref"
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "part": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)",
+          "title": "Part"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "With `end`, brace the stretch between two points instead of an object",
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "type": "array",
+              "x-widget": "point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "type": "string",
+              "x-ref-types": [
+                "number_plane",
+                "axes",
+                "axes_3d",
+                "number_line"
+              ],
+              "x-widget": "object-ref"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Coordinate system `start` and `end` are on; frame units if left out",
+          "title": "On"
         },
         "side": {
           "default": "down",
@@ -738,8 +1153,7 @@
       },
       "required": [
         "id",
-        "type",
-        "target"
+        "type"
       ],
       "title": "BraceObject",
       "type": "object",
@@ -1899,7 +2313,7 @@
             }
           ],
           "default": null,
-          "description": "A piece of the text or formula to highlight, rather than all of it",
+          "description": "A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)",
           "title": "Part"
         },
         "style": {
@@ -2893,6 +3307,25 @@
           "description": "Put the object beside another one",
           "title": "Next To"
         },
+        "anchor": {
+          "default": "center",
+          "description": "Which part of `next_to` to go beside: the tip or tail of a vector, the start or end of a line, or the whole object",
+          "enum": [
+            "center",
+            "tip",
+            "tail",
+            "start",
+            "end"
+          ],
+          "title": "Anchor",
+          "type": "string"
+        },
+        "follow": {
+          "default": false,
+          "description": "Stay beside `next_to` while it moves or changes, rather than only where it was at the start",
+          "title": "Follow",
+          "type": "boolean"
+        },
         "side": {
           "default": "down",
           "description": "Which side of `next_to` to put it on",
@@ -3480,10 +3913,22 @@
           "default": null,
           "title": "Background"
         },
+        "carry": {
+          "description": "Objects from the scene before, on screen from the start as that scene left them, and usable here by id",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Carry",
+          "type": "array"
+        },
         "objects": {
           "items": {
             "discriminator": {
               "mapping": {
+                "angle": "#/$defs/AngleObject",
+                "arc": "#/$defs/ArcObject",
                 "axes": "#/$defs/AxesObject",
                 "axes_3d": "#/$defs/Axes3DObject",
                 "box": "#/$defs/BoxObject",
@@ -3555,6 +4000,12 @@
               },
               {
                 "$ref": "#/$defs/PolygonObject"
+              },
+              {
+                "$ref": "#/$defs/AngleObject"
+              },
+              {
+                "$ref": "#/$defs/ArcObject"
               },
               {
                 "$ref": "#/$defs/CircleObject"
@@ -4743,9 +5194,18 @@
           "type": "string"
         },
         "keep": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "const": "dim",
+              "type": "string"
+            }
+          ],
           "default": false,
-          "title": "Keep",
-          "type": "boolean"
+          "description": "Leave `target` on screen and turn a copy of it into `into`; dim leaves it faded to show it's the original",
+          "title": "Keep"
         }
       },
       "required": [
@@ -4906,6 +5366,15 @@
           "description": "Show the tip's coordinates as a column vector beside it",
           "title": "Show Coordinates",
           "type": "boolean"
+        },
+        "coordinate_colors": {
+          "description": "Colors for the coordinates' rows, in order: x, y, z",
+          "items": {
+            "type": "string",
+            "x-widget": "color"
+          },
+          "title": "Coordinate Colors",
+          "type": "array"
         }
       },
       "required": [
@@ -5001,6 +5470,20 @@
       "default": "Untitled",
       "title": "Title",
       "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the video is about, in a sentence or two",
+      "title": "Description",
+      "x-widget": "multiline"
     },
     "settings": {
       "$ref": "#/$defs/Settings"

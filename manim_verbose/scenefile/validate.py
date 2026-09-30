@@ -15,6 +15,7 @@ editor can put the message beside the field it is about.
 from __future__ import annotations
 
 import difflib
+import re
 from functools import lru_cache
 from dataclasses import dataclass, field, asdict
 from pathlib import PurePosixPath, PureWindowsPath
@@ -27,7 +28,7 @@ from manim_verbose.scenefile.model import (
     Document, SceneSpec, ObjectBase, StepBase, Placement,
     OBJECT_MODELS, STEP_MODELS, ID_PATTERN,
     TextObject, TexObject, TitleObject, QuoteObject, BulletsObject,
-    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject, GraphObject,
+    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject, GraphObject, MatrixObject,
     ShowStep, HideStep, AddStep, RemoveStep, ClearStep, TransformStep,
     ChangeStep, MoveStep, HighlightStep, CameraStep, ApplyMatrixStep, TogetherStep,
     iter_steps,
@@ -278,21 +279,47 @@ def check_document(doc: Document) -> list[Problem]:
     problems: list[Problem] = []
     seen_scenes: set[str] = set()
     seen_steps: set[str] = set()
+    previous: SceneChecker | None = None
     for s_index, scene in enumerate(doc.scenes):
         sloc: Loc = ["scenes", s_index]
         if scene.id in seen_scenes:
             problems.append(Problem(f"Two scenes are called '{scene.id}'", sloc + ["id"], scene_id=scene.id))
         seen_scenes.add(scene.id)
-        problems.extend(SceneChecker(scene, sloc, seen_steps).run())
+        checker = SceneChecker(scene, sloc, seen_steps, previous)
+        problems.extend(checker.run())
+        previous = checker
     return problems
 
 
+MATRIX_PART = re.compile(r"^\s*(row|column|entry)\s+(\d+)(?:\s*[, ]\s*(\d+))?\s*$", re.IGNORECASE)
+
+
+def parse_matrix_part(part: str) -> tuple[str, int, int | None] | None:
+    """
+    "row 2", "column 1" or "entry 2 1" (also "entry 2, 1"), counting from 1, as
+    ("row", 2, None), ("column", 1, None) or ("entry", 2, 1). None for anything else, which
+    for a matrix means the text of one of its entries.
+    """
+    match = MATRIX_PART.match(part)
+    if match is None:
+        return None
+    kind, first, second = match.group(1).lower(), int(match.group(2)), match.group(3)
+    if (kind == "entry") != (second is not None):
+        return None
+    return kind, first, int(second) if second is not None else None
+
+
 class SceneChecker:
-    def __init__(self, scene: SceneSpec, loc: Loc, seen_steps: set[str]):
+    def __init__(self, scene: SceneSpec, loc: Loc, seen_steps: set[str], previous: SceneChecker | None = None):
         self.scene = scene
         self.loc = loc
         self.seen_steps = seen_steps
+        self.previous = previous
+        # Every object usable in the scene, as it is at the point the steps have reached: a
+        # change step replaces an entry, so a later highlight looks for its part in the new text
         self.objects: dict[str, ObjectBase] = {}
+        self.carried: set[str] = set()
+        self.final_on_screen: set[str] = set()
         self.problems: list[Problem] = []
 
     def run(self) -> list[Problem]:
@@ -306,10 +333,49 @@ class SceneChecker:
 
     # Objects
 
+    def check_carry(self):
+        """
+        Carried objects come from the scene before, as it left them. Anything a carried object
+        is built on (the plane a vector is on, say) has to come along with it.
+        """
+        declared = {obj.id for obj in self.scene.objects}
+        for index, obj_id in enumerate(self.scene.carry):
+            loc = self.loc + ["carry", index]
+            if self.previous is None:
+                self.problem("The first scene has no scene before it to carry objects from", loc)
+                continue
+            before = self.previous
+            if obj_id not in before.objects:
+                self.problem(
+                    f"Scene '{before.scene.id}' has no object called '{obj_id}' to carry"
+                    + _did_you_mean(obj_id, before.objects), loc,
+                )
+                continue
+            if obj_id in declared:
+                self.problem(f"'{obj_id}' is carried from the scene before, so it can't be declared here as well", loc, obj_id)
+                continue
+            if obj_id not in before.final_on_screen:
+                self.problem(
+                    f"'{obj_id}' isn't on screen at the end of scene '{before.scene.id}', but carried objects start on screen",
+                    loc, obj_id, "warning",
+                )
+            self.objects[obj_id] = before.objects[obj_id]
+            self.carried.add(obj_id)
+        for index, obj_id in enumerate(self.scene.carry):
+            if obj_id not in self.carried:
+                continue
+            for _, ref, _ in object_refs(self.objects[obj_id]):
+                if ref not in self.carried:
+                    self.problem(
+                        f"'{obj_id}' is built on '{ref}', so '{ref}' has to be carried too",
+                        self.loc + ["carry", index], obj_id,
+                    )
+
     def check_objects(self):
+        self.check_carry()
         for index, obj in enumerate(self.scene.objects):
             loc = self.loc + ["objects", index]
-            if obj.id in self.objects:
+            if obj.id in self.objects and obj.id not in self.carried:
                 self.problem(f"Two objects in this scene are called '{obj.id}'", loc + ["id"], obj.id)
             self.objects[obj.id] = obj
         for index, obj in enumerate(self.scene.objects):
@@ -322,7 +388,24 @@ class SceneChecker:
                 self.check_path(obj.path, loc + ["path"], obj.id)
             if isinstance(obj, GraphObject):
                 self.check_function(obj.function, loc + ["function"], obj.id)
+            if isinstance(obj, (BraceObject, BoxObject)) and obj.part is not None and obj.target in self.objects:
+                self.check_part(obj.target, obj.part, loc + ["part"], obj.id, "picked out")
+            place = getattr(obj, "place", None)
+            if place is not None:
+                self.check_anchor(place, loc + ["place"], obj.id)
         self.check_cycles()
+
+    def check_anchor(self, place: Placement, loc: Loc, item_id: str | None):
+        if place.anchor == "center" or place.next_to not in self.objects:
+            return
+        target = self.objects[place.next_to]
+        wanted = {"tip": ("vector",), "tail": ("vector",), "start": ("line", "arc"), "end": ("line", "arc")}[place.anchor]
+        if target.type not in wanted:
+            kinds = " or ".join(wanted)
+            self.problem(
+                f"Only a {kinds} has a {place.anchor}, and '{place.next_to}' is a {target.type.replace('_', ' ')}",
+                loc + ["anchor"], item_id,
+            )
 
     def check_ref(self, ref: str, types: list[str] | None, loc: Loc, item_id: str | None) -> bool:
         if ref not in self.objects:
@@ -386,23 +469,47 @@ class SceneChecker:
         for ref_loc, ref, types in step_refs(step):
             self.check_ref(ref, types, loc + ref_loc, step.id)
         if isinstance(step, HighlightStep) and step.part is not None and step.target in self.objects:
-            self.check_part(step, loc)
+            self.check_part(step.target, step.part, loc + ["part"], step.id, "highlighted")
+        if isinstance(step, MoveStep) and step.to is not None:
+            self.check_anchor(step.to, loc + ["to"], step.id)
         if isinstance(step, ChangeStep) and step.target in self.objects:
             self.check_change(step, loc)
         if isinstance(step, TogetherStep):
             for index, inner in enumerate(step.steps):
                 self.check_step(inner, loc + ["steps", index])
 
-    def check_part(self, step: HighlightStep, loc: Loc):
-        target = self.objects[step.target]
+    def check_part(self, target_id: str, part: str, loc: Loc, item_id: str | None, verb: str):
+        target = self.objects[target_id]
+        if isinstance(target, MatrixObject):
+            self.check_matrix_part(target, part, loc, item_id)
+            return
         field_name = PART_FIELDS.get(type(target))
         if field_name is None:
             self.problem(
-                f"Only parts of text, formulas, titles and quotes can be highlighted, and '{step.target}' is a {target.type}",
-                loc + ["part"], step.id,
+                f"Only parts of text, formulas, titles, quotes and matrices can be {verb}, and '{target_id}' is a {target.type}",
+                loc, item_id,
             )
-        elif step.part not in getattr(target, field_name):
-            self.problem(f"'{step.part}' doesn't appear in '{step.target}'", loc + ["part"], step.id)
+        elif part not in getattr(target, field_name):
+            self.problem(f"'{part}' doesn't appear in '{target_id}'", loc, item_id)
+
+    def check_matrix_part(self, matrix: MatrixObject, part: str, loc: Loc, item_id: str | None):
+        rows, columns = len(matrix.entries), len(matrix.entries[0])
+        parsed = parse_matrix_part(part)
+        if parsed is None:
+            texts = {str(entry) for row in matrix.entries for entry in row}
+            if part not in texts:
+                self.problem(
+                    f"'{part}' isn't an entry of '{matrix.id}': give an entry's text, or \"row 2\", \"column 1\" or \"entry 2 1\"",
+                    loc, item_id,
+                )
+            return
+        kind, first, second = parsed
+        if kind == "row" and not 1 <= first <= rows:
+            self.problem(f"'{matrix.id}' has rows 1 to {rows}", loc, item_id)
+        elif kind == "column" and not 1 <= first <= columns:
+            self.problem(f"'{matrix.id}' has columns 1 to {columns}", loc, item_id)
+        elif kind == "entry" and not (1 <= first <= rows and 1 <= second <= columns):
+            self.problem(f"'{matrix.id}' has {rows} rows and {columns} columns, counting from 1", loc, item_id)
 
     def check_change(self, step: ChangeStep, loc: Loc):
         target = self.objects[step.target]
@@ -419,7 +526,7 @@ class SceneChecker:
             self.check_function(step.set["function"], loc + ["set", "function"], step.id)
         merged = {**target.model_dump(exclude_defaults=True), **step.set, "id": target.id, "type": target.type}
         try:
-            model.model_validate(merged)
+            self.objects[target.id] = model.model_validate(merged)
         except ValidationError as err:
             for error in err.errors(include_url=False):
                 problem = reword(error, merged)
@@ -434,9 +541,10 @@ class SceneChecker:
         on something that isn't there. These are warnings rather than errors, since manim
         mostly copes, just not the way the author meant.
         """
-        on_screen = self.with_groups({obj.id for obj in self.scene.objects if obj.shown})
+        on_screen = self.with_groups({obj.id for obj in self.scene.objects if obj.shown} | self.carried)
         for index, step in enumerate(self.scene.steps):
             on_screen = self.with_groups(self.follow(step, self.loc + ["steps", index], on_screen))
+        self.final_on_screen = on_screen
 
     def with_groups(self, on_screen: set[str]) -> set[str]:
         """A group is on screen when all its members are, however they got there."""
@@ -518,7 +626,7 @@ def object_refs(obj: ObjectBase) -> list[tuple[Loc, str, list[str] | None]]:
     on = getattr(obj, "on", None)
     if on is not None:
         refs.append((["on"], on, _ref_types(type(obj), "on")))
-    if isinstance(obj, (BraceObject, BoxObject)):
+    if isinstance(obj, (BraceObject, BoxObject)) and obj.target is not None:
         refs.append((["target"], obj.target, None))
     if isinstance(obj, GroupObject):
         refs.extend((["members", i], m, None) for i, m in enumerate(obj.members))

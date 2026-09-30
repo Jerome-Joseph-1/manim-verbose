@@ -139,6 +139,13 @@ class Placement(Model):
     on: CoordinateSystemRef | None = Field(None, description="Read `at` as coordinates on this coordinate system")
     edge: Edge | None = Field(None, description="Push the object against an edge or corner of the frame, centred along it")
     next_to: AnyRef | None = Field(None, description="Put the object beside another one")
+    anchor: Literal["center", "tip", "tail", "start", "end"] = Field(
+        "center",
+        description="Which part of `next_to` to go beside: the tip or tail of a vector, the start or end of a line, or the whole object",
+    )
+    follow: bool = Field(
+        False, description="Stay beside `next_to` while it moves or changes, rather than only where it was at the start"
+    )
     side: Side = Field("down", description="Which side of `next_to` to put it on")
     buff: float = Field(0.25, ge=0, description="Gap left against the edge, or against `next_to`")
     shift: Point2 | None = Field(None, description="Moved by this much afterwards, in frame units")
@@ -159,6 +166,8 @@ class Placement(Model):
             raise ValueError(f"Give only one of at, edge or next_to, not {' and '.join(given)}")
         if self.on is not None and self.at is None:
             raise ValueError("`on` says which coordinates `at` is in, so it needs `at`")
+        if self.next_to is None and (self.anchor != "center" or self.follow):
+            raise ValueError("`anchor` and `follow` say how to stay beside `next_to`, so they need `next_to`")
         return self
 
 
@@ -300,6 +309,9 @@ class Axes3DObject(FreeObject):
     y_range: Range = Field([-5, 5, 1])
     z_range: Range = Field([-3, 3, 1])
     numbers: bool = False
+    x_label: TexString | None = Field(None, description="LaTeX label at the end of the x axis, kept facing the camera")
+    y_label: TexString | None = Field(None, description="LaTeX label at the end of the y axis, kept facing the camera")
+    z_label: TexString | None = Field(None, description="LaTeX label at the end of the z axis, kept facing the camera")
 
 
 class NumberLineObject(FreeObject):
@@ -332,6 +344,9 @@ class VectorObject(PlottedObject):
     label: TexString | None = Field(None, description="LaTeX label placed beside the tip, on `label_side`")
     label_side: Side = "right"
     show_coordinates: bool = Field(False, description="Show the tip's coordinates as a column vector beside it")
+    coordinate_colors: list[Color] = Field(
+        default_factory=list, description="Colors for the coordinates' rows, in order: x, y, z"
+    )
 
 
 class LineObject(PlottedObject):
@@ -400,13 +415,33 @@ class SquareObject(FreeObject):
 
 
 class BraceObject(ObjectBase):
-    """A curly brace along one side of another object, with an optional label."""
+    """
+    A curly brace, with an optional label: along one side of another object (or of a part of
+    it), or between two points, bulging towards `side` of the line between them.
+    """
     model_config = _object_meta("Brace", "Annotations")
     type: Literal["brace"]
-    target: AnyRef
+    target: AnyRef | None = None
+    part: str | None = Field(None, description="A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)")
+    start: Point | None = Field(None, description="With `end`, brace the stretch between two points instead of an object")
+    end: Point | None = None
+    on: CoordinateSystemRef | None = Field(None, description="Coordinate system `start` and `end` are on; frame units if left out")
     side: Side = "down"
     label: TexString | None = None
     buff: float = Field(0.1, ge=0)
+
+    @model_validator(mode="after")
+    def _target_or_points(self):
+        points = self.start is not None or self.end is not None
+        if self.target is None and not (self.start is not None and self.end is not None):
+            raise ValueError("A brace needs a `target`, or both `start` and `end`")
+        if self.target is not None and points:
+            raise ValueError("Give a brace either a `target` or `start` and `end`, not both")
+        if self.part is not None and self.target is None:
+            raise ValueError("`part` picks out a piece of `target`, so it needs `target`")
+        if self.on is not None and not points:
+            raise ValueError("`on` says which coordinates `start` and `end` are in, so it needs them")
+        return self
 
 
 class BoxObject(ObjectBase):
@@ -414,9 +449,36 @@ class BoxObject(ObjectBase):
     model_config = _object_meta("Box around", "Annotations")
     type: Literal["box"]
     target: AnyRef
+    part: str | None = Field(None, description="A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)")
     buff: float = Field(0.15, ge=0)
     corner_radius: float = Field(0, ge=0)
     fill_opacity: float = Field(0, ge=0, le=1)
+
+
+class AngleObject(PlottedObject):
+    """
+    The angle at the middle of three points, drawn as an arc between the two lines, or as a
+    small square when it is a right angle.
+    """
+    model_config = _object_meta("Angle", "Geometry")
+    type: Literal["angle"]
+    points: list[Point] = Field(min_length=3, max_length=3, description="[a, vertex, b]: the angle at the vertex, from a round to b")
+    radius: float = Field(0.5, gt=0)
+    right_angle: bool = Field(False, description="Draw the square mark of a right angle rather than an arc")
+    other_side: bool = Field(False, description="Mark the angle the other way round, the larger one")
+    label: TexString | None = None
+
+
+class ArcObject(PlottedObject):
+    """Part of a circle, counterclockwise from `start_angle` to `end_angle`, in degrees."""
+    model_config = _object_meta("Arc", "Geometry")
+    type: Literal["arc"]
+    center: Point = Field([0, 0])
+    radius: float = Field(1, gt=0)
+    start_angle: float = 0
+    end_angle: float = 90
+    arrow: bool = Field(False, description="Put an arrow tip on the end")
+    thickness: float | None = Field(None, gt=0)
 
 
 class ImageObject(FreeObject):
@@ -451,7 +513,7 @@ AnyObject = Annotated[
     Union[
         TextObject, TexObject, TitleObject, QuoteObject, BulletsObject, MatrixObject,
         NumberPlaneObject, AxesObject, Axes3DObject, NumberLineObject, GraphObject,
-        DotObject, VectorObject, LineObject, PolygonObject,
+        DotObject, VectorObject, LineObject, PolygonObject, AngleObject, ArcObject,
         CircleObject, RectangleObject, SquareObject,
         BraceObject, BoxObject,
         ImageObject, SvgObject,
@@ -534,7 +596,9 @@ class TransformStep(StepBase):
     style: Literal["auto", "morph", "match", "fade"] = Field(
         "auto", description="match moves matching parts of text or formulas to each other; auto uses it for those"
     )
-    keep: bool = False
+    keep: bool | Literal["dim"] = Field(
+        False, description="Leave `target` on screen and turn a copy of it into `into`; dim leaves it faded to show it's the original"
+    )
 
 
 class ChangeStep(StepBase):
@@ -571,7 +635,7 @@ class HighlightStep(StepBase):
     model_config = _step_meta("Highlight")
     do: Literal["highlight"]
     target: AnyRef
-    part: str | None = Field(None, description="A piece of the text or formula to highlight, rather than all of it")
+    part: str | None = Field(None, description="A piece of the target to pick out: some of its text or formula, or for a matrix \"row 2\", \"column 1\" or \"entry 2 1\" (counting from 1)")
     style: Literal["indicate", "flash", "box", "underline", "wiggle", "recolor"] = "indicate"
     color: Color | None = None
 
@@ -687,6 +751,10 @@ class SceneSpec(Model):
     id: Id
     title: str | None = None
     background: Color | None = None
+    carry: list[Id] = Field(
+        default_factory=list,
+        description="Objects from the scene before, on screen from the start as that scene left them, and usable here by id",
+    )
     objects: list[AnyObject] = Field(default_factory=list)
     steps: list[AnyStep] = Field(default_factory=list)
 
@@ -695,6 +763,7 @@ class Document(Model):
     """A whole video."""
     version: Literal[1] = 1
     title: str = "Untitled"
+    description: str | None = Field(None, description="What the video is about, in a sentence or two", json_schema_extra=_widget("multiline"))
     settings: Settings = Field(default_factory=Settings)
     scenes: list[SceneSpec] = Field(min_length=1)
 

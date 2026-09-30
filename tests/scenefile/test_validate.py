@@ -244,3 +244,71 @@ def test_data_for_the_api_keeps_placements_whole():
     assert scene["objects"][1]["place"] == {"at": [1, 2]}
     assert scene["steps"][0]["to"] == {"at": [0, 1]}
     assert "place: top" in dump_text(doc)
+
+
+def test_carry_parts_anchors_and_braces():
+    found = messages("""
+        scenes:
+          - id: a
+            carry: [x]
+            objects:
+              - {id: plane, type: number_plane}
+              - {id: v, type: vector, tip: [2, 1], on: plane}
+              - {id: m, type: matrix, entries: [[1], [2]]}
+              - {id: lbl, type: text, text: hi, place: {next_to: v, anchor: tip, follow: true}}
+              - {id: bad, type: text, text: no, place: {next_to: m, anchor: tip}}
+              - {id: b, type: brace, target: m, part: row 3}
+              - {id: b2, type: brace, start: [0, 0], end: [2, 1], on: plane, label: x}
+              - {id: t, type: text, text: old words}
+            steps:
+              - {do: show, target: [plane, v, m, t]}
+              - {do: highlight, target: m, part: entry 2 1}
+              - {do: highlight, target: m, part: "7"}
+              - {do: change, target: t, set: {text: new words}}
+              - {do: highlight, target: t, part: new}
+              - {do: highlight, target: t, part: old}
+          - id: b
+            carry: [v, nothere]
+            steps:
+              - {do: hide, target: v}
+    """)
+    assert found == [
+        "error: scenes[0].carry[0]: The first scene has no scene before it to carry objects from",
+        "error: scenes[0].objects[4].place.anchor: Only a vector has a tip, and 'm' is a matrix",
+        "error: scenes[0].objects[5].part: 'm' has rows 1 to 2",
+        "error: scenes[0].steps[2].part: '7' isn't an entry of 'm': give an entry's text, or \"row 2\", \"column 1\" or \"entry 2 1\"",
+        "error: scenes[0].steps[5].part: 'old' doesn't appear in 't'",
+        "error: scenes[1].carry[1]: Scene 'a' has no object called 'nothere' to carry",
+        "error: scenes[1].carry[0]: 'v' is built on 'plane', so 'plane' has to be carried too",
+    ]
+
+
+def test_carried_objects_are_on_screen_and_usable():
+    _, problems = load("""
+        scenes:
+          - id: a
+            objects:
+              - {id: plane, type: number_plane}
+              - {id: v, type: vector, tip: [2, 1], on: plane}
+            steps:
+              - {do: show, target: [plane, v]}
+          - id: b
+            carry: [plane, v]
+            objects:
+              - {id: w, type: vector, tip: [1, 2], on: plane}
+            steps:
+              - {do: show, target: w}
+              - {do: change, target: v, set: {tip: [3, 0]}}
+              - {do: hide, target: [v, w]}
+    """)
+    assert problems == []
+
+
+def test_matrix_part_syntax():
+    from manim_verbose.scenefile.validate import parse_matrix_part
+    assert parse_matrix_part("row 2") == ("row", 2, None)
+    assert parse_matrix_part("Column 1") == ("column", 1, None)
+    assert parse_matrix_part("entry 2, 1") == ("entry", 2, 1)
+    assert parse_matrix_part("entry 2") is None
+    assert parse_matrix_part("row 2 1") is None
+    assert parse_matrix_part("300{,}000") is None
