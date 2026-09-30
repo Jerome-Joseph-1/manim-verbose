@@ -1,0 +1,61 @@
+# Google Cloud Run service for the manim editor's rendering backend.
+#
+# You do not have to use this file — the one-line `gcloud run deploy` in docs/editor/HOSTING.md
+# sets the same things with flags, and is easier the first time. This is here so the settings
+# live in the repo and a deploy is reproducible:
+#
+#     gcloud run services replace deploy/cloudrun.yaml --region=us-central1
+#
+# Replace PROJECT_ID and, once you have pushed an image, the image URL. The comments say what
+# each setting is for and where its number comes from.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: manim-editor
+  labels:
+    cloud.googleapis.com/location: us-central1
+  annotations:
+    # Only Cloud Run itself calls the container; the browser reaches it through Vercel's
+    # rewrite, so requests still arrive here. Keeping ingress open is simplest; lock it down
+    # later if you put a load balancer in front.
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scale to zero when idle (no minimum instances) so an idle service is free, and cap
+        # the maximum so a burst of traffic can't run the free tier down. Raise max-scale only
+        # once you know you want to.
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "3"
+        # CPU is only allocated while a request is being handled (the default). A render holds
+        # its request open, so it keeps the CPU for as long as it runs.
+        run.googleapis.com/cpu-throttling: "true"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      # Rendering is CPU-bound and single-visitor-at-a-time here; a low concurrency means one
+      # instance isn't asked to render several videos at once (the app caps this too).
+      containerConcurrency: 4
+      # A still is seconds; an export of a few minutes of video can take a few minutes. 900s is
+      # Cloud Run's ceiling, and matches the hosted export timeout.
+      timeoutSeconds: 900
+      containers:
+        # Build and push this first (see HOSTING.md): the image built from the repo's Dockerfile.
+        - image: gcr.io/PROJECT_ID/manim-editor:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: MANIM_VERBOSE_HOSTED
+              value: "1"
+            # Uncomment to require a password (HTTP basic auth). Better: store it as a secret
+            # (see HOSTING.md) rather than in plain text here.
+            # - name: MANIM_VERBOSE_HOSTED_PASSWORD
+            #   value: "change-me"
+          resources:
+            limits:
+              # 2 vCPU lets an export render scenes in parallel; software rendering is hungry.
+              cpu: "2"
+              # LaTeX + the wgpu renderer + ffmpeg need headroom; 2Gi is comfortable, 4Gi safer
+              # for large scenes.
+              memory: 2Gi

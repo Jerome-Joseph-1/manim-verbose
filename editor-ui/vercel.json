@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "//": "Vercel deploys the browser editor (this editor-ui/ folder) as a static site and forwards the editor's API and rendered files to the Cloud Run backend, so the browser talks to one origin and there is no CORS. In Vercel, set the project's Root Directory to editor-ui; this file is then picked up automatically. Replace BOTH occurrences of the Cloud Run URL below with your service's URL, e.g. https://manim-editor-abc123-uc.a.run.app (from `gcloud run services describe manim-editor --region=us-central1 --format='value(status.url)'`). See docs/editor/HOSTING.md.",
+  "buildCommand": "npm run build -- --outDir dist --emptyOutDir",
+  "outputDirectory": "dist",
+  "installCommand": "npm ci",
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://REPLACE-WITH-CLOUD-RUN-URL.a.run.app/api/:path*" },
+    { "source": "/files/:path*", "destination": "https://REPLACE-WITH-CLOUD-RUN-URL.a.run.app/files/:path*" }
+  ],
+  "headers": [
+    {
+      "//": "Vite content-hashes the editor's assets, so they can be cached hard. index.html is served fresh (Vercel does not cache HTML by default), so a new deploy shows up right away.",
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ]
+}

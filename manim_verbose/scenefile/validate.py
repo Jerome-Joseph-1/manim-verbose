@@ -46,6 +46,101 @@ PART_FIELDS: dict[type, str] = {
 }
 
 
+# LaTeX sandboxing. A formula is compiled by a real LaTeX, which without these can read and
+# write files on the machine and run other programs (\input{/etc/passwd} typesets the file).
+# tex_file_writing.py locks the compiler's environment down as well; this rejects the
+# dangerous commands up front, in words their author can act on, so a shared or hosted file
+# never reaches LaTeX with one in it. Every field carrying LaTeX is checked: a formula, the
+# parts a formula colours, a matrix's entries, and the labels on axes, graphs, dots, vectors,
+# angles and braces (find them from `x-widget: tex` in the schema, plus matrix entries).
+_TEX_RULES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\\(?:input|include|includeonly|subfile|subfileinclude|subimport|import|"
+                r"InputIfFileExists|IfFileExists|includegraphics|lstinputlisting|verbatiminput|"
+                r"pdffiledump|pdffilesize|pdffilemoddate|pdfximage|XeTeXpdffile|XeTeXpicfile)(?![A-Za-z])"),
+     "formulas can't read files"),
+    (re.compile(r"\\(?:openin|openout|closein|closeout|read|readline|write|immediate|"
+                r"newread|newwrite|ifeof)(?![A-Za-z])"),
+     "formulas can't read or write files"),
+    (re.compile(r"\\special(?![A-Za-z])"),
+     r"formulas can't use \special"),
+    (re.compile(r"\\(?:write18|ShellEscape|pdfshellescape)(?![A-Za-z])"),
+     "formulas can't run programs"),
+    (re.compile(r"\\(?:usepackage|RequirePackage|documentclass|LoadClass|LoadClassWithOptions|"
+                r"makeatletter|input@path)(?![A-Za-z])"),
+     "formulas can't load packages or classes"),
+    (re.compile(r"\\(?:catcode|lccode|uccode|sfcode|mathcode|delcode|endlinechar|escapechar|newlinechar)(?![A-Za-z])"),
+     "formulas can't change how characters are read"),
+    (re.compile(r"\\(?:csname|endcsname|expandafter|scantokens|scantextokens|directlua|latelua|"
+                r"luaexec|dofile|loadfile)(?![A-Za-z])"),
+     "formulas can't use low-level TeX programming"),
+    (re.compile(r"\\(?:def|edef|gdef|xdef|let|futurelet|newcommand|renewcommand|providecommand|"
+                r"DeclareRobustCommand|newenvironment|renewenvironment|newcount|newdimen|newtoks|"
+                r"chardef|mathchardef|countdef|dimendef|protected)(?![A-Za-z])"),
+     "formulas can't define or redefine commands"),
+    (re.compile(r"\bfilecontents\b"),
+     "formulas can't write files"),
+    (re.compile(r"\\ExplSyntaxOn(?![A-Za-z])|\\(?:file|ior|iow|sys)_[A-Za-z_]*:"),
+     "formulas can't use expl3 file commands"),
+    (re.compile(r"\^\^"),
+     "formulas can't use ^^ escapes"),
+]
+
+# Object fields, besides `tex`, `colors` and matrix `entries`, which hold a LaTeX label
+_TEX_LABEL_FIELDS = ("x_label", "y_label", "z_label", "label")
+
+
+def tex_safety_message(text: str) -> str | None:
+    """The reason a piece of LaTeX is refused, in words for its author, or None if it is fine."""
+    if not isinstance(text, str):
+        return None
+    for pattern, reason in _TEX_RULES:
+        match = pattern.search(text)
+        if match:
+            snippet = match.group(0)
+            return f"That formula isn't allowed: {reason} (remove '{snippet}')"
+    return None
+
+
+def iter_tex_fields(obj: ObjectBase) -> Iterable[tuple[Loc, str]]:
+    """Every piece of LaTeX an object carries, with where it sits in the object."""
+    if isinstance(obj, TexObject):
+        yield ["tex"], obj.tex
+        for key in obj.colors:
+            if isinstance(key, str):
+                yield ["colors", key], key
+    if isinstance(obj, MatrixObject):
+        for r, row in enumerate(obj.entries):
+            for c, cell in enumerate(row):
+                if isinstance(cell, str):
+                    yield ["entries", r, c], cell
+    for name in _TEX_LABEL_FIELDS:
+        value = getattr(obj, name, None)
+        if isinstance(value, str):
+            yield [name], value
+
+
+def set_tex_fields(target: ObjectBase, changes: dict[str, Any]) -> Iterable[tuple[Loc, str]]:
+    """The LaTeX a `change` step's `set` introduces, read from the raw values so it is caught
+    even when the change is otherwise invalid."""
+    if isinstance(target, TexObject):
+        if isinstance(changes.get("tex"), str):
+            yield ["tex"], changes["tex"]
+        colors = changes.get("colors")
+        if isinstance(colors, dict):
+            for key in colors:
+                if isinstance(key, str):
+                    yield ["colors", key], key
+    if isinstance(target, MatrixObject) and isinstance(changes.get("entries"), list):
+        for r, row in enumerate(changes["entries"]):
+            if isinstance(row, list):
+                for c, cell in enumerate(row):
+                    if isinstance(cell, str):
+                        yield ["entries", r, c], cell
+    for name in _TEX_LABEL_FIELDS:
+        if isinstance(changes.get(name), str):
+            yield [name], changes[name]
+
+
 @dataclass
 class Problem:
     message: str
@@ -390,10 +485,17 @@ class SceneChecker:
                 self.check_function(obj.function, loc + ["function"], obj.id)
             if isinstance(obj, (BraceObject, BoxObject)) and obj.part is not None and obj.target in self.objects:
                 self.check_part(obj.target, obj.part, loc + ["part"], obj.id, "picked out")
+            for tex_loc, text in iter_tex_fields(obj):
+                self.check_tex_safety(text, loc + tex_loc, obj.id)
             place = getattr(obj, "place", None)
             if place is not None:
                 self.check_anchor(place, loc + ["place"], obj.id)
         self.check_cycles()
+
+    def check_tex_safety(self, text: str, loc: Loc, item_id: str | None):
+        message = tex_safety_message(text)
+        if message is not None:
+            self.problem(message, loc, item_id)
 
     def check_anchor(self, place: Placement, loc: Loc, item_id: str | None):
         if place.anchor == "center" or place.next_to not in self.objects:
@@ -524,6 +626,8 @@ class SceneChecker:
                 )
         if isinstance(target, GraphObject) and isinstance(step.set.get("function"), str):
             self.check_function(step.set["function"], loc + ["set", "function"], step.id)
+        for tex_loc, text in set_tex_fields(target, step.set):
+            self.check_tex_safety(text, loc + ["set"] + tex_loc, step.id)
         merged = {**target.model_dump(exclude_defaults=True), **step.set, "id": target.id, "type": target.type}
         try:
             self.objects[target.id] = model.model_validate(merged)

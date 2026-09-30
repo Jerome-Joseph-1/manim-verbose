@@ -2,6 +2,7 @@
 manimgl-editor: edit a scene file in the browser.
 
     manimgl-editor [FILE] [--port 8765] [--host 127.0.0.1] [--no-browser] [--output-dir DIR]
+    manimgl-editor --hosted [--port 8080] [--host 0.0.0.0]
 
 Starts the editor's server for FILE (video.yaml in the current folder if none is given) and
 opens it in the browser. A FILE which doesn't exist yet is created from a starter document.
@@ -11,12 +12,18 @@ the next free port is used.
 The server listens only on this computer unless told otherwise with --host. Anyone who can
 reach it can read and change the scene file and make this computer render, so it says so,
 loudly, when it listens anywhere else.
+
+With --hosted (or the environment variable MANIM_VERBOSE_HOSTED=1, which a container sets),
+it runs as a public service instead: no file on disk, documents kept in each visitor's
+browser, smaller limits, per-IP rate limits and expiring renders (see hosted.py and
+docs/editor/HOSTING.md). It then binds 0.0.0.0 and the port in $PORT, as Cloud Run expects.
 """
 from __future__ import annotations
 
 import argparse
 import ipaddress
 import logging
+import os
 import socket
 import sys
 import threading
@@ -25,11 +32,18 @@ import webbrowser
 from pathlib import Path
 
 DEFAULT_PORT = 8765
+DEFAULT_HOSTED_PORT = 8080
 PORTS_TO_TRY = 20
+
+
+def env_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.hosted or env_truthy(os.environ.get("MANIM_VERBOSE_HOSTED")):
+        return run_hosted(args)
     path = Path(args.file).expanduser().resolve()
     if path.suffix.lower() not in (".yaml", ".yml", ".json"):
         print(f"manimgl-editor: {args.file}: a scene file's name ends in .yaml, .yml or .json", file=sys.stderr)
@@ -74,17 +88,52 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def run_hosted(args: argparse.Namespace) -> int:
+    """The public service: bind 0.0.0.0 and $PORT, keep no file, and turn on the hosted
+    limits. Cloud Run sets $PORT and expects the process to listen on it right away."""
+    import tempfile
+
+    from manim_verbose.editor.hosted import HostedConfig
+    from manim_verbose.editor.server import create_app
+
+    host = args.host if args.host != "127.0.0.1" else "0.0.0.0"
+    port = int(os.environ.get("PORT") or args.port or DEFAULT_HOSTED_PORT)
+    # A stand-in path: hosted mode never reads or writes it, but the store and the export
+    # names still want a name to hang off. Its folder is a throwaway temp dir.
+    path = Path(tempfile.mkdtemp(prefix="manim-hosted-")) / "video.yaml"
+    config = HostedConfig.from_env()
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    app = create_app(path, hosted=config, allowed_hosts=None)
+    print(f"manimgl-editor: hosted mode on {host}:{port} "
+          f"(documents in the browser, {'password on' if config.password else 'no password'})",
+          flush=True)
+
+    import uvicorn
+    try:
+        uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False,
+                    timeout_graceful_shutdown=5)
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="manimgl-editor", description="Edit a manim scene file in the browser")
     parser.add_argument("file", nargs="?", default="video.yaml",
                         help="The scene file (.yaml or .json); created if it doesn't exist. Default: video.yaml")
     parser.add_argument("--port", type=int, default=None,
-                        help=f"Port to listen on. Default: {DEFAULT_PORT}, or the next free one")
+                        help=f"Port to listen on. Default: {DEFAULT_PORT}, or the next free one "
+                             f"(hosted: $PORT, else {DEFAULT_HOSTED_PORT})")
     parser.add_argument("--host", default="127.0.0.1",
-                        help="Address to listen on. Default: 127.0.0.1, which only this computer can reach")
+                        help="Address to listen on. Default: 127.0.0.1, which only this computer can reach "
+                             "(hosted: 0.0.0.0)")
     parser.add_argument("--no-browser", action="store_true", help="Don't open the editor in a browser")
     parser.add_argument("--output-dir", type=Path, default=None,
                         help="Folder for rendered frames, clips and exports. Default: one in your user cache")
+    parser.add_argument("--hosted", action="store_true",
+                        help="Run as a public service: no file on disk, documents kept in the browser, "
+                             "hosted-mode limits and rate limits (also MANIM_VERBOSE_HOSTED=1)")
     return parser
 
 

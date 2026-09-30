@@ -118,6 +118,7 @@ def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
             [
                 compiler,
                 *(["-no-pdf"] if compiler == "xelatex" else []),
+                "-no-shell-escape",  # never run external programs, even if the formula asks
                 "-interaction=batchmode",
                 "-halt-on-error",
                 f"-output-directory={temp_dir}",
@@ -125,6 +126,7 @@ def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
             ],
             capture_output=True,
             text=True,
+            env=_hardened_env(temp_dir),
         )
 
         if process.returncode != 0 and not dvi_path.exists():
@@ -149,6 +151,7 @@ def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
                 "--stdout",  # output to stdout instead of file
             ],
             capture_output=True,
+            env=_hardened_env(temp_dir),
         )
 
     if process.returncode != 0:
@@ -162,6 +165,28 @@ def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
         print(" " * len(message), end="\r")
 
     return result
+
+
+def _hardened_env(work_dir: str) -> dict[str, str]:
+    """
+    The environment a LaTeX (or dvisvgm) subprocess runs in, locked down so that a formula
+    cannot reach the filesystem even if a dangerous command slips past validation. Belt and
+    braces for the hosted editor, where formulas come from strangers, and cheap insurance
+    everywhere else.
+
+    - openin_any=p / openout_any=p: TeX may only read and write "paranoid" (safe) paths,
+      which excludes absolute paths, parent directories and dotfiles, so \\input{/etc/passwd}
+      and \\openout of a file elsewhere both fail.
+    - shell_escape=f: \\write18 and friends never spawn a program.
+    - TEXMFOUTPUT points at the compile's own throwaway directory, so nothing is written
+      beside the sources or into the user's tree.
+    """
+    env = dict(os.environ)
+    env["openin_any"] = "p"
+    env["openout_any"] = "p"
+    env["shell_escape"] = "f"
+    env["TEXMFOUTPUT"] = work_dir
+    return env
 
 
 class LatexError(Exception):

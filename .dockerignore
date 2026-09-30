@@ -1,0 +1,48 @@
+# Keep the build context small and reproducible: the image builds the UI from source (Node
+# stage) and installs the Python package, and needs nothing else.
+
+.git
+.github
+.claude
+
+# The UI's own build inputs/outputs — the Node stage installs from the lockfile and rebuilds
+editor-ui/node_modules
+editor-ui/dist
+editor-ui/test-results
+editor-ui/playwright-report
+editor-ui/e2e/__screenshots__
+# Rebuilt into the image by the Node stage; never copy a host build in
+manim_verbose/editor/static
+
+# Python build/test artefacts
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.egg-info
+.eggs
+build
+dist
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.hypothesis
+.tox
+.venv
+venv
+htmlcov
+.coverage
+
+# Tests, docs, examples and local scratch — not needed to run the server
+tests
+docs
+examples
+scripts/ci/smoke
+deploy
+*.md
+!README.md
+
+# Editor/OS noise
+.vscode
+.idea
+.DS_Store
+*.log

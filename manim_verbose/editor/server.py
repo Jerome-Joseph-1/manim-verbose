@@ -40,6 +40,11 @@ from manim_verbose.editor.backend import (
 from manim_verbose.editor.documents import (
     Conflict, DocumentStore, SaveFailed, Unreadable, problems_json, read_document,
 )
+from manim_verbose.editor.hosted import (
+    HostedConfig, OutputReaper, RateLimiter, RenderGate, asset_problems, capped_quality,
+    client_ip, duration_problems, ephemeral_output_dir, isolated_assets_dir, local_config_json,
+    total_duration,
+)
 from manim_verbose.editor.jobs import Job, JobPool, JobRegistry, StillQueue, Superseded, Task
 from manim_verbose.editor.limits import Limits, size_problems
 from manim_verbose.editor.outputs import OutputDir, cache_key, default_output_dir, file_stamps
@@ -130,11 +135,17 @@ class PreparedRender:
 class Editor:
     """Everything behind the API: the document, the renderers and the output folder."""
 
-    def __init__(self, path: str | Path, output_dir: str | Path | None, backend: Backend, limits: Limits):
+    def __init__(self, path: str | Path, output_dir: str | Path | None, backend: Backend, limits: Limits,
+                 hosted: HostedConfig | None = None):
         self.store = DocumentStore(path)
         self.backend = backend
         self.limits = limits
-        self.outputs = OutputDir(output_dir or default_output_dir(self.store.path),
+        self.hosted = hosted
+        # Hosted mode never touches the scene file's folder: renders read from an empty,
+        # isolated folder (so a relative image path resolves to nothing, not the container's
+        # own files) and write to a throwaway one that is swept as it fills.
+        self._base_dir = isolated_assets_dir() if hosted else self.store.base_dir
+        self.outputs = OutputDir(output_dir or (ephemeral_output_dir() if hosted else default_output_dir(self.store.path)),
                                  limits.cached_stills, limits.cached_clips)
         self.salt = backend.cache_salt()
         self.stills = StillQueue(WorkerProcess(backend, "stills", limits.worker_start_timeout, limits.cancel_grace))
@@ -146,7 +157,7 @@ class Editor:
 
     @property
     def base_dir(self) -> Path:
-        return self.store.base_dir
+        return self._base_dir
 
     def next_seq(self) -> int:
         return next(self._seq)
@@ -206,6 +217,10 @@ class Editor:
                     if p.severity == "error" and (scene_id is None or p.scene_id in (None, scene_id))]
         if blocking:
             raise ApiError(422, problems_json(problems))
+        if self.hosted:
+            assets = asset_problems(doc, self.hosted)
+            if assets:
+                raise ApiError(422, assets)
         return Checked(doc, problems_json(problems), scene_index)
 
     @staticmethod
@@ -367,6 +382,12 @@ class Editor:
 
     def export(self, body: ExportBody) -> Job:
         checked = self.check(body.document, None)
+        quality = body.quality
+        if self.hosted:
+            problems = duration_problems(total_duration(self, checked.doc), self.hosted)
+            if problems:
+                raise ApiError(422, problems)
+            quality = capped_quality(body.quality, self.hosted)
         if self.jobs.pending() >= self.limits.max_pending_exports:
             raise ApiError(429, [problem(
                 f"There are already {self.limits.max_pending_exports} exports waiting or running. "
@@ -374,10 +395,10 @@ class Editor:
         partial = self.outputs.partial("exports")
         job = Job()
         stem = re.sub(r"[^A-Za-z0-9_-]+", "_", self.store.path.stem).strip("_") or "video"
-        name = f"{stem}-{body.quality}-{job.job_id[:8]}.mp4"
+        name = f"{stem}-{quality}-{job.job_id[:8]}.mp4"
         task = Task(
             fn=run_video,
-            kwargs={"doc": checked.doc, "quality": body.quality, "out_mp4": str(partial),
+            kwargs={"doc": checked.doc, "quality": quality, "out_mp4": str(partial),
                     "base_dir": str(self.base_dir)},
             timeout=self.limits.export_timeout, priority=1,
             finish=lambda data: self.outputs.store_export(Path(data["path"]), name),
@@ -433,38 +454,63 @@ class Editor:
 
 def create_app(path: str | Path, *, output_dir: str | Path | None = None, backend: Backend | None = None,
                limits: Limits | None = None, static_dir: str | Path | None = None,
-               allowed_hosts: set[str] | frozenset[str] | None = None, start_workers: bool = True) -> FastAPI:
+               allowed_hosts: set[str] | frozenset[str] | None = None, start_workers: bool = True,
+               hosted: HostedConfig | None = None) -> FastAPI:
     """
     An app editing the scene file at `path`. Renders go to `output_dir` (a folder in the
     user's cache by default) and are made by `backend` (the real renderer by default).
     `allowed_hosts`, when given, is the set of host names requests may be addressed to, which
     keeps web pages elsewhere from reaching a server on localhost by DNS rebinding.
     `start_workers` starts the still worker as the app starts, rather than on the first still.
+    `hosted`, when given and enabled, puts the server in hosted mode (see hosted.py): no file
+    on disk, smaller limits, rate limits, a password maybe, and rendered files that expire.
 
     Renders run in processes started with multiprocessing's spawn method, which imports the
     main module afresh in each; a script which calls this has to do so under
     `if __name__ == "__main__":`, as the manimgl-editor command does.
     """
-    limits = limits or Limits()
-    editor = Editor(path, output_dir, backend or RenderBackend(), limits)
+    hosted = hosted if (hosted is not None and hosted.enabled) else None
+    limits = limits or (hosted.to_limits() if hosted else Limits())
+    editor = Editor(path, output_dir, backend or RenderBackend(), limits, hosted=hosted)
     static = Path(static_dir) if static_dir is not None else STATIC_DIR
+    limiter = RateLimiter() if hosted else None
+    gate = RenderGate(hosted.max_concurrent_renders) if hosted else None
+    reaper = OutputReaper(editor.outputs, hosted.output_ttl, hosted.reap_interval) if hosted else None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if start_workers:
             editor.stills.start()
             threading.Thread(target=_warm_validation, name="warm-validation", daemon=True).start()
+        if reaper is not None:
+            reaper.start()
         try:
             yield
         finally:
+            if reaper is not None:
+                reaper.stop()
             await run_in_threadpool(editor.close)
 
     app = FastAPI(title="manimgl editor", version=version(), lifespan=lifespan, docs_url="/api/docs",
                   redoc_url=None, openapi_url="/api/openapi.json")
     app.state.editor = editor
+    app.state.hosted = hosted
     app.add_middleware(BodyLimit, max_bytes=limits.max_body_bytes)
     if allowed_hosts is not None:
         app.add_middleware(HostCheck, allowed=frozenset(h.lower() for h in allowed_hosts))
+    if hosted is not None and hosted.password:
+        from manim_verbose.editor.hosted import BasicAuthMiddleware
+        app.add_middleware(BasicAuthMiddleware, password=hosted.password)
+
+    def rate_limit(request: Request, action: str, limit) -> None:
+        """Refuse a visitor who is asking for renders faster than hosted mode allows."""
+        if limiter is None:
+            return
+        retry = limiter.check(client_ip(request), action, limit)
+        if retry is not None:
+            raise ApiError(429, [problem(
+                f"You're asking for {action}s faster than the hosted editor allows. "
+                f"Try again in about {max(1, round(retry))} seconds")], retry_after=round(retry, 1))
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError):
@@ -494,12 +540,26 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
     def health():
         return {"ok": True, "version": version()}
 
+    @app.get("/api/config")
+    def config():
+        """What the editor UI needs to know before it loads a document: whether the server
+        keeps the file (local) or the browser does (hosted), and the hosted limits."""
+        return hosted.config_json() if hosted else local_config_json()
+
     @app.get("/api/document")
     def get_document():
+        if hosted:
+            raise ApiError(404, [problem(
+                "The hosted editor keeps your work in your browser, not on the server. "
+                "Use Download to save a copy")])
         return editor.get_document()
 
     @app.put("/api/document")
     def put_document(body: SaveBody):
+        if hosted:
+            raise ApiError(404, [problem(
+                "The hosted editor keeps your work in your browser, not on the server. "
+                "Use Download to save a copy")])
         return editor.put_document(body)
 
     @app.post("/api/validate")
@@ -516,7 +576,9 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
         return catalog()
 
     @app.post("/api/still")
-    async def still(body: StillBody):
+    async def still(body: StillBody, request: Request):
+        if hosted:
+            rate_limit(request, "still", hosted.still_rate)
         seq = editor.next_seq()
         prepared = await run_in_threadpool(editor.prepare_still, body)
         if prepared.cached is not None:
@@ -532,10 +594,21 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
         return {**result, "problems": prepared.checked.problems}
 
     @app.post("/api/clip")
-    async def clip(body: ClipBody):
+    async def clip(body: ClipBody, request: Request):
+        if hosted:
+            rate_limit(request, "clip", hosted.clip_rate)
         prepared = await run_in_threadpool(editor.prepare_clip, body)
         if prepared.cached is not None:
             return {"video_url": prepared.cached, "problems": prepared.checked.problems}
+        if gate is not None:
+            with gate.hold() as held:
+                if not held.ok:
+                    raise ApiError(429, [problem(
+                        "The hosted editor is busy rendering right now. Try again in a moment")])
+                return await _render_clip(body, prepared)
+        return await _render_clip(body, prepared)
+
+    async def _render_clip(body: ClipBody, prepared):
         future = editor.submit_clip(body, prepared)
         try:
             url = await asyncio.shield(asyncio.wrap_future(future))
@@ -549,10 +622,15 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
 
     @app.get("/api/timeline")
     def timeline(scene_id: str):
+        if hosted:
+            raise ApiError(404, [problem(
+                "The hosted editor keeps your work in your browser, so it has no saved timeline")])
         return editor.timeline(scene_id)
 
     @app.post("/api/export", status_code=202)
-    def export(body: ExportBody):
+    def export(body: ExportBody, request: Request):
+        if hosted:
+            rate_limit(request, "export", hosted.export_rate)
         job = editor.export(body)
         return JSONResponse({"job_id": job.job_id}, status_code=202)
 
