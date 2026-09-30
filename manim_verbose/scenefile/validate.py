@@ -22,11 +22,12 @@ from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from manim_verbose.scenefile.expressions import check_expression
 from manim_verbose.scenefile.model import (
     Document, SceneSpec, ObjectBase, StepBase, Placement,
     OBJECT_MODELS, STEP_MODELS, ID_PATTERN,
     TextObject, TexObject, TitleObject, QuoteObject, BulletsObject,
-    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject,
+    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject, GraphObject,
     ShowStep, HideStep, AddStep, RemoveStep, ClearStep, TransformStep,
     ChangeStep, MoveStep, HighlightStep, CameraStep, ApplyMatrixStep, TogetherStep,
     iter_steps,
@@ -111,6 +112,7 @@ def reword(error: dict[str, Any], data: Any) -> Problem:
         message = f"'{field_name}' isn't something {_a(kind)} has"
         if model is not None:
             message += _did_you_mean(field_name, [n for n in model.model_fields])
+        message += _indentation_hint(field_name, kind)
     elif etype == "union_tag_invalid":
         tag = ctx.get("tag")
         if ctx.get("discriminator") == "'do'":
@@ -176,22 +178,27 @@ def _clean_loc(raw_loc: tuple, data: Any) -> tuple[Loc, list[str]]:
         if isinstance(node, list) and isinstance(part, int) and part < len(node):
             node = node[part]
             loc.append(part)
+            # What an item is depends on the list it is in, not on the keys it happens to
+            # have: a badly indented `type` can land on a scene
+            container = loc[-2] if len(loc) >= 2 else None
             if isinstance(node, dict):
-                if "type" in node:
-                    kinds.append(f"{node['type']} object")
-                    expect_tag = node["type"]
-                elif "do" in node:
-                    kinds.append(f"{node['do']} step")
-                    expect_tag = node["do"]
-                elif loc[-2:-1] == ["scenes"]:
+                if container == "scenes":
                     kinds.append("scene")
+                elif container == "objects":
+                    kinds.append(f"{node['type']} object" if isinstance(node.get("type"), str) else "object")
+                    expect_tag = node.get("type")
+                elif container == "steps":
+                    kinds.append(f"{node['do']} step" if isinstance(node.get("do"), str) else "step")
+                    expect_tag = node.get("do")
         elif isinstance(node, dict) and isinstance(part, str) and part in node:
             node = node[part]
             loc.append(part)
-            if part == "place":
+            if part in ("place", "to"):
                 kinds.append("placement")
             elif part == "settings":
                 kinds.append("settings")
+            elif part == "captions":
+                kinds.append("captions setting")
         elif isinstance(node, dict) and isinstance(part, str):
             is_union_wrapper = any(c in part for c in "[]()") or part in ("str", "list[str]")
             if not is_union_wrapper:
@@ -208,6 +215,22 @@ def _model_for_kind(kind: str) -> type[BaseModel] | None:
     if what == "step":
         return STEP_MODELS.get(name)
     return {"placement": Placement, "scene": SceneSpec, "document": Document}.get(kind)
+
+
+def _indentation_hint(field_name: str | None, kind: str) -> str:
+    """
+    A key which is valid somewhere else in the format, but not here, usually means the line
+    is indented under the wrong item rather than misspelled.
+    """
+    item_fields = {f for m in (*OBJECT_MODELS.values(), *STEP_MODELS.values()) for f in m.model_fields}
+    structure = set(SceneSpec.model_fields) | set(Document.model_fields)
+    if kind in ("scene", "document") and field_name in item_fields - structure:
+        return ". It looks like part of an object or step: check its indentation"
+    if kind.endswith(" object") and field_name in structure:
+        return ". It looks like it belongs to a scene: check its indentation"
+    if kind.endswith(" step") and field_name in structure - {"steps"}:
+        return ". It looks like it belongs to a scene: check its indentation"
+    return ""
 
 
 def _a(kind: str) -> str:
@@ -297,6 +320,8 @@ class SceneChecker:
                     self.problem(f"'{obj.id}' can't refer to itself", loc + ref_loc, obj.id)
             if isinstance(obj, (ImageObject, SvgObject)):
                 self.check_path(obj.path, loc + ["path"], obj.id)
+            if isinstance(obj, GraphObject):
+                self.check_function(obj.function, loc + ["function"], obj.id)
         self.check_cycles()
 
     def check_ref(self, ref: str, types: list[str] | None, loc: Loc, item_id: str | None) -> bool:
@@ -315,6 +340,11 @@ class SceneChecker:
         parts = PurePosixPath(path.replace("\\", "/")).parts
         if PureWindowsPath(path).is_absolute() or path.startswith("/") or ".." in parts:
             self.problem("Files have to be in the scene file's folder or below it, given as a relative path", loc, item_id)
+
+    def check_function(self, function: Any, loc: Loc, item_id: str | None):
+        message = check_expression(function)
+        if message is not None:
+            self.problem(message, loc, item_id)
 
     def check_cycles(self):
         deps = {obj.id: {ref for _, ref, _ in object_refs(obj) if ref in self.objects} for obj in self.scene.objects}
@@ -385,6 +415,8 @@ class SceneChecker:
                     f"'{key}' isn't something a {target.type} has" + _did_you_mean(key, model.model_fields),
                     loc + ["set", key], step.id,
                 )
+        if isinstance(target, GraphObject) and isinstance(step.set.get("function"), str):
+            self.check_function(step.set["function"], loc + ["set", "function"], step.id)
         merged = {**target.model_dump(exclude_defaults=True), **step.set, "id": target.id, "type": target.type}
         try:
             model.model_validate(merged)

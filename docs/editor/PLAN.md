@@ -110,3 +110,16 @@ explanatory video of that length. It passes when:
 - `manimgl-scene info` totals between 9:30 and 10:30;
 - `manimgl-scene render -q hd` produces the video with no manual steps;
 - the scene file opens in the editor, and a scene can be changed and re-previewed there.
+
+## Before any hosted version
+
+Running on someone's own machine, a scene file can do no more than its author could. A
+server rendering other people's files needs these closed first:
+
+- LaTeX reads files: a formula containing `\input{/etc/passwd}` would typeset it. Formulas
+  need filtering in validation (no `\input`, `\include`, `\openin`, `\read`, `\write`,
+  `\immediate`, catcode changes), and LaTeX run with `openin_any=p`, `openout_any=p` and
+  shell escape off.
+- Renders need CPU, memory and time limits per request, and a cap on the total video length.
+- Image and svg paths are already confined to the scene file's folder; uploaded files need
+  type and size checks.

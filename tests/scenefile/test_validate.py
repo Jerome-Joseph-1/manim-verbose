@@ -194,3 +194,35 @@ def test_placement_on_a_coordinate_system():
     """)
     found = [f"{p.path}: {p.message}" for p in problems]
     assert any(f.startswith("scenes[0].objects[3].place: `on` says which coordinates") for f in found), found
+
+
+@pytest.mark.parametrize("yaml_text, expected", [
+    (
+        """
+        scenes:
+          - id: a
+            objects:
+              - id: t
+            type: title
+            text: hi
+        """,
+        "error: scenes[0].type: 'type' isn't something a scene has. It looks like part of an object or step: check its indentation",
+    ),
+    (
+        """
+        scenes:
+          - id: a
+            objects:
+              - id: t
+                type: title
+                text: hi
+                steps:
+                  - {do: show, target: t}
+        """,
+        "error: scenes[0].objects[0].steps: 'steps' isn't something a title object has. It looks like it belongs to a scene: check its indentation",
+    ),
+])
+def test_misindented_keys_say_so(yaml_text, expected):
+    found = messages(yaml_text)
+    assert expected in found, found
+    assert not any("did you mean 'type'" in m for m in found), found
