@@ -22,11 +22,12 @@ from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from manim_verbose.scenefile.expressions import check_expression
 from manim_verbose.scenefile.model import (
     Document, SceneSpec, ObjectBase, StepBase, Placement,
     OBJECT_MODELS, STEP_MODELS, ID_PATTERN,
     TextObject, TexObject, TitleObject, QuoteObject, BulletsObject,
-    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject,
+    GroupObject, BraceObject, BoxObject, ImageObject, SvgObject, GraphObject,
     ShowStep, HideStep, AddStep, RemoveStep, ClearStep, TransformStep,
     ChangeStep, MoveStep, HighlightStep, CameraStep, ApplyMatrixStep, TogetherStep,
     iter_steps,
@@ -297,6 +298,8 @@ class SceneChecker:
                     self.problem(f"'{obj.id}' can't refer to itself", loc + ref_loc, obj.id)
             if isinstance(obj, (ImageObject, SvgObject)):
                 self.check_path(obj.path, loc + ["path"], obj.id)
+            if isinstance(obj, GraphObject):
+                self.check_function(obj.function, loc + ["function"], obj.id)
         self.check_cycles()
 
     def check_ref(self, ref: str, types: list[str] | None, loc: Loc, item_id: str | None) -> bool:
@@ -315,6 +318,11 @@ class SceneChecker:
         parts = PurePosixPath(path.replace("\\", "/")).parts
         if PureWindowsPath(path).is_absolute() or path.startswith("/") or ".." in parts:
             self.problem("Files have to be in the scene file's folder or below it, given as a relative path", loc, item_id)
+
+    def check_function(self, function: Any, loc: Loc, item_id: str | None):
+        message = check_expression(function)
+        if message is not None:
+            self.problem(message, loc, item_id)
 
     def check_cycles(self):
         deps = {obj.id: {ref for _, ref, _ in object_refs(obj) if ref in self.objects} for obj in self.scene.objects}
@@ -385,6 +393,8 @@ class SceneChecker:
                     f"'{key}' isn't something a {target.type} has" + _did_you_mean(key, model.model_fields),
                     loc + ["set", key], step.id,
                 )
+        if isinstance(target, GraphObject) and isinstance(step.set.get("function"), str):
+            self.check_function(step.set["function"], loc + ["set", "function"], step.id)
         merged = {**target.model_dump(exclude_defaults=True), **step.set, "id": target.id, "type": target.type}
         try:
             model.model_validate(merged)
