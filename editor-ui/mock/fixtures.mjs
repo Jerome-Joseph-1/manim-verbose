@@ -1,5 +1,12 @@
 // Documents the mock server can start from. `demo` is a small populated lesson; `empty` is
-// what a brand new file looks like.
+// what a brand new file looks like; `eola` is the ten minute example video
+// (examples/eola_vectors/vectors.yaml, converted by scripts/convert_fixture.py), for
+// checking the editor stays quick with a big document.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const FIXTURES = {
   empty: () => ({
@@ -42,7 +49,8 @@ export const FIXTURES = {
       },
     ],
   }),
+
+  eola: () => JSON.parse(fs.readFileSync(path.join(here, 'fixtures/eola_vectors.json'), 'utf8')),
 };
 
-/** Objects for a scene with everything on it, used by tests that want a busy canvas. */
 export const DEFAULT_FIXTURE = 'demo';

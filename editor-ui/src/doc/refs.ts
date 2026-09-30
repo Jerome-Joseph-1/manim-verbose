@@ -1,7 +1,8 @@
 /**
  * Every place an object or step refers to another object by id, mirroring `object_refs`
- * and `step_refs` in manim_verbose/scenefile/validate.py, plus the fields a change step
- * can set which are themselves references.
+ * and `step_refs` in manim_verbose/scenefile/validate.py (next_to, on, targets, into,
+ * focus, members, and a placement's `on`), plus the fields a change step can set which are
+ * themselves references.
  *
  * References are scene local: an object in one scene can never refer to one in another.
  */
@@ -51,9 +52,13 @@ function visitScalarOrList(container: Record<string, unknown>, key: string, path
   else visitScalar(container, key, path, visit);
 }
 
+/** A placement names objects in `next_to`, and a coordinate system in `on` (for `at`). */
 function visitPlacement(container: Record<string, unknown>, key: string, path: Loc, visit: RefVisitor) {
   const place = container[key];
-  if (isObject(place)) visitScalar(place, 'next_to', [...path, key], visit);
+  if (isObject(place)) {
+    visitScalar(place, 'next_to', [...path, key], visit);
+    visitScalar(place, 'on', [...path, key], visit);
+  }
 }
 
 /**

@@ -127,6 +127,7 @@ export class Validator {
     if (title === 'Placement') {
       const given = ['at', 'edge', 'next_to'].filter((n) => value[n] !== undefined && value[n] !== null);
       if (given.length > 1) push(`Give only one of at, edge or next_to, not ${given.join(' and ')}`);
+      if (value.on != null && value.at == null) push('`on` says which coordinates `at` is in, so it needs `at`');
     }
     if (title === 'MoveStep' && (value.to == null) === (value.by == null)) push('A move needs exactly one of `to` or `by`');
     if (title === 'WaitStep' && value.run_time != null) push('A wait takes `duration`, not `run_time`');
@@ -279,6 +280,7 @@ function objectRefs(obj) {
   const refs = [];
   const place = isObj(obj.place) ? obj.place : null;
   if (place && typeof place.next_to === 'string') refs.push([['place', 'next_to'], place.next_to, null]);
+  if (place && typeof place.on === 'string') refs.push([['place', 'on'], place.on, ['number_plane', 'axes', 'axes_3d', 'number_line']]);
   if (typeof obj.on === 'string') refs.push([['on'], obj.on, obj.type === 'graph' ? ['axes', 'number_plane'] : ['number_plane', 'axes', 'axes_3d', 'number_line']]);
   if ((obj.type === 'brace' || obj.type === 'box') && typeof obj.target === 'string') refs.push([['target'], obj.target, null]);
   if (obj.type === 'group' && Array.isArray(obj.members)) obj.members.forEach((m, i) => refs.push([['members', i], m, null]));
@@ -292,6 +294,7 @@ function stepRefs(step) {
   if (step.do === 'transform' && typeof step.into === 'string') refs.push([['into'], step.into]);
   if (step.do === 'camera' && typeof step.focus === 'string') refs.push([['focus'], step.focus]);
   if (step.do === 'move' && isObj(step.to) && typeof step.to.next_to === 'string') refs.push([['to', 'next_to'], step.to.next_to]);
+  if (step.do === 'move' && isObj(step.to) && typeof step.to.on === 'string') refs.push([['to', 'on'], step.to.on, ['number_plane', 'axes', 'axes_3d', 'number_line']]);
   return refs;
 }
 
@@ -346,7 +349,7 @@ function wholeDocument(doc, validator) {
         if (seenSteps.has(step.id)) add(`Two steps are called '${step.id}'`, [...loc, 'id'], step.id);
         seenSteps.add(step.id);
       }
-      for (const [where, ref] of stepRefs(step)) checkRef(ref, null, [...loc, ...where], step.id ?? null);
+      for (const [where, ref, types] of stepRefs(step)) checkRef(ref, types ?? null, [...loc, ...where], step.id ?? null);
       if (step.do === 'highlight' && step.part != null && objects.has(step.target)) {
         const target = objects.get(step.target);
         const field = PART_FIELDS[target.type];
@@ -378,7 +381,24 @@ function wholeDocument(doc, validator) {
       if (obj?.type === 'group') for (const m of obj.members ?? []) for (const x of members(m)) set.add(x);
       return set;
     };
-    let onScreen = new Set((scene.objects ?? []).filter((o) => o.shown).map((o) => o.id));
+    const withGroups = (set) => {
+      const out = new Set(set);
+      const groups = (scene.objects ?? []).filter((o) => o.type === 'group' && Array.isArray(o.members));
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const g of groups) {
+          const shown = g.members.length > 0 && g.members.every((m) => out.has(m));
+          if (shown !== out.has(g.id)) {
+            if (shown) out.add(g.id);
+            else out.delete(g.id);
+            changed = true;
+          }
+        }
+      }
+      return out;
+    };
+    let onScreen = withGroups(new Set((scene.objects ?? []).filter((o) => o.shown).map((o) => o.id)));
     (scene.steps ?? []).forEach((step, i) => {
       const loc = [...sloc, 'steps', i];
       const warnAbsent = (ref) => {
@@ -404,7 +424,7 @@ function wholeDocument(doc, validator) {
       } else if (step.do === 'change' || step.do === 'highlight') {
         warnAbsent(step.target);
       }
-      onScreen = after;
+      onScreen = withGroups(after);
     });
     void ids;
   });

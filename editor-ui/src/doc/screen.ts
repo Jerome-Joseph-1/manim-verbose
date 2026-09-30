@@ -61,13 +61,35 @@ function follow(step: Step, objects: Map<string, SceneObject>, before: Set<strin
   return after;
 }
 
+/** A group is on screen when all its members are, however they got there. */
+function withGroups(objects: Map<string, SceneObject>, onScreen: Set<string>): Set<string> {
+  const out = new Set(onScreen);
+  const groups = [...objects.values()].filter((o) => o.type === 'group' && Array.isArray(o.members));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const group of groups) {
+      const members = (group.members as Json[]).filter((m): m is string => typeof m === 'string');
+      const shown = members.length > 0 && members.every((m) => out.has(m));
+      if (shown && !out.has(group.id)) {
+        out.add(group.id);
+        changed = true;
+      } else if (!shown && out.has(group.id)) {
+        out.delete(group.id);
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
 /** Ids on screen once step `stepIndex` has run (-1: before the first step). */
 export function onScreenAfter(scene: Scene, stepIndex: number): Set<string> {
   const objects = new Map((scene.objects ?? []).map((o) => [o.id, o]));
-  let current = new Set((scene.objects ?? []).filter((o) => o.shown === true).map((o) => o.id));
+  let current = withGroups(objects, new Set((scene.objects ?? []).filter((o) => o.shown === true).map((o) => o.id)));
   const steps = scene.steps ?? [];
   for (let i = 0; i <= Math.min(stepIndex, steps.length - 1); i += 1) {
-    current = follow(steps[i]!, objects, current);
+    current = withGroups(objects, follow(steps[i]!, objects, current));
   }
   return current;
 }

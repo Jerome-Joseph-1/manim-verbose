@@ -184,6 +184,44 @@ describe('renaming an object', () => {
   });
 });
 
+describe('placements on a coordinate system', () => {
+  function doc(): Document {
+    return {
+      scenes: [
+        {
+          id: 's',
+          objects: [
+            { id: 'plane', type: 'number_plane' },
+            { id: 'lbl', type: 'tex', tex: 'v', place: { at: [1, 2], on: 'plane' } },
+          ],
+          steps: [
+            { id: 's_1', do: 'show', target: ['plane', 'lbl'] },
+            { id: 's_2', do: 'move', target: 'lbl', to: { at: [3, 1], on: 'plane' } },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('renames place.on and move.to.on', () => {
+    const next = renameObject(doc(), 's', 'plane', 'grid');
+    expect(findObject(next, 's', 'lbl')!.place).toEqual({ at: [1, 2], on: 'grid' });
+    expect(findStep(next, 's', 's_2')!.to).toEqual({ at: [3, 1], on: 'grid' });
+    expect(invariantViolations(next, { references: true })).toEqual([]);
+  });
+
+  it('drops `on` (keeping `at`, now in frame units) when the system is removed', () => {
+    const next = removeObject(doc(), 's', 'plane', { cascade: true });
+    expect(findObject(next, 's', 'lbl')!.place).toEqual({ at: [1, 2] });
+    expect(findStep(next, 's', 's_2')!.to).toEqual({ at: [3, 1] });
+    expect(findStep(next, 's', 's_1')!.target).toEqual(['lbl']);
+    expect(invariantViolations(next, { references: true })).toEqual([]);
+    const plan = planObjectRemoval(doc(), 's', 'plane');
+    expect(plan.editedObjects).toEqual(['lbl']);
+    expect(plan.editedSteps).toEqual(['s_1', 's_2']);
+  });
+});
+
 describe('removing an object', () => {
   it('reports what uses it', () => {
     const plan = planObjectRemoval(sampleDoc(), 'intro', 'eq');

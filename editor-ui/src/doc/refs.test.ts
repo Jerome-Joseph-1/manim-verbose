@@ -7,6 +7,7 @@ import type { JsonSchema } from '../lib/schema';
 describe('object references', () => {
   it('finds next_to, on, brace/box target and group members', () => {
     expect(objectRefs({ id: 'a', type: 'text', text: 'x', place: { next_to: 'b' } })).toEqual([{ id: 'b', path: ['place', 'next_to'] }]);
+    expect(objectRefs({ id: 'a', type: 'text', text: 'x', place: { at: [1, 2], on: 'plane' } })).toEqual([{ id: 'plane', path: ['place', 'on'] }]);
     expect(objectRefs({ id: 'a', type: 'dot', point: [0, 0], on: 'plane' })).toEqual([{ id: 'plane', path: ['on'] }]);
     expect(objectRefs({ id: 'a', type: 'brace', target: 'eq' })).toEqual([{ id: 'eq', path: ['target'] }]);
     expect(objectRefs({ id: 'a', type: 'box', target: 'eq' })).toEqual([{ id: 'eq', path: ['target'] }]);
@@ -100,8 +101,11 @@ describe('coverage of the schema', () => {
         expect(stepRefs(step).map((r) => r.id), `${name}.${field}`).toContain('ref');
       }
     }
-    expect(refFields(defs.Placement!)).toEqual(['next_to']);
-    expect(stepRefs({ do: 'move', target: 'a', to: { next_to: 'ref' } }).map((r) => r.id)).toContain('ref');
-    expect(objectRefs({ id: 'o', type: 'circle', place: { next_to: 'ref' } }).map((r) => r.id)).toContain('ref');
+    const placementRefs = refFields(defs.Placement!);
+    expect(placementRefs.sort()).toEqual(['next_to', 'on']);
+    for (const field of placementRefs) {
+      expect(stepRefs({ do: 'move', target: 'a', to: { [field]: 'ref' } }).map((r) => r.id), `move.to.${field}`).toContain('ref');
+      expect(objectRefs({ id: 'o', type: 'circle', place: { [field]: 'ref' } }).map((r) => r.id), `place.${field}`).toContain('ref');
+    }
   });
 });

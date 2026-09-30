@@ -220,13 +220,13 @@ export function layoutScene(specs) {
         } else {
           box = [Math.min(...inner.map((b) => b[0])), Math.min(...inner.map((b) => b[1])), Math.max(...inner.map((b) => b[2])), Math.max(...inner.map((b) => b[3]))];
         }
-        box = positioned(obj, box[2] - box[0], box[3] - box[1], place, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2);
+        box = positioned(obj, box[2] - box[0], box[3] - box[1], place, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2, null, byId);
         break;
       }
       default: {
         const [w, h] = naturalSize(obj);
         const defaultEdge = obj.type === 'title' ? 'top' : null;
-        box = positioned(obj, w, h, place, 0, 0, defaultEdge);
+        box = positioned(obj, w, h, place, 0, 0, defaultEdge, byId);
       }
     }
     visiting.delete(id);
@@ -238,12 +238,14 @@ export function layoutScene(specs) {
   return boxes;
 }
 
-function positioned(obj, w, h, place, cx0, cy0, defaultEdge = null) {
+function positioned(obj, w, h, place, cx0, cy0, defaultEdge = null, byId = null) {
   const p = normalizePlace(obj.place);
   const buff = typeof p.buff === 'number' ? p.buff : 0.25;
   let cx = cx0;
   let cy = cy0;
-  if (Array.isArray(p.at) && p.at.length >= 2) [cx, cy] = p.at;
+  if (Array.isArray(p.at) && p.at.length >= 2 && typeof p.on === 'string' && byId?.has(p.on)) {
+    [cx, cy] = coordinateMap(byId.get(p.on), place(p.on))(p.at);
+  } else if (Array.isArray(p.at) && p.at.length >= 2) [cx, cy] = p.at;
   else if (typeof p.edge === 'string') [cx, cy] = edgeCenter(p.edge, w, h, buff);
   else if (typeof p.next_to === 'string') [cx, cy] = besideCenter(place(p.next_to), p.side ?? 'down', w, h, buff);
   else if (defaultEdge) [cx, cy] = edgeCenter(defaultEdge, w, h, buff);
@@ -281,7 +283,9 @@ export function sceneStateAfter(scene, stepIndex) {
         for (const t of targets) for (const m of members(t)) onScreen.delete(m);
         break;
       case 'clear':
+        // Clearing takes the caption with it
         onScreen = new Set();
+        caption = null;
         break;
       case 'transform':
         if (!step.keep) for (const m of members(step.target)) onScreen.delete(m);

@@ -300,11 +300,18 @@ function objectsToRemove(scene: Scene, objectId: string): Set<string> {
 function stripObjectRefs(obj: Draft<SceneObject>, gone: Set<string>): boolean {
   let changed = false;
   const place = obj.place as Draft<JsonObject> | undefined;
-  if (place && typeof place === 'object' && !Array.isArray(place) && typeof place.next_to === 'string' && gone.has(place.next_to)) {
-    delete place.next_to;
-    delete place.side;
+  if (place && typeof place === 'object' && !Array.isArray(place)) {
+    if (typeof place.next_to === 'string' && gone.has(place.next_to)) {
+      delete place.next_to;
+      delete place.side;
+      changed = true;
+    }
+    if (typeof place.on === 'string' && gone.has(place.on)) {
+      // `at` was in that system's coordinates; without it, it reads as frame units
+      delete place.on;
+      changed = true;
+    }
     if (Object.keys(place).length === 0) delete obj.place;
-    changed = true;
   }
   if (typeof obj.on === 'string' && gone.has(obj.on) && obj.type !== 'graph') {
     delete obj.on;
@@ -340,7 +347,13 @@ function stripStepRefs(step: Draft<Step>, gone: Set<string>): StepFate {
   if (step.do === 'transform' && has(fields.into)) return 'remove';
   if (step.do === 'move') {
     const to = fields.to as Draft<JsonObject> | undefined;
-    if (to && typeof to === 'object' && !Array.isArray(to) && has(to.next_to)) return 'remove';
+    if (to && typeof to === 'object' && !Array.isArray(to)) {
+      if (has(to.next_to)) return 'remove';
+      if (has(to.on)) {
+        delete to.on;
+        fate = 'edited';
+      }
+    }
   }
   if (step.do === 'camera' && has(fields.focus)) {
     delete fields.focus;
@@ -358,7 +371,7 @@ function stripStepRefs(step: Draft<Step>, gone: Set<string>): StepFate {
       }
     }
     const place = set.place as Draft<JsonObject> | undefined;
-    if (place && typeof place === 'object' && !Array.isArray(place) && has(place.next_to)) {
+    if (place && typeof place === 'object' && !Array.isArray(place) && (has(place.next_to) || has(place.on))) {
       delete set.place;
       touched = true;
     }
