@@ -1,0 +1,11 @@
+# The smallest scene file worth rendering. CI validates it with an installed manimgl, and
+# renders it wherever there is a renderer to render it with. Text and shapes only, no LaTeX.
+title: CI smoke test
+scenes:
+  - id: hello
+    objects:
+      - {id: ring, type: circle, color: BLUE}
+      - {id: greeting, type: text, text: Hello from CI}
+    steps:
+      - {do: show, target: ring}
+      - {do: show, target: greeting}
