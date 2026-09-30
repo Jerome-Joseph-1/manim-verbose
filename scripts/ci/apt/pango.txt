@@ -1,0 +1,4 @@
+# manimpango has wheels for macOS and Windows but not for Linux, where pip builds it from
+# source against the system's pango. The headers bring cairo's, fontconfig's and glib's with them.
+libpango1.0-dev
+pkg-config
