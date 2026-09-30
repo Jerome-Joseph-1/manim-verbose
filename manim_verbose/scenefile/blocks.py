@@ -94,7 +94,7 @@ SIDE_NAMES = {"up": "UP", "down": "DOWN", "left": "LEFT", "right": "RIGHT"}
 
 # Characters Pango's markup and LaTeX both refuse: C0 controls but tab and newline, DEL and
 # the C1 controls, lone surrogates, and the two noncharacters XML rules out
-_UNDRAWABLE = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\ud800-\udfff￾￿]")
+_UNDRAWABLE = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\ud800-\udfff\ufffe\uffff]")
 
 
 def displayable(text: str) -> str:

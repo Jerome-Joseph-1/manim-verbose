@@ -249,6 +249,7 @@ CASES: list[tuple[str, dict, list[dict]]] = [
     ("group", {"members": ["words", "sq"]}, [WORDS, SHAPE]),
     ("group", {"members": ["words", "sq", "words"], "arrange": "row", "buff": 0.2, **EVERYTHING_FREE}, [WORDS, SHAPE]),
     ("group", {"members": ["words", "img"], "arrange": "column", "opacity": 0.5}, [WORDS, IMAGE]),
+    ("group", {"members": ["words", "img"], "color": "RED", "z": 2, "scale": 0.5, **EVERYTHING_FREE}, [WORDS, IMAGE]),
 ]
 
 EXPECTED_TYPES = {
@@ -714,7 +715,7 @@ HOSTILE = [
     "\x1b[31mescape",
     "emoji 🙂 ok",
     "ünïcödé",
-    "‮right to left",
+    "\u202eright to left",
     "'); import os; os.system('echo pwned'); ('",
     '" + __import__("os").system("echo pwned") + "',
     "\\\" + __import__('os').getcwd() + \\\"",

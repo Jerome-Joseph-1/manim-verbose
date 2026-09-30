@@ -23,6 +23,7 @@ import ast
 import difflib
 import math
 import re
+import warnings
 from typing import Any, Callable, Sequence
 
 __all__ = ["safe_function", "check_expression", "SafeFunction", "ExpressionError"]
@@ -195,7 +196,11 @@ def _parse(text: Any, variables: tuple[str, ...]) -> ast.expr:
         raise ExpressionError(f"That formula is too long: keep it under {MAX_LENGTH} characters")
     source = text.replace("^", "**").strip()
     try:
-        tree = ast.parse(source, mode="eval")
+        # Python warns about oddities such as "1if" while parsing; they are refused below
+        # anyway, and a warning is no way to tell the formula's author
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tree = ast.parse(source, mode="eval")
     except SyntaxError as err:
         raise ExpressionError(_syntax_message(source, err, variables)) from None
     except (ValueError, MemoryError, RecursionError):

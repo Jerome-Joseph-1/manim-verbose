@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import sys
 import time
+import warnings
 
 import numpy as np
 import pytest
@@ -293,15 +294,20 @@ def watching(action):
 
 
 def evaluate_everywhere(text):
-    """Check, build and call a formula at a few points, as a render would, never raising."""
-    problem = check_expression(text)
-    try:
-        f = safe_function(text)
-    except ExpressionError as err:
-        assert problem == str(err)
-        return None
-    assert problem is None
-    values = [f(x) for x in (-2.5, -1, 0, 0.5, 1, 3, 1e6)]
+    """
+    Check, build and call a formula at a few points, as a render would, never raising and
+    never letting a warning out, which is no way to tell anyone anything.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        problem = check_expression(text)
+        try:
+            f = safe_function(text)
+        except ExpressionError as err:
+            assert problem == str(err)
+            return None
+        assert problem is None
+        values = [f(x) for x in (-2.5, -1, 0, 0.5, 1, 3, 1e6)]
     assert all(isinstance(v, float) for v in values)
     assert all(math.isnan(v) or math.isfinite(v) for v in values)
     return values

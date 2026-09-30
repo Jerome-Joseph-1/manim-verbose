@@ -36,7 +36,7 @@ from manimlib.mobject.shape_matchers import BackgroundRectangle, Underline
 from manimlib.mobject.svg.tex_mobject import Tex
 from manimlib.mobject.types.vectorized_mobject import VGroup, VMobject
 
-from manim_verbose.scenefile.expressions import SafeFunction, safe_function
+from manim_verbose.scenefile.expressions import safe_function
 
 __all__ = [
     "place", "frame_shape", "set_frame_shape", "SIDES", "EDGES",
