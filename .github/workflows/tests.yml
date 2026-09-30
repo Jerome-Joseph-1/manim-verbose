@@ -5,7 +5,7 @@ name: tests
 #
 #   python    layers 1, 2 and 4, and the packaging checks: pytest -m "not render and not e2e"
 #             on every supported Python
-#   render    layer 3: pytest -m render, and the renderer's own scripts, with Mesa's lavapipe
+#   render    layer 3: pytest -m render (and -m e2e), and the renderer's own scripts, with Mesa's lavapipe
 #             standing in for a GPU and the TeX manim's default template needs
 #   frontend  layer 5: typecheck, lint, Vitest and a build of editor-ui/
 #   e2e       layer 6: Playwright in Chromium against the real server and real renders
@@ -130,7 +130,20 @@ jobs:
           fi
           exit "$status"
 
-      # These run whatever became of the render tests, so long as manim installed
+      # pytest's e2e tests drive the real server with real renders, which is this job's
+      # setup; the browser journeys are the e2e job's
+      - name: Run end to end pytest tests (pytest -m e2e)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          status=0
+          python -m pytest -m e2e || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "::warning title=No e2e tests::No tests are marked e2e yet, so pytest -m e2e ran none"
+            exit 0
+          fi
+          exit "$status"
+
+      # These run whatever became of the tests above, so long as manim installed
       - name: Check every frame drawn reaches the video (tests/readback.py)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: python tests/readback.py --out "$GITHUB_WORKSPACE/.ci-artifacts/readback"
