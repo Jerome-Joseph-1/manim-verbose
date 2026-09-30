@@ -7,8 +7,10 @@ images, and the command line on top of it all.
 
 Golden images live in tests/scenefile/golden/ and are refreshed by running the tests with
 MANIM_VERBOSE_UPDATE_GOLDEN=1, after which they have to be looked at before being committed.
-Where a golden comparison fails and MANIM_TEST_ARTIFACTS is set, the new image and the
-difference are written there.
+golden/manifest.json, written along with them, records the machine they were made on and the
+boxes of what each shows: on that machine they are compared strictly, anywhere else loosely
+(see steps_helpers). Where a golden comparison fails and MANIM_TEST_ARTIFACTS is set, the new
+image, the difference and the reasons are written there.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ import sys
 import threading
 import time
 import uuid
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -25,8 +28,11 @@ import pytest
 
 from fake_blocks import blocks_impl, fake_blocks  # noqa: F401  (fixtures)
 from steps_helpers import (
-    FIXTURES, GOLDEN, UPDATE_GOLDEN, away_from_edges, difference, doc_from, fixture_doc, frame_count,
-    image, lossless, render_cache, run_scene, video_frames,  # noqa: F401  (lossless, render_cache are fixtures)
+    BOX_TOLERANCE, FINGERPRINT_KEYS, FIXTURES, GOLDEN, UPDATE_GOLDEN, away_from_edges, boxes_data, compare_boxes,
+    compare_loosely,
+    compare_strictly, difference, doc_from, fingerprint_differences, fixture_doc, frame_count, golden_manifest,
+    image, lossless, record_golden, render_cache, renderer_fingerprint, run_scene,  # noqa: F401  (fixtures)
+    video_frames,
 )
 
 from manim_verbose.scenefile import render
@@ -476,29 +482,195 @@ def golden_name(scene_id: str, step: int) -> str:
 @pytest.mark.render
 @pytest.mark.parametrize("scene_id, step", GOLDEN_STILLS)
 def test_stills_look_as_they_did(scene_id, step, fake_blocks, tmp_path, render_cache):
+    """
+    Strictly on the machine the golden images were made on, loosely anywhere else (see
+    steps_helpers.compare_loosely, and the test after this one for what that still catches).
+    """
     doc = fixture_doc("every_step.yaml")
     result = render.render_still(doc, scene_id, step, tmp_path / "new.png", width=320)
     golden = GOLDEN / golden_name(scene_id, step)
     if UPDATE_GOLDEN:
         golden.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(result.path, golden)
+        record_golden(golden.name, result.objects)
         return
-    if not golden.exists():
+    manifest = golden_manifest()
+    if not golden.exists() or golden.name not in manifest["stills"]:
         pytest.fail(f"No golden image {golden.name}: run with MANIM_VERBOSE_UPDATE_GOLDEN=1, and look at it")
+    elsewhere = fingerprint_differences(manifest["fingerprint"])
     reference, new = image(golden), image(result.path)
-    worst, mean = difference(reference, new)
-    stray = away_from_edges(reference, new)
-    if stray or mean >= 1.0:
-        artifacts = os.environ.get("MANIM_TEST_ARTIFACTS")
-        if artifacts:
-            from PIL import Image
-            folder = Path(artifacts) / "scenefile-golden"
-            folder.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(result.path, folder / golden.name.replace(".png", ".new.png"))
-            diff = np.clip(np.abs(reference - new) * 4, 0, 255).astype(np.uint8)
-            Image.fromarray(np.vstack([reference.astype(np.uint8), new.astype(np.uint8), diff])).save(
-                folder / golden.name.replace(".png", ".diff.png"))
-        pytest.fail(f"{golden.name} differs: {stray} pixels away from any edge, worst {worst}, mean {mean:.2f}")
+    recorded = manifest["stills"][golden.name]["boxes"]
+    reasons = compare_boxes(recorded, boxes_data(result.objects), BOX_TOLERANCE if elsewhere else 0.0)
+    if elsewhere:
+        warnings.warn(f"{golden.name} was compared loosely, having been made elsewhere: {'; '.join(elsewhere)}")
+        reasons += compare_loosely(reference, new, [(box.id, *box.bbox) for box in result.objects])
+    else:
+        reasons += compare_strictly(reference, new)
+    if reasons:
+        save_golden_artifacts(golden, result.path, reference, new, reasons, elsewhere)
+        how = ("compared loosely, since this machine isn't the one the golden images were made on ("
+               + "; ".join(elsewhere) + ")") if elsewhere else "compared strictly, on the machine they were made on"
+        pytest.fail(f"{golden.name} differs, {how}: " + "; ".join(reasons))
+
+
+def save_golden_artifacts(golden: Path, new_path: Path, reference, new, reasons: list[str], elsewhere: list[str]) -> None:
+    """The new picture, the two and their difference one above the other, and why, where CI collects them."""
+    artifacts = os.environ.get("MANIM_TEST_ARTIFACTS")
+    if not artifacts:
+        return
+    from PIL import Image
+    folder = Path(artifacts) / "scenefile-golden"
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(new_path, folder / golden.name.replace(".png", ".new.png"))
+    diff = np.clip(np.abs(reference - new) * 4, 0, 255).astype(np.uint8)
+    Image.fromarray(np.vstack([reference.astype(np.uint8), new.astype(np.uint8), diff])).save(
+        folder / golden.name.replace(".png", ".diff.png"))
+    (folder / golden.name.replace(".png", ".txt")).write_text(
+        "\n".join(["Differences:", *reasons, "", "Machine:", *(elsewhere or ["the one the golden images were made on"])]) + "\n",
+        encoding="utf-8")
+
+
+def still_with(doc, scene_id: str, step: int, out: Path, tweak=None):
+    """A still as render_still makes it, with `tweak` done to the scene just before it is drawn."""
+    job = render.prepare_job(doc, scene_id)
+    scene = render.run_job(job, RenderPlan(still=True, last_step=step), 320, 180, doc.settings.fps)
+    if tweak is not None:
+        tweak(scene)
+    scene.update_frame(force_draw=True)
+    scene.get_image().convert("RGB").save(out)
+    boxes = [render.ObjectBox(obj_id, pixels, frame) for obj_id, frame, pixels in scene.object_boxes()]
+    return image(out), boxes
+
+
+def nudged(dx: float, dy: float):
+    """The camera moved by a fraction of a pixel, which is how another rasterizer's lines come out: over by a little."""
+    def tweak(scene):
+        pixel = scene.frame.get_width() / 320
+        scene.frame.shift(np.array([dx * pixel, dy * pixel, 0]))
+    return tweak
+
+
+def multisampled(scene):
+    scene.camera.samples = 4
+    scene.camera.init_target()
+
+
+def bolder(scene):
+    from manimlib.mobject.types.vectorized_mobject import VMobject
+    for top in scene.mobjects:
+        for mob in top.get_family():
+            if isinstance(mob, VMobject) and mob.has_points():
+                mob.set_stroke(width=mob.get_stroke_widths() * 1.5, recurse=False)
+
+
+def invisible(obj_id: str):
+    def tweak(scene):
+        scene.objects[obj_id].set_opacity(0)
+    return tweak
+
+
+def gray_background(scene):
+    scene.camera.background_rgba = [0.3, 0.3, 0.3, 1.0]
+
+
+def edited(change):
+    doc = fixture_doc("every_step.yaml").model_copy(deep=True)
+    change(doc)
+    return doc
+
+
+def _set(obj, **values):
+    for key, value in values.items():
+        setattr(obj, key, value)
+
+
+# (what is different, scene, step, the document, what to do to the scene before drawing it)
+RENDERED_ELSEWHERE = [
+    ("nudged a third of a pixel", "basics", 7, None, nudged(0.37, 0.29)),
+    ("nudged a pixel and more", "plane_view", 1, None, nudged(1.2, -0.9)),
+    ("nudged, zoomed in", "plane_view", 2, None, nudged(0.6, 0.4)),
+    ("multisampled", "basics", 4, None, multisampled),
+    ("multisampled plane", "plane_view", 0, None, multisampled),
+    ("bolder lines", "basics", 11, None, bolder),
+    ("bolder grid", "plane_view", 4, None, bolder),
+]
+REGRESSIONS = [
+    ("a ring moved", "basics", 7, lambda d: _set(d.scenes[0].objects[3].place, at=[-3.85, 0]), None),
+    ("a ring recolored", "basics", 7, lambda d: _set(d.scenes[0].steps[7], set={"color": "RED", "radius": 0.6}), None),
+    ("a dot recolored", "basics", 7, lambda d: _set(d.scenes[0].objects[6], color="ORANGE"), None),
+    ("part of a formula recolored", "basics", 7, lambda d: _set(d.scenes[0].steps[4], color="ORANGE"), None),
+    ("a vector recolored", "plane_view", 1, lambda d: _set(d.scenes[1].objects[1], color="GOLD"), None),
+    ("a vector's tip moved", "plane_view", 1, lambda d: _set(d.scenes[1].objects[2], tip=[2, -1.2]), None),
+    ("a formula never shown", "basics", 4, lambda d: _set(d.scenes[0].steps[2], target="dot"), None),
+    ("a vector never shown", "plane_view", 0, lambda d: d.scenes[1].steps[0].steps.pop(), None),
+    ("a ring drawn invisibly", "basics", 7, None, invisible("ring")),
+    ("a formula drawn invisibly", "basics", 4, None, invisible("eq")),
+    ("a vector drawn invisibly", "plane_view", 1, None, invisible("v")),
+    ("another background", "basics", 1, None, gray_background),
+]
+
+
+@pytest.mark.render
+def test_comparing_loosely_forgives_another_rasterizer_and_catches_regressions(fake_blocks, tmp_path, render_cache):
+    """
+    What makes the loose comparison of golden images worth having: pictures as another
+    renderer might draw them (lines over by a fraction of a pixel, multisampled, a little
+    bolder) pass, and pictures showing something else (moved, recolored, missing, drawn
+    invisibly, on another background) don't, each caught by the boxes or by the pixels.
+    """
+    plain = fixture_doc("every_step.yaml")
+    references = {}
+
+    def reference(scene_id, step):
+        if (scene_id, step) not in references:
+            references[scene_id, step] = still_with(plain, scene_id, step, tmp_path / f"{scene_id}_{step}.png")
+        return references[scene_id, step]
+
+    def verdict(scene_id, step, doc, tweak, name):
+        ref_image, ref_boxes = reference(scene_id, step)
+        new_image, new_boxes = still_with(doc or plain, scene_id, step, tmp_path / f"{name}.png", tweak)
+        reasons = compare_boxes(boxes_data(ref_boxes), boxes_data(new_boxes), BOX_TOLERANCE)
+        if not reasons:
+            reasons = compare_loosely(ref_image, new_image, [(box.id, *box.bbox) for box in new_boxes])
+        return reasons, compare_strictly(ref_image, new_image)
+
+    for name, scene_id, step, change, tweak in RENDERED_ELSEWHERE:
+        loose, _ = verdict(scene_id, step, edited(change) if change else None, tweak, name)
+        assert loose == [], f"{name}: {loose}"
+    for name, scene_id, step, change, tweak in REGRESSIONS:
+        loose, strict = verdict(scene_id, step, edited(change) if change else None, tweak, name)
+        assert loose, f"{name} passed the loose comparison"
+
+
+def test_the_golden_manifest_knows_every_golden_image_and_what_made_them():
+    manifest = golden_manifest()
+    assert set(manifest["fingerprint"]) == set(FINGERPRINT_KEYS)
+    assert set(manifest["stills"]) == {golden_name(scene_id, step) for scene_id, step in GOLDEN_STILLS}
+    assert all(entry["boxes"] for entry in manifest["stills"].values())
+    assert {path.name for path in GOLDEN.glob("*.png")} >= set(manifest["stills"])
+
+
+def test_boxes_are_compared_by_id_and_place():
+    boxes = [["a", 0, 0, 1, 1], ["b", -1, -1, 0, 0]]
+    assert compare_boxes(boxes, boxes, 0) == []
+    assert compare_boxes(boxes, [["a", 0.03, 0, 1.03, 1], boxes[1]], BOX_TOLERANCE) == []
+    assert compare_boxes(boxes, [["a", 0.03, 0, 1.03, 1], boxes[1]], 0) == [
+        "'a' has moved: its box was [0, 0, 1, 1] and is [0.03, 0, 1.03, 1]"]
+    assert compare_boxes(boxes, boxes[:1], BOX_TOLERANCE) == ["the objects on screen were ['a', 'b'] and are now ['a']"]
+    assert compare_boxes(boxes, boxes[::-1], BOX_TOLERANCE), "drawn in another order"
+
+
+def test_a_machine_is_told_apart_by_what_draws_its_pictures(monkeypatch):
+    import steps_helpers
+    here = (("adapter", "llvmpipe (LLVM 20.1.2, 256 bits) | Mesa 25.2.8"), ("latex", "pdfTeX 3.14"),
+            ("pango", "1.52.1"), ("cairo", "1.18.0"), ("text font", "DejaVuSansMono.ttf"))
+    monkeypatch.setattr(steps_helpers, "_fingerprint", lambda: here)
+    assert fingerprint_differences(dict(here)) == []
+    [difference_] = fingerprint_differences({**dict(here), "adapter": "llvmpipe (LLVM 17.0.6, 256 bits) | Mesa 24.0.5"})
+    assert difference_ == ("adapter: made with 'llvmpipe (LLVM 17.0.6, 256 bits) | Mesa 24.0.5', "
+                           "here 'llvmpipe (LLVM 20.1.2, 256 bits) | Mesa 25.2.8'")
+    assert len(fingerprint_differences({})) == len(here), "a manifest recording nothing is from elsewhere"
+    assert [key for key, _ in here] == list(FINGERPRINT_KEYS)
 
 
 # The command line

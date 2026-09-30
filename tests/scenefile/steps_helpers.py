@@ -5,12 +5,14 @@ comparing pictures.
 
 Golden images and the expected generated code are refreshed by running the tests with
 MANIM_VERBOSE_UPDATE_GOLDEN=1, after which the new files are to be looked at before they
-are committed.
+are committed. How golden images are compared on machines other than the one they were made
+on is below, at GOLDEN_MANIFEST.
 """
 from __future__ import annotations
 
 import os
 import textwrap
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -100,6 +102,226 @@ def away_from_edges(reference: np.ndarray, other: np.ndarray, contrast: int = 24
     edges = spread > 8
     diff = np.abs(reference.astype(np.int16) - other.astype(np.int16)).max(axis=2)
     return int(((diff > contrast) & ~edges).sum())
+
+
+# Golden images, compared strictly on the machine they were made on and loosely elsewhere
+#
+# Two renderers never agree about every pixel of a thin line: Mesa's lavapipe from another
+# release, another LLVM, another GPU all rasterize a faint grid line or the edge of a glyph a
+# little differently, which is no regression. So next to the golden images is a manifest
+# recording what drew them (the graphics adapter and driver, LaTeX, Pango, cairo and the
+# font text falls back on) and, for each image, the box of every object on screen, which is
+# geometry and so the same on any machine.
+#
+# Where this machine is the one the images were made on, a new picture has to match its
+# golden image pixel for pixel away from edges (see compare_strictly). Anywhere else it is
+# compared loosely (compare_loosely), in ways a rasterizer can't change but a regression
+# does: the same objects in the same places, each drawn with about as much ink and in the
+# same colors, and the picture as a whole the same once blurred past the width of a line.
+
+GOLDEN_MANIFEST = GOLDEN / "manifest.json"
+# How far, in manim units, an object's box may be from where it was, on another machine,
+# where text is laid out by another version of Pango or LaTeX; on the same machine, none
+BOX_TOLERANCE = 0.05
+# How much more or less ink an object may be drawn with on another machine: thin lines
+# come out a little fainter or bolder
+INK_RATIO = (0.5, 2.0)
+# The share of an object's colored ink a hue has to hold to count as one of its colors,
+# and how little of it within HUE_REACH degrees counts as that color being gone
+HUE_PRESENT, HUE_GONE, HUE_REACH = 0.15, 0.03, 12.5
+# The blurred picture may differ by more than BLUR_LEVEL in no more than this share of it
+BLUR_SIGMA, BLUR_LEVEL, BLUR_SHARE = 3.0, 48, 0.005
+
+
+FINGERPRINT_KEYS = ("adapter", "latex", "pango", "cairo", "text font")
+
+
+def renderer_fingerprint() -> dict[str, str]:
+    """What decides how pictures come out on this machine, beyond this repository's code, as FINGERPRINT_KEYS."""
+    return dict(_fingerprint())
+
+
+@lru_cache(maxsize=1)
+def _fingerprint() -> tuple[tuple[str, str], ...]:
+    import shutil
+    import subprocess
+
+    def first_line(*command: str) -> str:
+        if shutil.which(command[0]) is None:
+            return "not installed"
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return "unknown"
+        return (result.stdout.strip().splitlines() or ["unknown"])[0]
+
+    try:
+        import wgpu
+        info = wgpu.gpu.request_adapter_sync(power_preference="high-performance").info
+        adapter = f"{info.get('device', '')} | {info.get('description', '')}".strip(" |")
+    except Exception as err:  # no adapter at all: then nothing renders anyway
+        adapter = f"none ({type(err).__name__})"
+    try:
+        import manimpango
+        pango, cairo = manimpango.pango_version(), manimpango.cairo_version()
+    except Exception:
+        pango = cairo = "unknown"
+    from manimlib.config import manim_config
+    return (
+        ("adapter", adapter),
+        ("latex", first_line("latex", "--version")),
+        ("pango", pango),
+        ("cairo", cairo),
+        ("text font", first_line("fc-match", str(manim_config.text.font))),
+    )
+
+
+def golden_manifest() -> dict:
+    import json
+    if not GOLDEN_MANIFEST.exists():
+        return {"fingerprint": {}, "stills": {}}
+    return json.loads(GOLDEN_MANIFEST.read_text(encoding="utf-8"))
+
+
+def record_golden(name: str, boxes: list) -> None:
+    """Notes a golden image's boxes, and what this machine is, in the manifest."""
+    import json
+    manifest = golden_manifest()
+    manifest["fingerprint"] = renderer_fingerprint()
+    manifest["stills"][name] = {"boxes": boxes_data(boxes)}
+    manifest["stills"] = dict(sorted(manifest["stills"].items()))
+    lines = ["{", f' "fingerprint": {json.dumps(manifest["fingerprint"], indent=2)[:-1]} }},', ' "stills": {']
+    for index, (still, entry) in enumerate(manifest["stills"].items()):
+        boxes = ",\n".join(f"   {json.dumps(box)}" for box in entry["boxes"])
+        comma = "," if index < len(manifest["stills"]) - 1 else ""
+        lines.append(f'  {json.dumps(still)}: {{"boxes": [\n{boxes}\n  ]}}{comma}')
+    lines += [" }", "}"]
+    GOLDEN_MANIFEST.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def boxes_data(boxes) -> list[list]:
+    """ObjectBoxes as the manifest keeps them: id and frame box, rounded."""
+    return [[box.id, *(round(float(v), 4) for v in box.frame_bbox)] for box in boxes]
+
+
+def fingerprint_differences(recorded: dict[str, str]) -> list[str]:
+    """
+    How this machine differs from the one golden images were made on, in words; none where
+    it is that one. MANIM_VERBOSE_GOLDEN_LOOSE=1 makes any machine count as another, to try
+    the loose comparison out.
+    """
+    here = renderer_fingerprint()
+    differences = [
+        f"{key}: made with {recorded.get(key, 'nothing recorded')!r}, here {here.get(key)!r}"
+        for key in sorted(set(recorded) | set(here)) if recorded.get(key) != here.get(key)
+    ]
+    if not differences and os.environ.get("MANIM_VERBOSE_GOLDEN_LOOSE") == "1":
+        differences.append("MANIM_VERBOSE_GOLDEN_LOOSE=1 asks for the comparison made on other machines")
+    return differences
+
+
+def compare_boxes(reference: list[list], new: list[list], tolerance: float) -> list[str]:
+    """Ways the objects on screen differ: some missing or extra, or out of place by more than tolerance."""
+    reasons = []
+    ref_ids, new_ids = [box[0] for box in reference], [box[0] for box in new]
+    if ref_ids != new_ids:
+        return [f"the objects on screen were {ref_ids} and are now {new_ids}"]
+    for ref, box in zip(reference, new):
+        worst = max(abs(a - b) for a, b in zip(ref[1:], box[1:]))
+        if worst > tolerance + 1e-4:
+            reasons.append(f"'{ref[0]}' has moved: its box was {ref[1:]} and is {box[1:]}")
+    return reasons
+
+
+def compare_strictly(reference: np.ndarray, new: np.ndarray) -> list[str]:
+    """The same picture but for the edges of shapes, which never come out exactly alike."""
+    worst, mean = difference(reference, new)
+    stray = away_from_edges(reference, new)
+    if stray or mean >= 1.0:
+        return [f"{stray} pixels away from any edge differ, worst by {worst}, by {mean:.2f} on average"]
+    return []
+
+
+def compare_loosely(reference: np.ndarray, new: np.ndarray, pixel_boxes: list) -> list[str]:
+    """
+    Whether a picture drawn by another renderer shows the same thing: each object (given by
+    its box in pixels, (id, x0, y0, x1, y1)) drawn with about as much ink and in the same
+    colors, and the whole the same once blurred past the width of a line. Lines drawn a
+    fraction of a pixel over or a little bolder pass; an object missing, invisible or
+    recolored, or a background of another color, doesn't.
+    """
+    from scipy import ndimage
+    assert reference.shape == new.shape, (reference.shape, new.shape)
+    reasons = []
+    background = reference[0, 0]
+    for obj_id, *box in pixel_boxes:
+        ref_part, new_part = _region(reference, box), _region(new, box)
+        ref_ink, new_ink = _ink(ref_part, background), _ink(new_part, background)
+        if ref_ink > 1 or new_ink > 1:
+            ratio = new_ink / max(ref_ink, 1e-9)
+            if not INK_RATIO[0] <= ratio <= INK_RATIO[1]:
+                reasons.append(f"'{obj_id}' is drawn with {ratio:.2f} times the ink it was")
+                continue
+        for hue, verb in _hues_changed(ref_part, new_part):
+            reasons.append(f"'{obj_id}' {verb} {hue:.0f}° of hue")
+    blurred = [
+        np.stack([ndimage.gaussian_filter(img[..., c].astype(float), BLUR_SIGMA) for c in range(3)], axis=-1)
+        for img in (reference, new)
+    ]
+    far = (np.abs(blurred[0] - blurred[1]).max(axis=2) > BLUR_LEVEL).mean()
+    if far > BLUR_SHARE:
+        reasons.append(f"{far:.1%} of the picture differs even blurred")
+    return reasons
+
+
+def _region(img: np.ndarray, box) -> np.ndarray:
+    x0, y0, x1, y1 = box
+    height, width = img.shape[:2]
+    return img[max(0, int(y0) - 2):min(height, int(np.ceil(y1)) + 2), max(0, int(x0) - 2):min(width, int(np.ceil(x1)) + 2)]
+
+
+def _ink(img: np.ndarray, background: np.ndarray) -> float:
+    """How much is drawn: the sum over pixels of how far each is from the background, 1 for the farthest."""
+    return float((np.abs(img.astype(float) - background).max(axis=2) / 255).sum())
+
+
+def _hue_shares(img: np.ndarray) -> tuple[np.ndarray, float]:
+    """
+    How the colored ink of a picture divides between hues, in 72 bins of 5°, weighted by how
+    colored each pixel is. Blending with a grey background, as antialiasing does, keeps hue,
+    which is what makes this the same whatever draws the edges.
+    """
+    rgb = img.astype(float) / 255
+    top, bottom = rgb.max(axis=2), rgb.min(axis=2)
+    chroma = top - bottom
+    colored = chroma > 0.2
+    if not colored.any():
+        return np.zeros(72), 0.0
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    c = np.maximum(chroma, 1e-9)
+    hue = np.where(top == r, ((g - b) / c) % 6, np.where(top == g, (b - r) / c + 2, (r - g) / c + 4)) * 60
+    shares, _ = np.histogram(hue[colored], bins=72, range=(0, 360), weights=chroma[colored])
+    total = float(shares.sum())
+    return shares / total, total
+
+
+def _hues_changed(reference: np.ndarray, new: np.ndarray) -> list[tuple[float, str]]:
+    """Hues holding a good share of the colored ink in one picture and next to none of the other's."""
+    ref, ref_mass = _hue_shares(reference)
+    now, new_mass = _hue_shares(new)
+    if ref_mass < 3 and new_mass < 3:
+        return []
+    reach = int(HUE_REACH // 5)
+    near = [sum(np.roll(shares, k) for k in range(-reach, reach + 1)) for shares in (ref, now)]
+    window = [sum(np.roll(shares, k) for k in (-1, 0, 1)) for shares in (ref, now)]
+    changed = []
+    for present, gone, verb in ((0, 1, "has lost the color at"), (1, 0, "has gained a color at")):
+        mass = (ref_mass, new_mass)[gone]
+        for index in np.argsort(-window[present])[:3]:
+            if window[present][index] >= HUE_PRESENT and (mass < 3 or near[gone][index] < HUE_GONE):
+                changed.append((index * 5 + 2.5, verb))
+                break
+    return changed
 
 
 @pytest.fixture
