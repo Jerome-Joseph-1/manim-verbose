@@ -1,0 +1,129 @@
+version: 1
+title: Solving an equation step by step
+description: Solves 3x + 5 = 20 one line at a time, with a note beside each move, then checks the answer. Change the three lines of working in the first scene (equation, minus_five and divided) and their notes, then the lines of the check.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: solve
+  title: Solve for x
+  objects:
+  - {id: heading, type: title, text: Solve for x}
+  - id: equation
+    type: tex
+    tex: 3x + 5 = 20
+    font_size: 60
+    colors: {x: YELLOW}
+    place: [-2.2, 1.3]
+  - id: minus_five
+    type: tex
+    tex: 3x = 15
+    font_size: 60
+    colors: {x: YELLOW}
+    place: [-2.2, -0.1]
+  - {id: divided, type: tex, tex: x = 5, font_size: 60, colors: {x: YELLOW}, place: [-2.2, -1.5]}
+  - id: note_minus_five
+    type: text
+    text: Take 5 from both sides
+    font_size: 34
+    color: BLUE_B
+    place: [2.8, -0.1]
+  - id: note_divided
+    type: text
+    text: Divide both sides by 3
+    font_size: 34
+    color: BLUE_B
+    place: [2.8, -1.5]
+  - {id: answer_box, type: box, target: divided, buff: 0.2, color: YELLOW}
+  steps:
+  - id: solve_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: We want the number x that makes this equation true.
+  - {id: solve_2, do: show, target: equation, style: write, run_time: 2}
+  - {id: solve_3, do: wait, duration: 2}
+  - id: solve_4
+    do: highlight
+    target: equation
+    part: '5'
+    style: box
+    run_time: 1.5
+    caption: First undo the + 5 by taking 5 away from both sides.
+  - {id: solve_5, do: show, target: note_minus_five, style: fade, run_time: 1}
+  - id: solve_6
+    do: transform
+    target: equation
+    into: minus_five
+    style: match
+    keep: true
+    run_time: 2
+  - {id: solve_7, do: wait, duration: 2}
+  - id: solve_8
+    do: highlight
+    target: minus_five
+    part: '3'
+    run_time: 1
+    caption: Now x is multiplied by 3, so divide both sides by 3.
+  - {id: solve_9, do: show, target: note_divided, style: fade, run_time: 1}
+  - id: solve_10
+    do: transform
+    target: minus_five
+    into: divided
+    style: match
+    keep: true
+    run_time: 2
+  - {id: solve_11, do: wait, duration: 1.5}
+  - id: solve_12
+    do: show
+    target: answer_box
+    style: draw
+    run_time: 1.5
+    caption: 'That leaves x on its own: x = 5.'
+  - {id: solve_13, do: wait, duration: 3}
+  - {id: solve_14, do: clear, run_time: 1}
+- id: check
+  title: Check the answer
+  objects:
+  - {id: heading, type: title, text: Check the answer}
+  - {id: original, type: tex, tex: 3x + 5 = 20, font_size: 60, colors: {x: YELLOW}, place: [0, 0.6]}
+  - id: substituted
+    type: tex
+    tex: 3(5) + 5 = 20
+    font_size: 60
+    colors: {(5): YELLOW}
+    place: [0, 0.6]
+  - {id: multiplied, type: tex, tex: 15 + 5 = 20, font_size: 60, place: [0, 0.6]}
+  - {id: added, type: tex, tex: 20 = 20, font_size: 60, place: [0, 0.6]}
+  - id: verdict
+    type: text
+    text: So x = 5 is right
+    font_size: 36
+    color: GREEN
+    place: {next_to: added, buff: 0.7}
+  steps:
+  - id: check_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: Always check by putting 5 back in place of x.
+  - {id: check_2, do: show, target: original, style: write, run_time: 1.5}
+  - {id: check_3, do: wait}
+  - {id: check_4, do: transform, target: original, into: substituted, style: match, run_time: 1.5}
+  - {id: check_5, do: wait, duration: 1.5}
+  - id: check_6
+    do: transform
+    target: substituted
+    into: multiplied
+    style: match
+    run_time: 1.5
+    caption: Three fives make 15, and 15 + 5 makes 20.
+  - {id: check_7, do: wait, duration: 1.5}
+  - {id: check_8, do: transform, target: multiplied, into: added, style: match, run_time: 1.5}
+  - id: check_9
+    do: show
+    target: verdict
+    style: fade_up
+    run_time: 1
+    caption: Both sides come to 20, so they match.
+  - {id: check_10, do: wait, duration: 3}
