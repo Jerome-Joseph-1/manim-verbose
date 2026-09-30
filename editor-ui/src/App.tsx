@@ -3,6 +3,7 @@ import { api, ApiError, type Catalog } from './lib/api';
 import type { Document, Problem } from './doc/types';
 import { ensureStepIds } from './doc/ops';
 import { invariantViolations } from './doc/check';
+import { storage } from './doc/storage';
 import { Autosaver, setAutosaver } from './state/autosave';
 import { handleShortcut } from './state/shortcuts';
 import { currentDoc, dismissToast, loadFailed, loaded, useEditor } from './state/store';
@@ -17,7 +18,10 @@ import { ProblemsPanel } from './components/ProblemsPanel';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { Sidebar } from './components/Sidebar';
+import { TemplateGallery } from './components/TemplateGallery';
+import { Tour, maybeStartTour } from './components/Tour';
 import { ConflictBanner, TopBar } from './components/TopBar';
+import { useLayoutWarnings } from './components/useLayout';
 
 /** What a new video starts as when the file can't be read and the user starts over. */
 const FRESH_DOCUMENT: Document = { version: 1, title: 'Untitled', scenes: [{ id: 'scene_1' }] };
@@ -32,7 +36,7 @@ async function loadEverything(): Promise<Unreadable | null> {
   const [schema, catalog, document] = await Promise.all([
     api.schema(),
     api.catalog().catch((): Catalog | null => null),
-    api.getDocument(),
+    storage().load(),
   ]);
   if (document.document === null) {
     return { path: document.path, revision: document.revision, problems: document.problems ?? [] };
@@ -76,7 +80,7 @@ export function App() {
 
   useEffect(() => {
     if (status !== 'ready') return undefined;
-    const saver = new Autosaver(api);
+    const saver = new Autosaver({ save: (doc, base, signal) => storage().save(doc, base, signal), timeline: api.timeline });
     setAutosaver(saver);
     saver.start();
     window.addEventListener('keydown', handleShortcut);
@@ -97,6 +101,7 @@ export function App() {
         return doc ? invariantViolations(doc) : ['no document'];
       },
     };
+    maybeStartTour();
     return () => {
       saver.stop();
       setAutosaver(null);
@@ -111,7 +116,7 @@ export function App() {
         info={unreadable}
         onStartFresh={async () => {
           try {
-            await api.putDocument(FRESH_DOCUMENT, unreadable.revision);
+            await storage().save(FRESH_DOCUMENT, unreadable.revision);
           } catch (error) {
             if (!(error instanceof ApiError && error.status === 409)) throw error;
           }
@@ -146,6 +151,11 @@ export function App() {
       </main>
     );
   }
+  return <Workspace />;
+}
+
+function Workspace() {
+  useLayoutWarnings();
   return (
     <div className="app">
       <TopBar />
@@ -162,7 +172,9 @@ export function App() {
       <CodeModal />
       <ExportModal />
       <ShortcutsModal />
+      <TemplateGallery />
       <ConfirmDialog />
+      <Tour />
       <Toasts />
     </div>
   );

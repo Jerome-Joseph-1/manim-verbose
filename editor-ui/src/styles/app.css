@@ -694,8 +694,8 @@ textarea {
   gap: 0;
 }
 
-.step-card:hover .step-actions,
-.step-card:has(:focus-visible) .step-actions {
+.step-card:hover > .step-actions,
+.step-card:has(> .step-title:focus-visible, > .step-actions :focus-visible) > .step-actions {
   display: flex;
 }
 

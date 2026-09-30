@@ -89,7 +89,7 @@ describe('coverage of the schema', () => {
       }
       sample[type] = true;
     }
-    expect(Object.keys(sample).length).toBe(23);
+    expect(Object.keys(sample).length).toBe(25);
   });
 
   it('knows every reference field of every step kind, and of placements', () => {

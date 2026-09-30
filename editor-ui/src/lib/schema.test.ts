@@ -13,7 +13,7 @@ function field(fields: FieldSpec[], name: string): FieldSpec {
 
 describe('the schema index', () => {
   it('lists every kind of object with its label and category', () => {
-    expect(schemaIndex.objectKinds).toHaveLength(23);
+    expect(schemaIndex.objectKinds).toHaveLength(25);
     expect(objectKind(schemaIndex, 'tex')).toMatchObject({ label: 'Equation', category: 'Text & math', description: 'A LaTeX formula, in math mode.' });
     expect(objectKind(schemaIndex, 'number_plane')?.category).toBe('Coordinates');
     // Sorted by category order: text and math first
@@ -91,7 +91,21 @@ describe('fields of objects', () => {
     ['circle', 'fill', 'color'],
     ['rectangle', 'corner_radius', 'number', { minimum: 0 }],
     ['square', 'side', 'number'],
-    ['brace', 'target', 'object-ref', { refTypes: null, required: true }],
+    ['brace', 'target', 'object-ref', { refTypes: null, required: false }],
+    ['brace', 'part', 'part', { label: 'Part to pick out' }],
+    ['brace', 'start', 'point'],
+    ['brace', 'end', 'point'],
+    ['brace', 'on', 'object-ref', { refTypes: ['number_plane', 'axes', 'axes_3d', 'number_line'] }],
+    ['box', 'part', 'part'],
+    ['angle', 'points', 'point-list', { minItems: 3, maxItems: 3, itemNames: ['Point A', 'Vertex', 'Point B'] }],
+    ['angle', 'right_angle', 'boolean'],
+    ['angle', 'label', 'tex'],
+    ['arc', 'center', 'point', { default: [0, 0] }],
+    ['arc', 'start_angle', 'number', { label: 'Start angle (degrees)' }],
+    ['arc', 'arrow', 'boolean'],
+    ['axes_3d', 'x_label', 'tex', { label: 'X axis label' }],
+    ['axes_3d', 'z_label', 'tex'],
+    ['vector', 'coordinate_colors', 'color-list'],
     ['brace', 'label', 'tex'],
     ['box', 'buff', 'number'],
     ['image', 'path', 'file', { accept: 'image/*' }],
@@ -138,11 +152,11 @@ describe('fields of steps', () => {
     ['show', 'id', 'id'],
     ['transform', 'target', 'object-ref'],
     ['transform', 'into', 'object-ref'],
-    ['transform', 'keep', 'boolean'],
+    ['transform', 'keep', 'choice', { choices: [{ value: false, label: 'No' }, { value: true, label: 'Yes' }, { value: 'dim', label: 'Yes, dimmed' }] }],
     ['change', 'set', 'properties', { required: true }],
     ['move', 'to', 'placement'],
     ['move', 'by', 'point', { maxItems: 2 }],
-    ['highlight', 'part', 'text'],
+    ['highlight', 'part', 'part', { label: 'Part to highlight' }],
     ['highlight', 'color', 'color'],
     ['wait', 'duration', 'number', { default: 1 }],
     ['camera', 'zoom', 'number'],
@@ -173,9 +187,11 @@ describe('other models', () => {
       ['id', 'id'],
       ['title', 'text'],
       ['background', 'color'],
+      ['carry', 'carry'],
     ]);
     const doc = documentFields(schemaIndex);
-    expect(doc.map((f) => f.name)).toEqual(['title', 'settings']);
+    expect(doc.map((f) => f.name)).toEqual(['title', 'description', 'settings']);
+    expect(field(doc, 'description').kind).toBe('multiline');
     const settings = field(doc, 'settings');
     expect(settings.kind).toBe('object');
     expect(settings.fields!.map((f) => [f.name, f.kind])).toEqual([
@@ -195,6 +211,8 @@ describe('other models', () => {
       ['on', 'object-ref'],
       ['edge', 'enum'],
       ['next_to', 'object-ref'],
+      ['anchor', 'enum'],
+      ['follow', 'boolean'],
       ['side', 'enum'],
       ['buff', 'number'],
       ['shift', 'point'],

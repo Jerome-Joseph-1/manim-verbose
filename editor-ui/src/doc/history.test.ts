@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { HISTORY_LIMIT, breakCoalescing, canRedo, canUndo, commit, createHistory, redo, replacePresent, undo } from './history';
+import fc from 'fast-check';
+import {
+  HISTORY_LIMIT, breakCoalescing, canRedo, canUndo, commit, createHistory, redo, replacePresent, selectionAfterRedo, selectionAfterUndo, undo,
+} from './history';
 
 describe('history', () => {
   it('undoes and redoes', () => {
@@ -71,5 +74,73 @@ describe('history', () => {
     h = replacePresent(h, 'B');
     expect(h.present).toBe('B');
     expect(undo(h).present).toBe('a');
+  });
+});
+
+describe('what went with each edit', () => {
+  it('gives back what was selected before an edit on undo, and after it on redo', () => {
+    let h = createHistory<string, string>('doc0');
+    h = commit(h, 'doc1', { now: 0, meta: { before: 'circle', after: 'circle' } });
+    h = commit(h, 'doc2', { now: 5000, meta: { before: 'text', after: 'new thing' } });
+    expect(selectionAfterUndo(h)).toBe('text');
+    h = undo(h);
+    expect(selectionAfterUndo(h)).toBe('circle');
+    expect(selectionAfterRedo(h)).toBe('new thing');
+    h = undo(h);
+    expect(selectionAfterUndo(h)).toBeUndefined();
+    expect(selectionAfterRedo(h)).toBe('circle');
+    h = redo(h);
+    expect(h.present).toBe('doc1');
+    expect(selectionAfterRedo(h)).toBe('new thing');
+  });
+
+  it('keeps the first before and the last after of edits merged into one', () => {
+    let h = createHistory<number, string>(0);
+    h = commit(h, 1, { key: 'typing', now: 0, meta: { before: 'a', after: 'b' } });
+    h = commit(h, 2, { key: 'typing', now: 100, meta: { before: 'b', after: 'c' } });
+    expect(h.past).toEqual([0]);
+    expect(h.pastMeta).toEqual([{ before: 'a', after: 'c' }]);
+  });
+
+  it('keeps meta in step with the snapshots, whatever is done', () => {
+    type Op = { kind: 'commit'; key: string | null; at: number } | { kind: 'undo' } | { kind: 'redo' };
+    const op: fc.Arbitrary<Op> = fc.oneof(
+      fc.record({ kind: fc.constant('commit' as const), key: fc.constantFrom(null, 'k'), at: fc.integer({ min: 0, max: 3000 }) }),
+      fc.constant({ kind: 'undo' as const }),
+      fc.constant({ kind: 'redo' as const }),
+    );
+    fc.assert(
+      fc.property(fc.array(op, { maxLength: 60 }), (ops) => {
+        let h = createHistory<number, number>(0);
+        let n = 0;
+        let now = 0;
+        for (const o of ops) {
+          if (o.kind === 'commit') {
+            n += 1;
+            now += o.at;
+            h = commit(h, n, { key: o.key, now, meta: { before: -n, after: n } });
+          } else if (o.kind === 'undo') {
+            const wanted = selectionAfterUndo(h);
+            const before = h;
+            h = undo(h);
+            // The selection given back is the one from before the edit that made what was undone
+            if (before.past.length) expect(wanted).toBeLessThan(0);
+          } else {
+            h = redo(h);
+          }
+          expect(h.pastMeta).toHaveLength(h.past.length);
+          expect(h.futureMeta).toHaveLength(h.future.length);
+          // Redoing gives the selection after the edit which made the state redone
+          if (h.future.length) expect(selectionAfterRedo(h)).toBe(h.future[0]);
+        }
+      }),
+    );
+  });
+
+  it('drops old meta along with old snapshots', () => {
+    let h = createHistory<number, number>(0);
+    for (let i = 1; i <= HISTORY_LIMIT + 10; i += 1) h = commit(h, i, { meta: { before: i - 1, after: i } });
+    expect(h.pastMeta).toHaveLength(HISTORY_LIMIT);
+    expect(h.pastMeta[0]).toEqual({ before: 10, after: 11 });
   });
 });

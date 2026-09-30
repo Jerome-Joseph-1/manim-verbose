@@ -76,7 +76,7 @@ function naturalSize(obj, ctx) {
       break;
     }
     case 'number_plane':
-      size = [obj.width ?? Math.min(rangeSpan(obj.x_range, 16), FRAME_WIDTH), obj.height ?? Math.min(rangeSpan(obj.y_range, 8), FRAME_HEIGHT)];
+      size = [obj.width ?? rangeSpan(obj.x_range, 16), obj.height ?? rangeSpan(obj.y_range, 8)];
       break;
     case 'axes':
       size = [obj.width ?? rangeSpan(obj.x_range, 12), obj.height ?? rangeSpan(obj.y_range, 6)];
@@ -143,13 +143,17 @@ function normalizePlace(place) {
   return isObj(place) ? place : {};
 }
 
+export const COORDINATE_TYPES = ['number_plane', 'axes', 'axes_3d', 'number_line'];
+
 /** A coordinate system's mapping from its coordinates to frame units. */
-function coordinateMap(system, box) {
+export function coordinateMap(system, box) {
   const xr = Array.isArray(system.x_range) ? system.x_range : system.type === 'number_plane' ? [-8, 8] : [-6, 6];
   const yr = Array.isArray(system.y_range) ? system.y_range : system.type === 'number_plane' ? [-4, 4] : [-3, 3];
   const [x0, y0, x1, y1] = box;
   const sx = (x1 - x0) / Math.max(1e-6, xr[1] - xr[0]);
-  const sy = system.type === 'number_line' ? sx : (y1 - y0) / Math.max(1e-6, yr[1] - yr[0]);
+  // A point on a number line is [n, height]: along it, then that far up in frame units
+  if (system.type === 'number_line') return (p) => [x0 + (p[0] - xr[0]) * sx, (y0 + y1) / 2 + (p[1] ?? 0)];
+  const sy = (y1 - y0) / Math.max(1e-6, yr[1] - yr[0]);
   return (p) => [x0 + (p[0] - xr[0]) * sx, y0 + ((p[1] ?? 0) - yr[0]) * sy];
 }
 
@@ -191,11 +195,48 @@ export function layoutScene(specs) {
         box = pointsBox((obj.points ?? []).filter(Array.isArray).map(pt), 0.02);
         if (!Number.isFinite(box[0])) box = [-0.5, -0.5, 0.5, 0.5];
         break;
+      case 'angle': {
+        // The arc near the vertex, a radius out along each side
+        const [a, v, b] = (obj.points ?? []).filter(Array.isArray).map(pt);
+        if (!a || !v || !b) {
+          box = [-0.5, -0.5, 0.5, 0.5];
+          break;
+        }
+        const r = obj.radius ?? 0.5;
+        const toward = (p) => {
+          const d = Math.hypot(p[0] - v[0], p[1] - v[1]) || 1;
+          return [v[0] + ((p[0] - v[0]) / d) * r, v[1] + ((p[1] - v[1]) / d) * r];
+        };
+        box = pointsBox([v, toward(a), toward(b)], 0.04);
+        break;
+      }
+      case 'arc': {
+        const c = pt(obj.center ?? [0, 0]);
+        const r = obj.radius ?? 1;
+        const start = obj.start_angle ?? 0;
+        const end = obj.end_angle ?? 90;
+        const points = [];
+        for (let i = 0; i <= 16; i += 1) {
+          const t = ((start + ((end - start) * i) / 16) * Math.PI) / 180;
+          points.push([c[0] + r * Math.cos(t), c[1] + r * Math.sin(t)]);
+        }
+        box = pointsBox(points, 0.03);
+        break;
+      }
       case 'graph':
         box = onBox ? [...onBox] : [-3, -2, 3, 2];
         box = [box[0], box[1] + (box[3] - box[1]) * 0.15, box[2], box[3] - (box[3] - box[1]) * 0.15];
         break;
       case 'brace': {
+        if (Array.isArray(obj.start) && Array.isArray(obj.end) && obj.target == null) {
+          // Between two points, bulging towards `side`
+          const [s, e] = [pt(obj.start), pt(obj.end)];
+          const depth = obj.label ? 0.8 : 0.35;
+          const side = obj.side ?? 'down';
+          const push = { up: [0, depth], down: [0, -depth], left: [-depth, 0], right: [depth, 0] }[side] ?? [0, -depth];
+          box = pointsBox([s, e, [s[0] + push[0], s[1] + push[1]], [e[0] + push[0], e[1] + push[1]]], 0.02);
+          break;
+        }
         const t = typeof obj.target === 'string' && byId.has(obj.target) ? place(obj.target) : [-1, -0.5, 1, 0.5];
         const buff = obj.buff ?? 0.1;
         const side = obj.side ?? 'down';
@@ -260,9 +301,10 @@ function positioned(obj, w, h, place, cx0, cy0, defaultEdge = null, byId = null)
  * Follow a scene's steps up to and including `stepIndex`: what is on screen, what each
  * object looks like by then (after change and move steps), the caption, and the camera.
  */
-export function sceneStateAfter(scene, stepIndex) {
-  const specs = new Map((scene.objects ?? []).map((o) => [o.id, structuredClone(o)]));
-  let onScreen = new Set((scene.objects ?? []).filter((o) => o.shown).map((o) => o.id));
+export function sceneStateAfter(scene, stepIndex, carried = []) {
+  const specs = new Map([...carried, ...(scene.objects ?? [])].map((o) => [o.id, structuredClone(o)]));
+  // Carried objects start on screen, as the scene before left them
+  let onScreen = new Set([...(scene.objects ?? []).filter((o) => o.shown).map((o) => o.id), ...carried.map((o) => o.id)]);
   let caption = null;
   const camera = { zoom: 1, center: [0, 0], focus: null };
   const members = (ref) => {
@@ -352,10 +394,17 @@ function fittedText(label, x, y, w, h, color, opacity) {
  * The still for `stepIndex` of a scene, as SVG, with each object's box in pixels and in
  * frame units, in drawing order.
  */
-export function renderStill(doc, scene, stepIndex, width) {
+export function renderStill(doc, scene, stepIndex, width, { assets = new Map() } = {}) {
   const height = Math.round((width * 9) / 16);
-  const state = sceneStateAfter(scene, stepIndex);
+  const state = sceneStateAfter(scene, stepIndex, carriedSpecs(doc, scene));
   const boxes = layoutScene(state.specs);
+  const byId = new Map(state.specs.map((o) => [o.id, o]));
+  // A point of an object, in its own units, as pixels: through its coordinate system if it is on one
+  const pixel = (obj, p) => {
+    const system = typeof obj.on === 'string' ? byId.get(obj.on) : null;
+    const [fx, fy] = system && boxes.has(system.id) ? coordinateMap(system, boxes.get(system.id))(p) : [p[0], p[1] ?? 0];
+    return toPx(fx, fy);
+  };
   let [cx, cy] = state.camera.center;
   if (state.camera.focus && boxes.has(state.camera.focus)) {
     const b = boxes.get(state.camera.focus);
@@ -401,19 +450,29 @@ export function renderStill(doc, scene, stepIndex, width) {
     if (obj.type === 'circle' || obj.type === 'dot') {
       parts.push(`<ellipse cx="${(px0 + px1) / 2}" cy="${(py0 + py1) / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fill}" fill-opacity="${obj.type === 'dot' ? 1 : fillOpacity}" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`);
     } else if (obj.type === 'polygon' && Array.isArray(obj.points)) {
-      const on = typeof obj.on === 'string';
-      const pts = on ? [[fb[0], fb[1]], [fb[2], fb[1]], [fb[2], fb[3]]] : obj.points;
-      parts.push(`<polygon points="${pts.map((p) => toPx(p[0], p[1]).join(',')).join(' ')}" fill="${fill}" fill-opacity="${fillOpacity}" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`);
-    } else if (obj.type === 'vector' || obj.type === 'line') {
+      const pts = obj.points.filter(Array.isArray).map((p) => pixel(obj, p));
+      parts.push(`<polygon points="${pts.map((p) => p.join(',')).join(' ')}" fill="${fill}" fill-opacity="${fillOpacity}" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`);
+    } else if (obj.type === 'vector' || obj.type === 'line' || (obj.type === 'brace' && Array.isArray(obj.start) && Array.isArray(obj.end))) {
       const a = obj.type === 'vector' ? obj.tail ?? [0, 0] : obj.start;
       const b = obj.type === 'vector' ? obj.tip : obj.end;
-      if (Array.isArray(a) && Array.isArray(b) && typeof obj.on !== 'string') {
-        const [ax, ay] = toPx(a[0], a[1]);
-        const [bx, by] = toPx(b[0], b[1]);
-        parts.push(`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="4" opacity="${opacity}"/>`);
+      if (Array.isArray(a) && Array.isArray(b)) {
+        const [ax, ay] = pixel(obj, a);
+        const [bx, by] = pixel(obj, b);
+        const dash = obj.type === 'brace' || obj.dashed ? ' stroke-dasharray="8 5"' : '';
+        parts.push(`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="4" opacity="${opacity}"${dash}/>`);
+        if (obj.type === 'vector') {
+          const angle = Math.atan2(by - ay, bx - ax);
+          const head = (d, turn) => [bx - d * Math.cos(angle + turn), by - d * Math.sin(angle + turn)].join(',');
+          parts.push(`<polygon points="${bx},${by} ${head(14, 0.45)} ${head(14, -0.45)}" fill="${color}" opacity="${opacity}"/>`);
+        }
       } else {
         parts.push(`<line x1="${px0}" y1="${py1}" x2="${px1}" y2="${py0}" stroke="${color}" stroke-width="4" opacity="${opacity}"/>`);
       }
+    } else if (obj.type === 'angle' || obj.type === 'arc') {
+      parts.push(`<rect x="${px0}" y="${py0}" width="${w}" height="${h}" rx="${Math.min(w, h) / 2}" fill="none" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`);
+    } else if (obj.type === 'image' && typeof obj.path === 'string' && assets.has(obj.path)) {
+      const asset = assets.get(obj.path);
+      parts.push(`<image x="${px0}" y="${py0}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}" href="data:${asset.type};base64,${asset.bytes.toString('base64')}"/>`);
     } else if (obj.type === 'graph') {
       const pts = [];
       for (let i = 0; i <= 40; i += 1) {
@@ -433,5 +492,33 @@ export function renderStill(doc, scene, stepIndex, width) {
     parts.push(`<text x="${width / 2}" y="${height - fontPx * 1.2}" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="${fontPx}" text-anchor="middle" dominant-baseline="central">${escapeXml(state.caption)}</text>`);
   }
   parts.push('</svg>');
-  return { svg: parts.join(''), width, height, objects };
+  // Where each coordinate system's coordinates land, as the real server measures them
+  const round = (v) => Math.round(v * 1000) / 1000;
+  const coordinateSystems = order
+    .filter((obj) => COORDINATE_TYPES.includes(obj.type))
+    .map((obj) => {
+      const origin = pixel({ on: obj.id }, [0, 0]);
+      const unit = (p) => pixel({ on: obj.id }, p).map((v, i) => round(v - origin[i]));
+      return { id: obj.id, type: obj.type, origin: origin.map(round), x_unit: unit([1, 0]), y_unit: unit([0, 1]), z_unit: obj.type === 'axes_3d' ? [0, 0] : null };
+    });
+  return { svg: parts.join(''), width, height, objects, coordinateSystems };
+}
+
+/**
+ * The objects a scene carries over from the scenes before it, as those scenes declared them
+ * (changes made by steps there aren't followed, which is near enough for the mock).
+ */
+export function carriedSpecs(doc, scene) {
+  const index = (doc.scenes ?? []).indexOf(scene);
+  if (index <= 0 || !Array.isArray(scene.carry)) return [];
+  let usable = new Map();
+  for (let i = 0; i < index; i += 1) {
+    const s = doc.scenes[i];
+    const next = new Map();
+    for (const id of i > 0 ? (s.carry ?? []) : []) if (usable.has(id)) next.set(id, usable.get(id));
+    for (const obj of s.objects ?? []) next.set(obj.id, obj);
+    usable = next;
+  }
+  const own = new Set((scene.objects ?? []).map((o) => o.id));
+  return scene.carry.filter((id) => usable.has(id) && !own.has(id)).map((id) => structuredClone(usable.get(id)));
 }

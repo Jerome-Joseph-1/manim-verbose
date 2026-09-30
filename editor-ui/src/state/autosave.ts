@@ -4,6 +4,7 @@
  * meantime the server says so (409) and the user chooses whose version wins.
  */
 import { ApiError, type Api } from '../lib/api';
+import type { DocumentStorage } from '../doc/storage';
 import type { Document } from '../doc/types';
 import { adoptCanonical, adoptServerDocument, currentSceneId, useEditor } from './store';
 
@@ -22,7 +23,7 @@ export class Autosaver {
   private timelineAbort: AbortController | null = null;
 
   constructor(
-    private readonly api: Pick<Api, 'putDocument' | 'timeline'>,
+    private readonly api: Pick<DocumentStorage, 'save'> & Partial<Pick<Api, 'timeline'>>,
     private readonly delay = SAVE_DELAY_MS,
   ) {}
 
@@ -89,7 +90,7 @@ export class Autosaver {
 
   private async send(doc: Document, baseRevision: number): Promise<void> {
     try {
-      const response = await this.api.putDocument(doc, baseRevision);
+      const response = await this.api.save(doc, baseRevision);
       this.retries = 0;
       const now = useEditor.getState();
       const unchanged = now.history?.present === doc;
@@ -157,6 +158,7 @@ export class Autosaver {
     const abort = new AbortController();
     this.timelineAbort = abort;
     try {
+      if (!this.api.timeline) return;
       const timeline = await this.api.timeline(sceneId, abort.signal);
       useEditor.setState((s) => ({ timelines: { ...s.timelines, [sceneId]: timeline } }));
     } catch {

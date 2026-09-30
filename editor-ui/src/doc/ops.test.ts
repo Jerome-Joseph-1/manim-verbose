@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DocOpError, addNestedStep, addObject, addScene, addStep, duplicateObject, duplicateScene, duplicateStep,
-  ensureStepIds, findObject, findScene, findStep, findStepPath, itemLoc, moveObject, moveScene, moveStep,
+  ensureStepIds, findObject, findScene, findStep, findStepPath, itemLoc, moveNestedStep, moveObject, moveScene, moveStep, parentStep,
   planObjectRemoval, removeObject, removeScene, removeStep, renameItem, renameObject, renameScene, renameStep,
   setField, setItemField,
 } from './ops';
@@ -340,11 +340,36 @@ describe('steps', () => {
   it('removes steps, top level and nested', () => {
     let doc = removeStep(sampleDoc(), 'intro', 'intro_1');
     expect(findStep(doc, 'intro', 'intro_1')).toBeUndefined();
+    // A together left with one step (it needs two) becomes that step
     doc = removeStep(doc, 'intro', 'intro_9');
-    expect((stepById(doc, 'intro_8').steps as Step[]).map((s) => s.id)).toEqual(['intro_10']);
+    expect(findStep(doc, 'intro', 'intro_8')).toBeUndefined();
+    expect(scene(doc).steps![6]).toEqual({ id: 'intro_10', do: 'highlight', target: 'eq' });
     doc = removeStep(doc, 'second', 'second_1');
     expect(scene(doc, 'second').steps).toBeUndefined();
     expect(() => removeStep(doc, 'intro', 'nope')).toThrow(/no step/);
+    expect(invariantViolations(doc)).toEqual([]);
+  });
+
+  it('keeps a together with more than two steps, and gives an unwrapped step its caption', () => {
+    let doc = addNestedStep(sampleDoc(), 'intro', 'intro_8', { do: 'show', target: 'label' }).doc;
+    doc = removeStep(doc, 'intro', 'intro_9');
+    expect((stepById(doc, 'intro_8').steps as Step[]).map((s) => s.do)).toEqual(['highlight', 'show']);
+    doc = setItemField(doc, { kind: 'step', sceneId: 'intro', id: 'intro_8' }, ['caption'], 'Both at once');
+    doc = removeStep(doc, 'intro', 'intro_10');
+    expect(scene(doc).steps![7]).toMatchObject({ do: 'show', target: 'label', caption: 'Both at once' });
+  });
+
+  it('adds, reorders and finds the steps inside a together', () => {
+    const { doc, id } = addNestedStep(sampleDoc(), 'intro', 'intro_8', { do: 'hide', target: 'eq' }, { index: 0 });
+    expect((stepById(doc, 'intro_8').steps as Step[]).map((s) => s.id)).toEqual([id, 'intro_9', 'intro_10']);
+    expect(parentStep(doc, 'intro', id)?.id).toBe('intro_8');
+    expect(parentStep(doc, 'intro', 'intro_8')).toBeUndefined();
+    const moved = moveNestedStep(doc, 'intro', 'intro_8', 0, 2);
+    expect((stepById(moved, 'intro_8').steps as Step[]).map((s) => s.id)).toEqual(['intro_9', 'intro_10', id]);
+    expect(moveNestedStep(moved, 'intro', 'intro_8', 1, 1)).toBe(moved);
+    expect(() => moveNestedStep(doc, 'intro', 'intro_1', 0, 1)).toThrow(/together/);
+    expect(() => addNestedStep(doc, 'intro', 'intro_8', { do: 'wait', duration: 1 })).toThrow(/can't go inside/);
+    expect(invariantViolations(moved)).toEqual([]);
   });
 
   it('reorders steps', () => {

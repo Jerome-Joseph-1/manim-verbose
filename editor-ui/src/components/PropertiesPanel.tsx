@@ -3,20 +3,21 @@
  * problems beside the fields they are about.
  */
 import { useEffect, useMemo, useRef } from 'react';
-import { DocOpError, findObject, findScene, findStep, renameItem, setItemField, type ItemRef } from '../doc/ops';
+import { DocOpError, findObject, findScene, findStep, parentStep, renameItem, setItemField, type ItemRef } from '../doc/ops';
 import { formatLoc } from '../doc/paths';
 import { onScreenAfter } from '../doc/screen';
-import { fieldOf, type Document, type Json, type Problem, type Scene } from '../doc/types';
+import { fieldOf, type Document, type Json, type Problem, type Scene, type SceneObject } from '../doc/types';
 import {
   documentFields, objectFields, objectKind, sceneFields, stepFields, stepKind, type FieldGroup, type FieldSpec, type SchemaIndex,
 } from '../lib/schema';
-import { dedupeProblems, problemsForField, type ItemAddress } from '../lib/problems';
-import { apply, frameStepIndex, select, useEditor } from '../state/store';
+import { problemsForField, type ItemAddress } from '../lib/problems';
+import { apply, frameStepIndex, select, useAllProblems, useEditor } from '../state/store';
+import { carriedObjects, effectiveScene } from '../doc/carry';
 import {
   duplicateObjectById, duplicateSceneById, duplicateStepById, removeStepById, requestRemoveObject, requestRemoveScene, showObjects,
 } from '../state/actions';
 import { openPreview } from './PreviewModal';
-import { FormContext, type FormCtx } from './form/context';
+import { FormContext, useForm, type FormCtx } from './form/context';
 import { Field, FieldProblems } from './form/Field';
 import { Icon, categoryIcon, stepIcon } from './Icon';
 
@@ -30,9 +31,21 @@ const GROUP_TITLES: Record<FieldGroup, string> = {
 };
 
 function useProblems(): Problem[] {
-  const saveProblems = useEditor((s) => s.saveProblems);
-  const renderProblems = useEditor((s) => s.renderProblems);
-  return useMemo(() => dedupeProblems([...saveProblems, ...Object.values(renderProblems).flat()]), [saveProblems, renderProblems]);
+  return useAllProblems();
+}
+
+/** Fields that don't apply to an object as it is now: a brace between two points has no target. */
+export function applicableFields(obj: SceneObject, fields: FieldSpec[]): FieldSpec[] {
+  if (obj.type === 'brace') {
+    const points = braceMode(obj) === 'points';
+    const hidden = points ? ['target', 'part'] : ['start', 'end', 'on'];
+    return fields.filter((f) => !hidden.includes(f.name));
+  }
+  return fields;
+}
+
+export function braceMode(obj: SceneObject): 'object' | 'points' {
+  return (obj.target === undefined || obj.target === null) && (obj.start !== undefined || obj.end !== undefined) ? 'points' : 'object';
 }
 
 function makeContext(
@@ -48,7 +61,8 @@ function makeContext(
   return {
     schema,
     doc,
-    scene,
+    // References can name objects carried over from the scene before, as well as the scene's own
+    scene: scene ? effectiveScene(doc, scene) : null,
     item,
     problems,
     idPrefix: prefix,
@@ -60,9 +74,9 @@ function makeContext(
       if (!current) return null;
       try {
         const next = renameItem(current, ref, newId);
-        apply(() => next);
-        if (ref.kind === 'scene') select({ kind: 'scene', sceneId: newId, id: null });
-        else select({ kind: ref.kind, sceneId: ref.sceneId ?? null, id: newId });
+        apply(() => next, {
+          select: ref.kind === 'scene' ? { kind: 'scene', sceneId: newId, id: null } : { kind: ref.kind, sceneId: ref.sceneId ?? null, id: newId },
+        });
         return null;
       } catch (error) {
         if (error instanceof DocOpError) return error.message;
@@ -72,7 +86,7 @@ function makeContext(
   };
 }
 
-function FieldGroups({ fields, values, selfId, currentCentre, order }: { fields: FieldSpec[]; values: Record<string, Json | undefined>; selfId?: string | null; currentCentre?: [number, number] | null; order?: FieldGroup[] }) {
+function FieldGroups({ fields, values, selfId, currentCentre, order, lead }: { fields: FieldSpec[]; values: Record<string, Json | undefined>; selfId?: string | null; currentCentre?: [number, number] | null; order?: FieldGroup[]; lead?: React.ReactNode }) {
   const groups = order ?? (['identity', 'main', 'caption', 'position', 'style', 'timing'] as FieldGroup[]);
   return (
     <>
@@ -82,6 +96,7 @@ function FieldGroups({ fields, values, selfId, currentCentre, order }: { fields:
         return (
           <section key={group} aria-label={GROUP_TITLES[group] || 'Main'}>
             {GROUP_TITLES[group] ? <h3 className="group-title">{GROUP_TITLES[group]}</h3> : null}
+            {group === 'main' ? lead : null}
             {inGroup.map((f) => (
               <Field key={f.name} spec={f} path={[f.name]} value={values[f.name]} selfId={selfId} currentCentre={currentCentre} />
             ))}
@@ -187,9 +202,12 @@ function ObjectProperties({ doc, schema, scene, objectId, problems }: { doc: Doc
     () => makeContext(schema, doc, scene, { kind: 'object', sceneId: scene.id, id: objectId }, problems, `obj-${objectId}`),
     [schema, doc, scene, objectId, problems],
   );
-  if (!obj) return <NothingSelected />;
+  if (!obj) {
+    const carried = carriedObjects(doc, scene.id).find((c) => c.object.id === objectId);
+    return carried ? <CarriedObject schema={schema} sceneId={scene.id} obj={carried.object} from={carried.from} /> : <NothingSelected />;
+  }
   const kind = objectKind(schema, obj.type);
-  const fields = objectFields(schema, obj.type);
+  const fields = applicableFields(obj, objectFields(schema, obj.type));
   const onScreen = onScreenAfter(scene, frameIndex).has(obj.id);
   const box = still?.sceneId === scene.id ? still.objects.find((o) => o.id === obj.id) : undefined;
   const centre: [number, number] | null = box ? [(box.frame_bbox[0] + box.frame_bbox[2]) / 2, (box.frame_bbox[1] + box.frame_bbox[3]) / 2] : null;
@@ -214,9 +232,101 @@ function ObjectProperties({ doc, schema, scene, objectId, problems }: { doc: Doc
           </div>
         ) : null}
         <FieldProblems problems={own} />
-        <FieldGroups fields={fields} values={obj} selfId={obj.id} currentCentre={centre} />
+        <FieldGroups fields={fields} values={obj} selfId={obj.id} currentCentre={centre} lead={obj.type === 'brace' ? <BraceModeSwitch obj={obj} sceneId={scene.id} /> : null} />
       </div>
     </FormContext.Provider>
+  );
+}
+
+/** A brace goes around (part of) an object, or spans two points. */
+function BraceModeSwitch({ obj, sceneId }: { obj: SceneObject; sceneId: string }) {
+  const ctx = useForm();
+  const still = useEditor((s) => s.still);
+  const mode = braceMode(obj);
+  const ref = { kind: 'object' as const, sceneId, id: obj.id };
+  // What it went around, to go back to it
+  const lastTarget = useRef<string | null>(typeof obj.target === 'string' ? obj.target : null);
+  const switchTo = (next: 'object' | 'points') => {
+    if (next === mode) return;
+    apply((d) => {
+      let out = d;
+      if (next === 'points') {
+        // Along the bottom of what it went around, when that is on the picture
+        const box = still?.sceneId === sceneId ? still.objects.find((o) => o.id === obj.target)?.frame_bbox : undefined;
+        const start = box ? [roundTo(box[0]), roundTo(box[1] - 0.1)] : [-2, -1];
+        const end = box ? [roundTo(box[2]), roundTo(box[1] - 0.1)] : [2, -1];
+        if (typeof obj.target === 'string') lastTarget.current = obj.target;
+        for (const field of ['target', 'part']) out = setItemField(out, ref, [field], undefined);
+        out = setItemField(out, ref, ['start'], start);
+        out = setItemField(out, ref, ['end'], end);
+      } else {
+        const objects = (ctx.scene?.objects ?? []).filter((o) => o.id !== obj.id && o.type !== 'brace');
+        const target =
+          objects.find((o) => o.id === lastTarget.current) ??
+          objects.find((o) => ['tex', 'text', 'title', 'matrix', 'quote', 'bullets'].includes(o.type)) ??
+          objects.find((o) => !['number_plane', 'axes', 'axes_3d', 'number_line'].includes(o.type)) ??
+          objects[0];
+        for (const field of ['start', 'end', 'on']) out = setItemField(out, ref, [field], undefined);
+        if (target) out = setItemField(out, ref, ['target'], target.id);
+      }
+      return out;
+    });
+  };
+  const options: { value: 'object' | 'points'; label: string }[] = [
+    { value: 'object', label: 'Around an object' },
+    { value: 'points', label: 'Between two points' },
+  ];
+  return (
+    <div className="field" data-name="brace-mode">
+      <div className="field-label" id={`${ctx.idPrefix}-brace-mode`}>
+        What it spans
+      </div>
+      <div className="segmented" role="radiogroup" aria-labelledby={`${ctx.idPrefix}-brace-mode`} data-field="brace-mode">
+        {options.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={mode === o.value} tabIndex={mode === o.value ? 0 : -1} onClick={() => switchTo(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <p className="field-help">
+        {mode === 'points' ? 'Drag its ends on the picture, or type them below.' : 'It goes along one side of the object, or of a part of it.'}
+      </p>
+    </div>
+  );
+}
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
+function roundTo(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** An object carried over from the scene before: made there, and changed there. */
+function CarriedObject({ schema, sceneId, obj, from }: { schema: SchemaIndex; sceneId: string; obj: SceneObject; from: string }) {
+  const kind = objectKind(schema, obj.type);
+  return (
+    <>
+      <ItemHeader icon={categoryIcon(kind?.category)} title={kind?.label ?? obj.type} subtitle={obj.id} description={kind?.description} />
+      <div className="props-body" data-item-kind="object" data-item-id={obj.id}>
+        <div className="offscreen-note carried-note" style={{ margin: '10px 0 0' }} data-testid="carried-note">
+          <Icon name="right" />
+          <span>
+            Carried over from scene <strong>{from}</strong>: this scene starts with it on screen, as that scene left it. Steps here can show, move or
+            change it; to change what it is, edit it in scene {from}.
+          </span>
+        </div>
+        <div className="inline" style={{ marginTop: 10 }}>
+          <button type="button" className="btn btn-sm" onClick={() => select({ kind: 'object', sceneId: from, id: obj.id })}>
+            <Icon name="left" /> Edit it in scene {from}
+          </button>
+          <button type="button" className="btn btn-sm" onClick={() => select({ kind: 'scene', sceneId, id: null })}>
+            Stop carrying it…
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -230,13 +340,15 @@ function StepProperties({ doc, schema, scene, stepId, problems }: { doc: Documen
   const kind = stepKind(schema, step.do);
   const fields = stepFields(schema, step.do);
   const index = (scene.steps ?? []).findIndex((s) => s.id === stepId);
+  const parent = index < 0 ? parentStep(doc, scene.id, stepId) : undefined;
+  const parentIndex = parent ? (scene.steps ?? []).findIndex((s) => s.id === parent.id) : -1;
   const own = problemsForField(problems, ctx.item, [], { exact: true, doc });
   return (
     <FormContext.Provider value={ctx}>
       <ItemHeader
         icon={stepIcon(step.do)}
         title={`${kind?.label ?? step.do} step`}
-        subtitle={index >= 0 ? `${index + 1} of ${scene.steps?.length ?? 0}` : 'inside together'}
+        subtitle={index >= 0 ? `${index + 1} of ${scene.steps?.length ?? 0}` : parentIndex >= 0 ? `at the same time as others, in step ${parentIndex + 1}` : 'inside together'}
         description={kind?.description}
       >
         {index >= 0 ? (
@@ -273,7 +385,7 @@ function SceneProperties({ doc, schema, scene, problems }: { doc: Document; sche
         icon="scene"
         title={scene.title || scene.id}
         subtitle={`scene ${index + 1} of ${doc.scenes.length}`}
-        description={`${scene.objects?.length ?? 0} objects, ${scene.steps?.length ?? 0} steps${timeline ? `, ${timeline.duration.toFixed(1)} s` : ''}.`}
+        description={`${plural(scene.objects?.length ?? 0, 'object')}, ${plural(scene.steps?.length ?? 0, 'step')}${timeline ? `, ${timeline.duration.toFixed(1)} s` : ''}.`}
       >
         <button type="button" className="btn btn-sm" onClick={() => openPreview({ sceneId: scene.id, start: 0, end: Math.max(0, (scene.steps?.length ?? 1) - 1) })} disabled={!scene.steps?.length}>
           <Icon name="play" /> Preview scene

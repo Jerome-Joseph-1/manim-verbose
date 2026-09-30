@@ -9,6 +9,7 @@ import { produce, type Draft } from 'immer';
 import {
   isValidId, iterSteps, newObjectId, newSceneId, newStepId, objectIds, sceneIds, stepIds, uniqueId,
 } from './ids';
+import { scenesCarrying } from './carry';
 import { forEachObjectRef, forEachStepRef, findReferences, type RefUse } from './refs';
 import { getIn, setInMutable } from './paths';
 import type { Document, Json, JsonObject, Loc, Scene, SceneObject, Step } from './types';
@@ -231,21 +232,34 @@ export function moveObject(doc: Document, sceneId: string, from: number, to: num
   });
 }
 
-/** Rename an object and every reference to it in its scene. */
+/**
+ * Rename an object and every reference to it in its scene, and in the scenes after it which
+ * carry it on (their `carry` lists and their references to it).
+ */
 export function renameObject(doc: Document, sceneId: string, oldId: string, newId: string): Document {
   const s = sceneIndex(doc, sceneId);
   const scene = doc.scenes[s]!;
   const o = objectIndex(scene, oldId);
   if (newId === oldId) return doc;
   checkNewId(newId, objectIds(scene), 'an object');
+  const carrying = scenesCarrying(doc, sceneId, oldId);
+  for (const id of carrying) {
+    const later = findScene(doc, id)!;
+    if (objectIds(later).has(newId) || (later.carry ?? []).includes(newId)) {
+      throw new DocOpError(`Scene '${id}' carries '${oldId}' over and already has something called '${newId}'`);
+    }
+  }
   const swap = (id: string, _path: Loc, replace: (next: string) => void) => {
     if (id === oldId) replace(newId);
   };
   return produce(doc, (draft) => {
     const target = draft.scenes[s]!;
     target.objects![o]!.id = newId;
-    for (const obj of target.objects ?? []) forEachObjectRef(obj as SceneObject, swap);
-    for (const step of target.steps ?? []) forEachStepRef(step as Step, swap);
+    for (const later of [target, ...draft.scenes.filter((sc) => carrying.includes(sc.id))]) {
+      if (later !== target) later.carry = (later.carry ?? []).map((c) => (c === oldId ? newId : c));
+      for (const obj of later.objects ?? []) forEachObjectRef(obj as SceneObject, swap);
+      for (const step of later.steps ?? []) forEachStepRef(step as Step, swap);
+    }
   });
 }
 
@@ -258,6 +272,8 @@ export interface RemovalPlan {
   editedSteps: string[];
   /** Objects which would lose a reference (a `next_to`, a group member) but stay. */
   editedObjects: string[];
+  /** Scenes after this one which carry the object over, and would stop. */
+  carriedBy: string[];
   /** Everything referring to the object, as found. */
   uses: RefUse[];
 }
@@ -431,7 +447,8 @@ export function planObjectRemoval(doc: Document, sceneId: string, objectId: stri
   objectIndex(scene, objectId);
   const uses = findReferences(scene, objectId);
   const gone = objectsToRemove(scene, objectId);
-  const plan: RemovalPlan = { objects: [...gone], steps: [], editedSteps: [], editedObjects: [], uses };
+  const carriedBy = [...new Set([...gone].flatMap((id) => scenesCarrying(doc, sceneId, id)))];
+  const plan: RemovalPlan = { objects: [...gone], steps: [], editedSteps: [], editedObjects: [], carriedBy, uses };
   produce(scene, (draft) => {
     for (const obj of draft.objects ?? []) {
       if (!gone.has(obj.id) && stripObjectRefs(obj, gone)) plan.editedObjects.push(obj.id);
@@ -457,16 +474,36 @@ export function removeObject(doc: Document, sceneId: string, objectId: string, o
   const scene = doc.scenes[s]!;
   objectIndex(scene, objectId);
   const gone = options.cascade ? objectsToRemove(scene, objectId) : new Set([objectId]);
+  // Scenes after this one carrying any of it on, each with what it carries of it
+  const carrying = new Map<string, Set<string>>();
+  if (options.cascade) {
+    for (const id of gone) {
+      for (const later of scenesCarrying(doc, sceneId, id)) {
+        if (!carrying.has(later)) carrying.set(later, new Set());
+        carrying.get(later)!.add(id);
+      }
+    }
+  }
+  const strip = (target: Draft<Scene>, lost: Set<string>) => {
+    for (const obj of target.objects ?? []) stripObjectRefs(obj, lost);
+    if (target.steps) {
+      target.steps = target.steps.filter((step) => stripStepRefs(step, lost) !== 'remove');
+      unwrapLoneTogether(target.steps);
+      if (target.steps.length === 0) delete target.steps;
+    }
+  };
   return produce(doc, (draft) => {
     const target = draft.scenes[s]!;
     target.objects = (target.objects ?? []).filter((o) => !gone.has(o.id));
     if (target.objects.length === 0) delete target.objects;
     if (!options.cascade) return;
-    for (const obj of target.objects ?? []) stripObjectRefs(obj, gone);
-    if (target.steps) {
-      target.steps = target.steps.filter((step) => stripStepRefs(step, gone) !== 'remove');
-      unwrapLoneTogether(target.steps);
-      if (target.steps.length === 0) delete target.steps;
+    strip(target, gone);
+    for (const later of draft.scenes) {
+      const lost = carrying.get(later.id);
+      if (!lost) continue;
+      later.carry = (later.carry ?? []).filter((id) => !lost.has(id));
+      if (later.carry.length === 0) delete later.carry;
+      strip(later, lost);
     }
   });
 }
@@ -492,26 +529,51 @@ export function addStep(
   return { doc: next, id };
 }
 
-/** Add a step inside a `together` step. */
+/** Add a step inside a `together` step (at the end, or at `index`). */
 export function addNestedStep(
   doc: Document,
   sceneId: string,
   parentId: string,
   template: { do: string } & Record<string, unknown>,
+  options: { index?: number } = {},
 ) {
   const s = sceneIndex(doc, sceneId);
   const path = findStepPath(doc.scenes[s]!.steps, parentId);
   if (!path) throw new DocOpError(`There's no step called '${parentId}'`);
   const parent = getIn(doc.scenes[s]!.steps, path) as Step;
   if (parent.do !== 'together') throw new DocOpError('Only a "together" step holds other steps');
+  if (template.do === 'together' || template.do === 'wait') throw new DocOpError(`A '${template.do}' step can't go inside 'together'`);
   const step = clone(template) as Step;
   reassignStepIds(step, sceneId, stepIds(doc));
   const next = produce(doc, (draft) => {
     const target = getIn(draft.scenes[s]!.steps, path) as Draft<Step>;
     const inner = (Array.isArray(target.steps) ? target.steps : (target.steps = [])) as Draft<Json>[];
-    inner.push(ordered(step, ['id', 'do']) as unknown as Draft<Json>);
+    const index = Math.max(0, Math.min(options.index ?? inner.length, inner.length));
+    inner.splice(index, 0, ordered(step, ['id', 'do']) as unknown as Draft<Json>);
   });
   return { doc: next, id: step.id! };
+}
+
+/** Reorder the steps inside a `together` step. */
+export function moveNestedStep(doc: Document, sceneId: string, parentId: string, from: number, to: number): Document {
+  const s = sceneIndex(doc, sceneId);
+  const path = findStepPath(doc.scenes[s]!.steps, parentId);
+  if (!path) throw new DocOpError(`There's no step called '${parentId}'`);
+  const parent = getIn(doc.scenes[s]!.steps, path) as Step;
+  if (parent.do !== 'together' || !Array.isArray(parent.steps)) throw new DocOpError('Only a "together" step holds other steps');
+  if (from === to) return doc;
+  return produce(doc, (draft) => {
+    const target = getIn(draft.scenes[s]!.steps, path) as Draft<Step>;
+    moveInList(target.steps as Draft<Json>[], from, to);
+  });
+}
+
+/** The `together` step holding a step, if it is nested in one. */
+export function parentStep(doc: Document, sceneId: string, stepId: string): Step | undefined {
+  const scene = findScene(doc, sceneId);
+  const path = scene ? findStepPath(scene.steps, stepId) : null;
+  if (!path || path.length < 3) return undefined;
+  return getIn(scene!.steps, path.slice(0, -2)) as Step;
 }
 
 export function duplicateStep(doc: Document, sceneId: string, stepId: string) {
@@ -530,6 +592,10 @@ export function duplicateStep(doc: Document, sceneId: string, stepId: string) {
   return { doc: next, id: copy.id! };
 }
 
+/**
+ * Remove a step. A `together` step left holding one step becomes that step (keeping its
+ * caption), since `together` needs two; one left with none goes too.
+ */
 export function removeStep(doc: Document, sceneId: string, stepId: string): Document {
   const s = sceneIndex(doc, sceneId);
   const path = findStepPath(doc.scenes[s]!.steps, stepId);
@@ -537,6 +603,18 @@ export function removeStep(doc: Document, sceneId: string, stepId: string): Docu
   return produce(doc, (draft) => {
     const scene = draft.scenes[s]!;
     setInMutable(scene.steps, path, undefined);
+    if (path.length >= 3) {
+      const parentPath = path.slice(0, -2);
+      const parent = getIn(scene.steps, parentPath) as Draft<Step>;
+      const inner = Array.isArray(parent.steps) ? (parent.steps as unknown as Draft<Step>[]) : [];
+      if (inner.length === 0) {
+        setInMutable(scene.steps, parentPath, undefined);
+      } else if (inner.length === 1) {
+        const only = inner[0]!;
+        if ((only.caption === undefined || only.caption === null) && parent.caption !== undefined && parent.caption !== null) only.caption = parent.caption;
+        setInMutable(scene.steps, parentPath, only);
+      }
+    }
     if (scene.steps && scene.steps.length === 0) delete scene.steps;
   });
 }

@@ -30,12 +30,44 @@ export interface Catalog {
   steps: CatalogEntry[];
 }
 
+/**
+ * Where a coordinate system's coordinates land in a still: (x, y) is at pixel
+ * origin + x * x_unit + y * y_unit (see server-api.md).
+ */
+export interface CoordinateSystem {
+  id: string;
+  type: string;
+  origin: [number, number];
+  x_unit: [number, number];
+  y_unit: [number, number] | null;
+  z_unit: [number, number] | null;
+}
+
 export interface StillResponse {
   image_url: string;
   width: number;
   height: number;
   objects: StillObject[];
+  /** Missing from servers older than the editor. */
+  coordinate_systems?: CoordinateSystem[];
   problems: Problem[];
+}
+
+export interface TemplateSummary {
+  name: string;
+  title: string;
+  description: string | null;
+  thumbnail_url: string | null;
+}
+
+export interface TemplateDetail extends TemplateSummary {
+  document: Document;
+  problems: Problem[];
+}
+
+export interface UploadedAsset {
+  path: string;
+  kind?: string;
 }
 
 export interface TimelineStep {
@@ -156,6 +188,34 @@ export const api = {
     request<{ job_id: string }>('POST', '/api/export', { document, quality }),
   job: (jobId: string, signal?: AbortSignal) => request<Job>('GET', `/api/jobs/${encodeURIComponent(jobId)}`, undefined, signal),
   cancelJob: (jobId: string) => request<{ status: JobStatus }>('DELETE', `/api/jobs/${encodeURIComponent(jobId)}`),
+  /** Layout warnings for one scene: things off screen, on top of each other. 404 from servers without it. */
+  layout: (document: Document, sceneId: string, signal?: AbortSignal) =>
+    request<{ problems: Problem[] }>('POST', '/api/layout', { document, scene_id: sceneId }, signal),
+  templates: (signal?: AbortSignal) => request<{ templates: TemplateSummary[] }>('GET', '/api/templates', undefined, signal),
+  template: (name: string, signal?: AbortSignal) => request<TemplateDetail>('GET', `/api/templates/${encodeURIComponent(name)}`, undefined, signal),
+  uploadAsset: (file: Blob, filename: string, signal?: AbortSignal) => upload<UploadedAsset>('/api/assets', file, filename, signal),
 };
+
+/** A file sent as multipart/form-data, in a part called `file`. */
+async function upload<T>(url: string, file: Blob, filename: string, signal?: AbortSignal): Promise<T> {
+  const form = new FormData();
+  form.append('file', file, filename);
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'POST', body: form, headers: { Accept: 'application/json' }, signal: signal ?? null, cache: 'no-store' });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new ApiError(0, null);
+  }
+  const text = await response.text();
+  let data: unknown = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!response.ok) throw new ApiError(response.status, data);
+  return data as T;
+}
 
 export type Api = typeof api;

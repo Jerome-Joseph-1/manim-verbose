@@ -7,6 +7,7 @@ import {
 import { exportRunning, useExport } from './ExportModal';
 import { Icon } from './Icon';
 import { openPreview } from './PreviewModal';
+import { useTemplatesAvailable } from './TemplateGallery';
 
 const SAVE_LABELS: Record<SaveState, string> = {
   loading: 'Loading…',
@@ -53,6 +54,7 @@ export function TopBar() {
   const job = useExport((s) => s.job);
   const running = exportRunning(job);
   const hasDoc = history !== null;
+  const templates = useTemplatesAvailable();
 
   const preview = () => {
     const s = useEditor.getState();
@@ -102,16 +104,21 @@ export function TopBar() {
         </button>
       </div>
       <div className="topbar-divider" />
-      <button type="button" className="btn" onClick={preview} disabled={!hasDoc} title="Play a quick preview of the selected step, or of the scene">
+      <button type="button" className="btn" onClick={preview} disabled={!hasDoc} title="Play a quick preview of the selected step, or of the scene" data-tour="preview">
         <Icon name="play" /> Preview
       </button>
       <button type="button" className="btn" onClick={() => openModal('code')} disabled={!hasDoc} title="See the Python code">
         <Icon name="code" /> Code
       </button>
-      <button type="button" className="btn btn-primary" onClick={() => openModal('export')} disabled={!hasDoc}>
+      <button type="button" className="btn btn-primary" onClick={() => openModal('export')} disabled={!hasDoc} data-tour="export">
         <Icon name="film" /> {running ? `Exporting ${Math.round((job?.progress ?? 0) * 100)}%` : 'Export'}
       </button>
       <div className="topbar-divider" />
+      {templates ? (
+        <button type="button" className="icon-btn" aria-label="Start from a template" title="Start from a template" disabled={!hasDoc} onClick={() => openModal('templates')} data-testid="open-templates">
+          <Icon name="layers" />
+        </button>
+      ) : null}
       <button
         type="button"
         className="icon-btn"

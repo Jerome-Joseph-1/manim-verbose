@@ -11,14 +11,14 @@ function doc(title = 'A'): Document {
 }
 
 interface FakeApi {
-  putDocument: ReturnType<typeof vi.fn>;
+  save: ReturnType<typeof vi.fn>;
   timeline: ReturnType<typeof vi.fn>;
 }
 
 function fakeApi(): FakeApi {
   let revision = 1;
   return {
-    putDocument: vi.fn(async (document: Document, base: number): Promise<SaveResponse> => {
+    save: vi.fn(async (document: Document, base: number): Promise<SaveResponse> => {
       if (base !== revision) throw new ApiError(409, { document: doc('Theirs'), revision, problems: [] });
       revision += 1;
       return { revision, problems: [], document };
@@ -52,11 +52,11 @@ describe('autosave', () => {
     retitle('Bob');
     expect(useEditor.getState().saveState).toBe('unsaved');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS - 100);
-    expect(api.putDocument).not.toHaveBeenCalled();
+    expect(api.save).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(200);
-    expect(api.putDocument).toHaveBeenCalledTimes(1);
-    expect(api.putDocument.mock.calls[0]![0].title).toBe('Bob');
-    expect(api.putDocument.mock.calls[0]![1]).toBe(1);
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.save.mock.calls[0]![0].title).toBe('Bob');
+    expect(api.save.mock.calls[0]![1]).toBe(1);
     expect(useEditor.getState()).toMatchObject({ saveState: 'saved', revision: 2 });
     expect(useEditor.getState().timelines.s?.duration).toBe(2);
   });
@@ -66,8 +66,8 @@ describe('autosave', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const real = api.putDocument.getMockImplementation() as (document: Document, base: number) => Promise<SaveResponse>;
-    api.putDocument.mockImplementationOnce(async (document: Document, base: number) => {
+    const real = api.save.getMockImplementation() as (document: Document, base: number) => Promise<SaveResponse>;
+    api.save.mockImplementationOnce(async (document: Document, base: number) => {
       await gate;
       return real(document, base);
     });
@@ -79,14 +79,14 @@ describe('autosave', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(useEditor.getState().saveState).toBe('unsaved');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 10);
-    expect(api.putDocument).toHaveBeenCalledTimes(2);
-    expect(api.putDocument.mock.calls[1]![0].title).toBe('C');
-    expect(api.putDocument.mock.calls[1]![1]).toBe(2);
+    expect(api.save).toHaveBeenCalledTimes(2);
+    expect(api.save.mock.calls[1]![0].title).toBe('C');
+    expect(api.save.mock.calls[1]![1]).toBe(2);
     expect(useEditor.getState().saveState).toBe('saved');
   });
 
   it("takes the server's canonical form without an undo step", async () => {
-    api.putDocument.mockImplementationOnce(async (document: Document) => ({ revision: 2, problems: [], document: { ...document, title: 'Canonical' } }));
+    api.save.mockImplementationOnce(async (document: Document) => ({ revision: 2, problems: [], document: { ...document, title: 'Canonical' } }));
     retitle('B');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 10);
     expect(currentDoc()!.title).toBe('Canonical');
@@ -96,14 +96,14 @@ describe('autosave', () => {
 
   it('keeps problems from the save', async () => {
     const problems = [{ message: 'x', severity: 'warning' as const, loc: [], path: '', scene_id: null, item_id: null }];
-    api.putDocument.mockImplementationOnce(async (document: Document) => ({ revision: 2, problems, document }));
+    api.save.mockImplementationOnce(async (document: Document) => ({ revision: 2, problems, document }));
     retitle('B');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 10);
     expect(useEditor.getState().saveProblems).toEqual(problems);
   });
 
   it('shows a conflict, and can keep ours', async () => {
-    api.putDocument.mockImplementationOnce(async () => {
+    api.save.mockImplementationOnce(async () => {
       throw new ApiError(409, { document: doc('Theirs'), revision: 5, problems: [] });
     });
     retitle('Mine');
@@ -113,16 +113,16 @@ describe('autosave', () => {
     // Edits during a conflict wait for the choice
     retitle('Mine 2');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS * 3);
-    expect(api.putDocument).toHaveBeenCalledTimes(1);
-    api.putDocument.mockImplementationOnce(async (document: Document, base: number) => ({ revision: base + 1, problems: [], document }));
+    expect(api.save).toHaveBeenCalledTimes(1);
+    api.save.mockImplementationOnce(async (document: Document, base: number) => ({ revision: base + 1, problems: [], document }));
     await saver.keepMine();
-    expect(api.putDocument.mock.calls[1]![1]).toBe(5);
-    expect(api.putDocument.mock.calls[1]![0].title).toBe('Mine 2');
+    expect(api.save.mock.calls[1]![1]).toBe(5);
+    expect(api.save.mock.calls[1]![0].title).toBe('Mine 2');
     expect(useEditor.getState()).toMatchObject({ saveState: 'saved', revision: 6, conflict: null });
   });
 
   it('can take theirs after a conflict, undoably', async () => {
-    api.putDocument.mockImplementationOnce(async () => {
+    api.save.mockImplementationOnce(async () => {
       throw new ApiError(409, { document: doc('Theirs'), revision: 5, problems: [] });
     });
     retitle('Mine');
@@ -135,7 +135,7 @@ describe('autosave', () => {
   });
 
   it("can't take theirs when their file can't be read", async () => {
-    api.putDocument.mockImplementationOnce(async () => {
+    api.save.mockImplementationOnce(async () => {
       throw new ApiError(409, { document: null, revision: 5, problems: [] });
     });
     retitle('Mine');
@@ -147,7 +147,7 @@ describe('autosave', () => {
 
   it('says a document the server cannot read was not saved, and tries again on the next edit', async () => {
     const problems = [{ message: "'blu' isn't a color", severity: 'error' as const, loc: ['scenes', 0, 'objects', 0, 'color'], path: '', scene_id: 's', item_id: 'a' }];
-    api.putDocument.mockImplementationOnce(async () => {
+    api.save.mockImplementationOnce(async () => {
       throw new ApiError(422, { problems });
     });
     retitle('B');
@@ -160,14 +160,14 @@ describe('autosave', () => {
   });
 
   it('retries when the server is unreachable', async () => {
-    api.putDocument.mockImplementationOnce(async () => {
+    api.save.mockImplementationOnce(async () => {
       throw new ApiError(0, null);
     });
     retitle('B');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 10);
     expect(useEditor.getState().saveState).toBe('offline');
     await vi.advanceTimersByTimeAsync(2100);
-    expect(api.putDocument).toHaveBeenCalledTimes(2);
+    expect(api.save).toHaveBeenCalledTimes(2);
     expect(useEditor.getState().saveState).toBe('saved');
   });
 
@@ -177,13 +177,13 @@ describe('autosave', () => {
     undo();
     expect(useEditor.getState().saveState).toBe('saved');
     await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS * 2);
-    expect(api.putDocument).not.toHaveBeenCalled();
+    expect(api.save).not.toHaveBeenCalled();
   });
 
   it('saves at once when asked (Ctrl+S)', async () => {
     retitle('B');
     await saver.flush();
-    expect(api.putDocument).toHaveBeenCalledTimes(1);
+    expect(api.save).toHaveBeenCalledTimes(1);
     expect(useEditor.getState().saveState).toBe('saved');
   });
 });

@@ -69,7 +69,18 @@ export type WidgetKind =
   | 'steps'
   | 'file'
   | 'object'
+  /** One of a few values of different types, such as `keep: false | true | "dim"`. */
+  | 'choice'
+  /** A piece of another object: some of its text, or a row, column or entry of a matrix. */
+  | 'part'
+  /** Objects carried over from the scene before. */
+  | 'carry'
   | 'json';
+
+export interface Choice {
+  value: Json;
+  label: string;
+}
 
 export type FieldGroup = 'identity' | 'main' | 'position' | 'style' | 'caption' | 'timing';
 
@@ -94,6 +105,10 @@ export interface FieldSpec {
   group: FieldGroup;
   /** For kind 'object': the fields of the nested mapping. */
   fields?: FieldSpec[];
+  /** For kind 'choice': the values, in order, with a word for each. */
+  choices?: Choice[];
+  /** For a list of a fixed number of points: a name for each ("Vertex"). */
+  itemNames?: string[];
 }
 
 export interface KindInfo {
@@ -233,7 +248,22 @@ const LABELS: Record<string, string> = {
   resolution: 'Resolution',
   fps: 'Frames per second',
   captions: 'Captions',
+  anchor: 'Beside which part',
+  follow: 'Follow it as it moves',
+  carry: 'Carried over from the scene before',
+  start_angle: 'Start angle (degrees)',
+  end_angle: 'End angle (degrees)',
+  right_angle: 'Right angle mark',
+  other_side: 'The other side (the larger angle)',
+  coordinate_colors: 'Coordinate colors',
+  x_label: 'X axis label',
+  y_label: 'Y axis label',
+  z_label: 'Z axis label',
+  description: 'Description',
 };
+
+/** Words for the values of a 'choice' field. */
+const CHOICE_WORDS: Record<string, string> = { false: 'No', true: 'Yes', dim: 'Yes, dimmed' };
 
 const DESCRIPTIONS: Record<string, string> = {
   id: 'Steps refer to it by this name. Letters, digits and _, not starting with a digit.',
@@ -329,6 +359,14 @@ export function fieldSpec(
     spec.kind = 'id';
     return spec;
   }
+  if (name === 'part') {
+    spec.kind = 'part';
+    return spec;
+  }
+  if (name === 'carry') {
+    spec.kind = 'carry';
+    return spec;
+  }
   if (variants.length > 1) {
     // `target`: one object or a list of them
     const scalar = variants.find((v) => v.type === 'string' && isRef(v));
@@ -336,6 +374,13 @@ export function fieldSpec(
     if (scalar && list) {
       spec.kind = 'targets';
       spec.refTypes = scalar['x-ref-types'] ?? null;
+      return spec;
+    }
+    // `keep`: false, true or "dim"
+    const choices = choicesOf(variants);
+    if (choices) {
+      spec.kind = 'choice';
+      spec.choices = choices;
       return spec;
     }
   }
@@ -426,6 +471,18 @@ export function fieldSpec(
   }
 }
 
+/** The values of a field made of booleans and fixed strings, or null when it is anything else. */
+function choicesOf(variants: JsonSchema[]): Choice[] | null {
+  const values: Json[] = [];
+  for (const v of variants) {
+    if (v.type === 'boolean') values.push(false, true);
+    else if (v.const !== undefined && typeof v.const !== 'object') values.push(v.const);
+    else if (Array.isArray(v.enum) && v.enum.every((e) => typeof e === 'string')) values.push(...v.enum);
+    else return null;
+  }
+  return values.map((value) => ({ value, label: CHOICE_WORDS[String(value)] ?? humanize(String(value)) }));
+}
+
 function pick(schema: JsonSchema, keys: string[]): Partial<JsonSchema> {
   const out: Partial<JsonSchema> = {};
   for (const key of keys) if (schema[key] !== undefined) out[key] = schema[key];
@@ -451,7 +508,12 @@ const FACTORY_DEFAULTS: Record<string, Json> = {
   'Settings.resolution': [1920, 1080],
 };
 
-const GROUP_ORDER: FieldGroup[] = ['identity', 'main', 'caption', 'position', 'style', 'timing'];
+/** Names for the places of lists of a fixed number of points. */
+const ITEM_NAMES: Record<string, string[]> = {
+  'AngleObject.points': ['Point A', 'Vertex', 'Point B'],
+};
+
+const GROUP_ORDER: FieldGroup[] =['identity', 'main', 'caption', 'position', 'style', 'timing'];
 
 /** The fields of a model, in the order the panel shows them. */
 export function fieldsOf(index: SchemaIndex, model: JsonSchema, owner: 'object' | 'step' | 'other'): FieldSpec[] {
@@ -460,8 +522,11 @@ export function fieldsOf(index: SchemaIndex, model: JsonSchema, owner: 'object' 
     .filter(([name]) => !HIDDEN.has(name))
     .map(([name, prop]) => {
       const spec = fieldSpec(index, name, prop, required.has(name), owner);
-      const factory = FACTORY_DEFAULTS[`${model.title ?? ''}.${name}`];
+      const key = `${model.title ?? ''}.${name}`;
+      const factory = FACTORY_DEFAULTS[key];
       if (spec.default === undefined && factory !== undefined) spec.default = factory;
+      if (ITEM_NAMES[key]) spec.itemNames = ITEM_NAMES[key];
+      if (owner === 'object' && name === 'part') spec.label = 'Part to pick out';
       return spec;
     });
   // Stable sort by group keeps the schema's order within each group
@@ -486,12 +551,12 @@ export function stepFields(index: SchemaIndex, name: string): FieldSpec[] {
 export function sceneFields(index: SchemaIndex): FieldSpec[] {
   const def = index.defs.SceneSpec;
   if (!def) return [];
-  return fieldsOf(index, { ...def, properties: pick(def.properties ?? {}, ['id', 'title', 'background']) as Record<string, JsonSchema> }, 'other');
+  return fieldsOf(index, { ...def, properties: pick(def.properties ?? {}, ['id', 'title', 'background', 'carry']) as Record<string, JsonSchema> }, 'other');
 }
 
 export function documentFields(index: SchemaIndex): FieldSpec[] {
   const root = index.root;
-  const props = pick(root.properties ?? {}, ['title', 'settings']) as Record<string, JsonSchema>;
+  const props = pick(root.properties ?? {}, ['title', 'description', 'settings']) as Record<string, JsonSchema>;
   return fieldsOf(index, { ...root, properties: props }, 'other');
 }
 

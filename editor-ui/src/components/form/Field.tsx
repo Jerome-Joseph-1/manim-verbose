@@ -18,6 +18,7 @@ import { ObjectRefWidget, RefListWidget, TargetsWidget } from './refs';
 import { PlacementWidget } from './placement';
 import { ColorListWidget, ColorMapWidget, MatrixWidget, StringListWidget } from './collections';
 import { NestedObjectWidget, PropertiesWidget, StepsWidget } from './nested';
+import { CarryWidget, ChoiceWidget, PartWidget } from './extra';
 
 /** Kinds whose inner fields show their own problems; the row shows only its own. */
 const DELEGATING: WidgetKind[] = ['properties', 'steps', 'object'];
@@ -142,12 +143,21 @@ export function Field({ spec, path, value, selfId, currentCentre }: FieldProps) 
     case 'object':
       widget = <NestedObjectWidget {...props} path={path} />;
       break;
+    case 'choice':
+      widget = <ChoiceWidget {...props} />;
+      break;
+    case 'part':
+      widget = <PartWidget {...props} />;
+      break;
+    case 'carry':
+      widget = <CarryWidget {...props} />;
+      break;
     default:
       widget = <JsonWidget {...props} />;
   }
 
   const labelled = !SELF_LABELLED.includes(spec.kind);
-  const usesLabelFor = ['text', 'multiline', 'tex', 'expression', 'number', 'color', 'object-ref', 'file', 'json'].includes(spec.kind);
+  const usesLabelFor = ['text', 'multiline', 'tex', 'expression', 'number', 'color', 'object-ref', 'file', 'json', 'part'].includes(spec.kind);
   return (
     <div className={`field${invalid ? ' has-error' : ''}`} data-kind={spec.kind} data-name={spec.name}>
       {labelled ? (

@@ -66,7 +66,7 @@ class RenderBackend:
         from importlib import metadata
         digest = hashlib.sha256()
         scenefile = Path(__file__).resolve().parent.parent / "scenefile"
-        for source in sorted(scenefile.glob("*.py")):
+        for source in sorted(scenefile.glob("*.py")) + [Path(__file__).with_name("systems.py")]:
             digest.update(source.name.encode())
             digest.update(source.read_bytes())
         try:
@@ -76,8 +76,9 @@ class RenderBackend:
         return digest.hexdigest()[:16]
 
     def still(self, doc, scene_id, step_index, out_png, width, base_dir):
-        from manim_verbose.scenefile import render
-        return render.render_still(doc, scene_id, step_index, out_png, width=width, base_dir=base_dir)
+        # render.render_still, with where each coordinate system is (see systems.py)
+        from manim_verbose.editor.systems import render_still_with_systems
+        return render_still_with_systems(doc, scene_id, step_index, out_png, width, base_dir)
 
     def clip(self, doc, scene_id, out_mp4, start_step, end_step, base_dir):
         from manim_verbose.scenefile import render
@@ -130,11 +131,13 @@ def still_data(result: Any, out_png: str) -> dict[str, Any]:
             "bbox": [float(v) for v in _get(box, "bbox")],
             "frame_bbox": [float(v) for v in _get(box, "frame_bbox")],
         })
+    from manim_verbose.editor.systems import systems_data
     return {
         "path": str(_get(result, "path", None) or out_png),
         "width": int(_get(result, "width")),
         "height": int(_get(result, "height")),
         "objects": objects,
+        "coordinate_systems": systems_data(result),
     }
 
 

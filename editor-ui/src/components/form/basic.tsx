@@ -1,8 +1,10 @@
 /** Inputs for single values: text, numbers, switches, choices. */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { checkNumber, humanize, type FieldSpec } from '../../lib/schema';
 import type { Json } from '../../doc/types';
 import { endEditBurst } from '../../state/store';
+import { storage } from '../../doc/storage';
+import { ApiError } from '../../lib/api';
 
 export interface WidgetProps {
   spec: FieldSpec;
@@ -209,12 +211,68 @@ export function EnumWidget({ spec, value, onChange, inputId, dataField, describe
   );
 }
 
+/** What a file field's upload button offers to pick, from the field's `accept`. */
+export function acceptFor(accept: string | undefined): string {
+  if (accept === '.svg') return '.svg,image/svg+xml';
+  return 'image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp';
+}
+
+/** A file beside the scene file: typed in, or uploaded from this computer. */
 export function FileWidget(props: WidgetProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const upload = storage().uploadAsset;
+  const svg = props.spec.accept === '.svg';
   return (
     <div>
-      <TextWidget {...props} mono />
+      <div className="inline file-row">
+        <TextWidget {...props} mono />
+        {upload ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={busy}
+              onClick={() => picker.current?.click()}
+              aria-label={`Upload ${svg ? 'a drawing' : 'a picture'} for ${props.spec.label.toLowerCase()}`}
+              data-testid="upload-file"
+            >
+              {busy ? <span className="spinner" aria-hidden="true" /> : null} Upload…
+            </button>
+            <input
+              ref={picker}
+              type="file"
+              hidden
+              accept={acceptFor(props.spec.accept)}
+              data-testid="upload-input"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                setBusy(true);
+                setError(null);
+                try {
+                  const { path } = await upload(file, file.name);
+                  props.onChange(path);
+                } catch (err) {
+                  setError(err instanceof ApiError ? err.message : `${file.name} couldn't be uploaded`);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          </>
+        ) : null}
+      </div>
+      {error ? (
+        <div className="local-error" role="alert">
+          {error}
+        </div>
+      ) : null}
       <p className="field-help">
-        A file in the same folder as the scene file (or below it){props.spec.accept ? `, such as ${props.spec.accept === '.svg' ? 'drawing.svg' : 'picture.png'}` : ''}.
+        {upload ? `Upload ${svg ? 'an SVG drawing' : 'a PNG, JPEG, GIF or WebP picture'} from this computer, or type the name of ` : 'The name of '}a file in
+        the scene file's folder (or below it){props.spec.accept ? `, such as ${svg ? 'drawing.svg' : 'picture.png'}` : ''}.
       </p>
     </div>
   );

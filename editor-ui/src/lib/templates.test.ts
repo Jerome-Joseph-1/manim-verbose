@@ -23,7 +23,9 @@ describe('filling in new objects', () => {
 
   it('leaves references empty in an empty scene, to be picked', () => {
     const empty: Scene = { id: 'e' };
-    expect(fillObjectTemplate(schemaIndex, { type: 'brace', target: '' }, { scene: empty, frameIndex: -1, selectedObjectId: null }).target).toBe('');
+    expect(fillObjectTemplate(schemaIndex, { type: 'box', target: '' }, { scene: empty, frameIndex: -1, selectedObjectId: null }).target).toBe('');
+    // A brace with nothing to go around spans two points instead
+    expect(fillObjectTemplate(schemaIndex, { type: 'brace', target: '' }, { scene: empty, frameIndex: -1, selectedObjectId: null })).toEqual({ type: 'brace', start: [-2, -1], end: [2, -1] });
     expect(fillObjectTemplate(schemaIndex, { type: 'group', members: ['', ''] }, { scene: empty, frameIndex: -1, selectedObjectId: null }).members).toEqual([]);
   });
 
@@ -85,7 +87,8 @@ describe('references left empty', () => {
 describe('a catalog from the schema alone', () => {
   it('has every kind with a template', () => {
     const catalog = catalogFromSchema(schemaIndex);
-    expect(catalog.objects).toHaveLength(23);
+    expect(catalog.objects).toHaveLength(25);
+    expect(catalog.objects.find((o) => o.type === 'angle')?.template.points).toHaveLength(3);
     expect(catalog.steps).toHaveLength(13);
     expect(catalog.objects.find((o) => o.type === 'text')?.template).toEqual({ type: 'text', text: 'Text' });
     expect(catalog.steps.find((s) => s.do === 'together')?.template.steps).toHaveLength(2);

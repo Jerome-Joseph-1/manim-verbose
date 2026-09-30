@@ -152,12 +152,18 @@ export function PlacementWidget({
             <RefSelect
               value={place.next_to ?? ''}
               options={refOptions(schema, scene, null, selfId)}
-              onChange={(id) => write({ ...place, next_to: id ?? '' })}
+              onChange={(id) => {
+                // An anchor the new object doesn't have (a tip, for a circle) goes back to the whole object
+                const type = scene?.objects?.find((o) => o.id === id)?.type;
+                const keep = place.anchor && anchorsFor(type).includes(place.anchor);
+                write({ ...place, next_to: id ?? '', anchor: keep ? place.anchor : undefined });
+              }}
               allowNone={false}
               ariaLabel={`${spec.label}: beside which object`}
               dataField={`${dataField}.next_to`}
             />
           </div>
+          <AnchorPicker place={place} scene={scene} write={write} label={spec.label} dataField={dataField} />
           <div>
             <div className="sub-label">On its</div>
             <div className="segmented" role="radiogroup" aria-label={`${spec.label}: which side`}>
@@ -176,6 +182,10 @@ export function PlacementWidget({
             </div>
           </div>
           <BuffInput place={place} write={write} inputId={`${inputId}-buff`} dataField={`${dataField}.buff`} label="Gap between them" />
+          <label className="checkbox" data-field={`${dataField}.follow`}>
+            <input type="checkbox" checked={place.follow === true} onChange={(e) => write({ ...place, follow: e.target.checked ? true : undefined })} />
+            Follow it as it moves
+          </label>
         </div>
       ) : null}
 
@@ -226,6 +236,45 @@ export function PlacementWidget({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type Anchor = NonNullable<Placement['anchor']>;
+
+/** The parts of an object something can be put beside, as validate.py's check_anchor has them. */
+export function anchorsFor(type: string | undefined): Anchor[] {
+  if (type === 'vector') return ['tip', 'tail'];
+  if (type === 'line' || type === 'arc') return ['start', 'end'];
+  return [];
+}
+
+const ANCHOR_WORDS: Record<Anchor, string> = { center: 'Whole object', tip: 'Its tip', tail: 'Its tail', start: 'Its start', end: 'Its end' };
+
+/** Beside which part of the object (a vector's tip...), and whether to keep beside it as it moves. */
+function AnchorPicker({ place, scene, write, label, dataField }: { place: Placement; scene: Scene | null; write: (p: Placement, coalesce?: boolean) => void; label: string; dataField: string }) {
+  const type = scene?.objects?.find((o) => o.id === place.next_to)?.type;
+  const anchors = anchorsFor(type);
+  const current: Anchor = place.anchor ?? 'center';
+  const options: Anchor[] = anchors.length ? ['center', ...anchors] : current !== 'center' ? ['center', current] : [];
+  if (options.length === 0) return null;
+  return (
+    <div>
+      <div className="sub-label">Beside which part of it</div>
+      <div className="segmented" role="radiogroup" aria-label={`${label}: beside which part`} data-field={`${dataField}.anchor`}>
+        {options.map((anchor) => (
+          <button
+            key={anchor}
+            type="button"
+            role="radio"
+            aria-checked={current === anchor}
+            tabIndex={current === anchor ? 0 : -1}
+            onClick={() => write({ ...place, anchor: anchor === 'center' ? undefined : anchor })}
+          >
+            {ANCHOR_WORDS[anchor]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -199,11 +199,14 @@ export function NumberListWidget({ spec, value, onChange, inputId, dataField, in
 export function PointListWidget({ spec, value, onChange, inputId, dataField, invalid }: WidgetProps) {
   const points = Array.isArray(value) ? (value as Json[]) : [];
   const min = spec.minItems ?? 0;
+  // A list of a fixed number of points (an angle's three) has a name for each and no add or remove
+  const fixed = spec.maxItems !== undefined && spec.maxItems === spec.minItems;
   const set = (next: Json[], coalesce = false) => onChange(next, { coalesce });
   return (
     <div className="list-editor">
       {points.map((point, i) => (
         <div className="list-row" key={i}>
+          {spec.itemNames?.[i] ? <span className="list-row-name">{spec.itemNames[i]}</span> : null}
           <TupleEditor
             value={point}
             names={['x', 'y']}
@@ -213,21 +216,23 @@ export function PointListWidget({ spec, value, onChange, inputId, dataField, inv
             dataField={`${dataField}[${i}]`}
             invalid={invalid}
             required
-            groupLabel={`Point ${i + 1}`}
+            groupLabel={spec.itemNames?.[i] ?? `Point ${i + 1}`}
           />
-          <button
-            type="button"
-            className="icon-btn danger"
-            aria-label={`Remove point ${i + 1}`}
-            disabled={points.length <= min}
-            title={points.length <= min ? `A ${spec.label.toLowerCase()} list needs at least ${min}` : 'Remove'}
-            onClick={() => set(points.filter((_, j) => j !== i))}
-          >
-            <Icon name="trash" />
-          </button>
+          {fixed ? null : (
+            <button
+              type="button"
+              className="icon-btn danger"
+              aria-label={`Remove point ${i + 1}`}
+              disabled={points.length <= min}
+              title={points.length <= min ? `A ${spec.label.toLowerCase()} list needs at least ${min}` : 'Remove'}
+              onClick={() => set(points.filter((_, j) => j !== i))}
+            >
+              <Icon name="trash" />
+            </button>
+          )}
         </div>
       ))}
-      <div>
+      <div hidden={fixed && points.length >= (spec.maxItems ?? 0)}>
         <button
           type="button"
           className="btn btn-sm"

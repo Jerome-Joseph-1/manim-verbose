@@ -135,7 +135,7 @@ export function findReferences(scene: Scene, objectId: string): RefUse[] {
 
 /** References in a scene which name no object in it. Empty strings count as dangling. */
 export function danglingReferences(scene: Scene): RefUse[] {
-  const ids = new Set((scene.objects ?? []).map((o) => o.id));
+  const ids = new Set([...(scene.objects ?? []).map((o) => o.id), ...(scene.carry ?? [])]);
   const uses: RefUse[] = [];
   (scene.objects ?? []).forEach((obj, index) => {
     for (const ref of objectRefs(obj)) {

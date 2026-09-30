@@ -3,6 +3,7 @@
  * server last said, and the dialogs open. Edits go through `apply`, which runs one of the
  * pure ops from doc/ops.ts and records the result for undo.
  */
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import type { Catalog, Timeline } from '../lib/api';
 import type { StillObject } from '../lib/geometry';
@@ -10,7 +11,7 @@ import { buildSchemaIndex, type JsonSchema, type SchemaIndex } from '../lib/sche
 import { dedupeProblems, type ItemAddress } from '../lib/problems';
 import {
   breakCoalescing, canRedo, canUndo, commit, createHistory, redo as redoHistory, replacePresent,
-  undo as undoHistory, type History,
+  selectionAfterRedo, selectionAfterUndo, undo as undoHistory, type History,
 } from '../doc/history';
 import { DocOpError, findObject, findScene, findStep, findStepPath, type RemovalPlan } from '../doc/ops';
 import type { Document, Loc, Problem } from '../doc/types';
@@ -56,6 +57,9 @@ export interface StillInfo {
   height: number;
 }
 
+/** Whether the server checks layout (POST /api/layout): null until it has been asked. */
+export type LayoutAvailability = boolean | null;
+
 export type Theme = 'dark' | 'light';
 
 export interface EditorState {
@@ -65,7 +69,7 @@ export interface EditorState {
   catalog: Catalog | null;
   path: string;
 
-  history: History<Document> | null;
+  history: History<Document, Selection> | null;
   revision: number;
   /** The document as the server last confirmed it (what is on disk). */
   savedDoc: Document | null;
@@ -74,6 +78,9 @@ export interface EditorState {
   saveProblems: Problem[];
   /** Problems from the last render of each scene, such as LaTeX which didn't compile. */
   renderProblems: Record<string, Problem[]>;
+  /** Layout warnings for each scene (things off screen or on top of each other). */
+  layoutProblems: Record<string, Problem[]>;
+  layoutAvailable: LayoutAvailability;
   /** The other version after a 409; its document is null when the file can't be read. */
   conflict: { document: Document | null; revision: number } | null;
   timelines: Record<string, Timeline>;
@@ -88,7 +95,9 @@ export interface EditorState {
   toasts: Toast[];
   theme: Theme;
   problemsOpen: boolean;
-  modal: 'code' | 'export' | 'preview' | 'shortcuts' | null;
+  modal: 'code' | 'export' | 'preview' | 'shortcuts' | 'templates' | null;
+  /** The first-run tour's step, or null when it isn't showing. */
+  tourStep: number | null;
 }
 
 const THEME_KEY = 'manim-editor-theme';
@@ -116,6 +125,8 @@ export const initialState = (): EditorState => ({
   saveMessage: null,
   saveProblems: [],
   renderProblems: {},
+  layoutProblems: {},
+  layoutAvailable: null,
   conflict: null,
   timelines: {},
   still: null,
@@ -127,6 +138,7 @@ export const initialState = (): EditorState => ({
   theme: initialTheme(),
   problemsOpen: false,
   modal: null,
+  tourStep: null,
 });
 
 export const useEditor = create<EditorState>()(() => initialState());
@@ -159,7 +171,18 @@ export function frameStepIndex(state: EditorState, sceneId: string): number {
 }
 
 export function allProblems(state: EditorState): Problem[] {
-  return dedupeProblems([...state.saveProblems, ...Object.values(state.renderProblems).flat()]);
+  return dedupeProblems([...state.saveProblems, ...Object.values(state.renderProblems).flat(), ...Object.values(state.layoutProblems).flat()]);
+}
+
+/** Every problem the editor knows of, for components: kept the same array while nothing changes. */
+export function useAllProblems(): Problem[] {
+  const saveProblems = useEditor((s) => s.saveProblems);
+  const renderProblems = useEditor((s) => s.renderProblems);
+  const layoutProblems = useEditor((s) => s.layoutProblems);
+  return useMemo(
+    () => dedupeProblems([...saveProblems, ...Object.values(renderProblems).flat(), ...Object.values(layoutProblems).flat()]),
+    [saveProblems, renderProblems, layoutProblems],
+  );
 }
 
 // Changing
@@ -179,12 +202,16 @@ export function dismissToast(id: number): void {
 export interface ApplyOptions {
   /** Edits with the same key in quick succession are one undo step. */
   key?: string;
-  select?: Selection;
+  /**
+   * What to select once the edit is made (by default the selection stays). A function is
+   * called after the edit, with the new document, so it can name what the edit made.
+   */
+  select?: Selection | ((doc: Document) => Selection | null | undefined);
 }
 
 /**
  * Run an edit. Returns false (and says why in a toast) when the op refused, as when a name
- * is already taken.
+ * is already taken. The selection before and after is recorded with it, for undo and redo.
  */
 export function apply(edit: (doc: Document) => Document, options: ApplyOptions = {}): boolean {
   const state = useEditor.getState();
@@ -199,11 +226,12 @@ export function apply(edit: (doc: Document) => Document, options: ApplyOptions =
     }
     throw error;
   }
-  const changes: Partial<EditorState> = {};
+  const wanted = typeof options.select === 'function' ? options.select(next) : options.select;
+  const selection = wanted ?? state.selection;
+  const changes: Partial<EditorState> = wanted ? selectionChanges(state, selection, next) : {};
   if (next !== state.history.present) {
-    changes.history = commit(state.history, next, { key: options.key ?? null });
+    changes.history = commit(state.history, next, { key: options.key ?? null, meta: { before: state.selection, after: selection } });
   }
-  if (options.select) changes.selection = options.select;
   useEditor.setState(changes);
   return true;
 }
@@ -224,18 +252,26 @@ function repairSelection(doc: Document, selection: Selection): Selection {
   return selection;
 }
 
+/** Undo the last edit, selecting again what was selected when it was made. */
 export function undo(): void {
-  const { history, selection } = useEditor.getState();
+  const state = useEditor.getState();
+  const { history } = state;
   if (!history || !canUndo(history)) return;
+  const wanted = selectionAfterUndo(history) ?? state.selection;
   const next = undoHistory(history);
-  useEditor.setState({ history: next, selection: repairSelection(next.present, selection) });
+  const selection = repairSelection(next.present, wanted);
+  useEditor.setState({ ...selectionChanges(state, selection, next.present), history: next });
 }
 
+/** Redo the edit undone last, selecting what it selected. */
 export function redo(): void {
-  const { history, selection } = useEditor.getState();
+  const state = useEditor.getState();
+  const { history } = state;
   if (!history || !canRedo(history)) return;
+  const wanted = selectionAfterRedo(history) ?? state.selection;
   const next = redoHistory(history);
-  useEditor.setState({ history: next, selection: repairSelection(next.present, selection) });
+  const selection = repairSelection(next.present, wanted);
+  useEditor.setState({ ...selectionChanges(state, selection, next.present), history: next });
 }
 
 /** End the current run of merged edits (called when a field loses focus). */
@@ -244,18 +280,24 @@ export function endEditBurst(): void {
   if (history) useEditor.setState({ history: breakCoalescing(history) });
 }
 
-export function select(selection: Selection): void {
-  const state = useEditor.getState();
+/**
+ * What selecting something changes: the selection, and for a step the frame the canvas shows
+ * (the frame after it; for a step nested in `together`, after the whole together step).
+ */
+function selectionChanges(state: EditorState, selection: Selection, doc: Document | null = currentDoc(state)): Partial<EditorState> {
   const changes: Partial<EditorState> = { selection };
   if (selection.kind === 'step' && selection.sceneId && selection.id) {
-    // A step nested in `together` shows the frame after the whole together step
-    const doc = currentDoc(state);
     const scene = doc ? findScene(doc, selection.sceneId) : undefined;
     const path = scene ? findStepPath(scene.steps, selection.id) : null;
     const top = path && scene?.steps ? scene.steps[path[0] as number] : undefined;
     changes.frameStep = { ...state.frameStep, [selection.sceneId]: top?.id ?? selection.id };
   }
-  useEditor.setState(changes);
+  return changes;
+}
+
+export function select(selection: Selection): void {
+  const state = useEditor.getState();
+  useEditor.setState(selectionChanges(state, selection));
 }
 
 export function selectScene(sceneId: string): void {
@@ -314,7 +356,7 @@ export function loaded(payload: {
     schema: buildSchemaIndex(payload.schema),
     catalog: payload.catalog,
     path: payload.path,
-    history: createHistory(doc),
+    history: createHistory<Document, Selection>(doc),
     revision: payload.revision,
     savedDoc: doc,
     saveState: 'saved',
@@ -331,14 +373,17 @@ export function loadFailed(message: string): void {
 /** Take the server's copy of the document in place of ours (after a conflict). */
 export function adoptServerDocument(document: Document, revision: number): void {
   const state = useEditor.getState();
-  const history = state.history ? commit(state.history, document) : createHistory(document);
+  const selection = repairSelection(document, state.selection);
+  const history = state.history
+    ? commit(state.history, document, { meta: { before: state.selection, after: selection } })
+    : createHistory<Document, Selection>(document);
   useEditor.setState({
     history,
     revision,
     savedDoc: document,
     saveState: 'saved',
     conflict: null,
-    selection: repairSelection(document, state.selection),
+    selection,
   });
 }
 
@@ -351,6 +396,10 @@ export function adoptCanonical(document: Document): void {
 
 export function setRenderProblems(sceneId: string, problems: Problem[]): void {
   useEditor.setState((s) => ({ renderProblems: { ...s.renderProblems, [sceneId]: problems } }));
+}
+
+export function setLayoutProblems(sceneId: string, problems: Problem[]): void {
+  useEditor.setState((s) => ({ layoutProblems: { ...s.layoutProblems, [sceneId]: problems } }));
 }
 
 export type { RemovalPlan };

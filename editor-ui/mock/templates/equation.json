@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "title": "An equation, step by step",
+  "description": "Write a formula, then change it one step at a time, with a caption for each step.",
+  "scenes": [
+    {
+      "id": "equation",
+      "objects": [
+        { "id": "heading", "type": "title", "text": "Solving for x" },
+        { "id": "start", "type": "tex", "tex": "2x + 3 = 7" },
+        { "id": "middle", "type": "tex", "tex": "2x = 4" },
+        { "id": "answer", "type": "tex", "tex": "x = 2", "color": "YELLOW" }
+      ],
+      "steps": [
+        { "do": "show", "target": "heading" },
+        { "do": "show", "target": "start", "caption": "Start from the equation" },
+        { "do": "transform", "target": "start", "into": "middle", "caption": "Take 3 from both sides" },
+        { "do": "transform", "target": "middle", "into": "answer", "caption": "Then halve both sides" },
+        { "do": "highlight", "target": "answer" }
+      ]
+    }
+  ]
+}

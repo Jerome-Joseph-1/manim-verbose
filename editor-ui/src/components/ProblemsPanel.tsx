@@ -2,8 +2,8 @@
 import { useMemo } from 'react';
 import type { Document, Problem } from '../doc/types';
 import { formatLoc } from '../doc/paths';
-import { dedupeProblems, isRequestProblem, locateProblem, sortProblems } from '../lib/problems';
-import { requestFocus, setFrameStep, useEditor } from '../state/store';
+import { isRequestProblem, locateProblem, sortProblems } from '../lib/problems';
+import { requestFocus, setFrameStep, useAllProblems, useEditor } from '../state/store';
 import { Icon } from './Icon';
 
 function describeWhere(problem: Problem, doc: Document | null): string {
@@ -25,13 +25,12 @@ function describeWhere(problem: Problem, doc: Document | null): string {
 }
 
 export function ProblemsPanel() {
-  const saveProblems = useEditor((s) => s.saveProblems);
-  const renderProblems = useEditor((s) => s.renderProblems);
+  const all = useAllProblems();
   const open = useEditor((s) => s.problemsOpen);
   const doc = useEditor((s) => s.history?.present ?? null);
   const problems = useMemo(
-    () => sortProblems(dedupeProblems([...saveProblems, ...Object.values(renderProblems).flat()].filter((p) => !isRequestProblem(p)))),
-    [saveProblems, renderProblems],
+    () => sortProblems(all.filter((p) => !isRequestProblem(p))),
+    [all],
   );
   const errors = problems.filter((p) => p.severity === 'error').length;
   const warnings = problems.length - errors;

@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +59,7 @@ class Still:
     width: int
     height: int
     objects: list[Box]
+    coordinate_systems: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -147,7 +148,15 @@ class FakeBackend:
         for i, obj in enumerate(o for o in scene.objects if o.id in shown):
             x0 = 10.0 + 40 * i
             boxes.append(Box(obj.id, (x0, 20.0, x0 + 30, 50.0), (-1.0 + i, -0.5, -0.2 + i, 0.5)))
-        return Still(Path(out_png), width, height, boxes)
+        # Coordinate systems where manim's defaults would put them, centred, a unit an eighth of the height
+        unit = height / 8
+        systems = [
+            {"id": obj.id, "type": obj.type, "origin": [width / 2, height / 2], "x_unit": [unit, 0.0],
+             "y_unit": [0.0, -unit], "z_unit": [0.0, 0.0] if obj.type == "axes_3d" else None}
+            for obj in scene.objects
+            if obj.id in shown and obj.type in ("number_plane", "axes", "axes_3d", "number_line")
+        ]
+        return Still(Path(out_png), width, height, boxes, systems)
 
     def clip(self, doc, scene_id, out_mp4, start_step, end_step, base_dir):
         scene = next(s for s in doc.scenes if s.id == scene_id)

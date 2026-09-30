@@ -34,6 +34,8 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
+from manim_verbose.editor import assets as asset_routes
+from manim_verbose.editor import templates as template_routes
 from manim_verbose.editor.backend import (
     Backend, RenderBackend, render_error_problems, run_clip, run_still, run_video, timeline_data,
 )
@@ -433,13 +435,15 @@ class Editor:
 
 def create_app(path: str | Path, *, output_dir: str | Path | None = None, backend: Backend | None = None,
                limits: Limits | None = None, static_dir: str | Path | None = None,
-               allowed_hosts: set[str] | frozenset[str] | None = None, start_workers: bool = True) -> FastAPI:
+               allowed_hosts: set[str] | frozenset[str] | None = None, start_workers: bool = True,
+               templates_dir: str | Path | None = None) -> FastAPI:
     """
     An app editing the scene file at `path`. Renders go to `output_dir` (a folder in the
     user's cache by default) and are made by `backend` (the real renderer by default).
     `allowed_hosts`, when given, is the set of host names requests may be addressed to, which
     keeps web pages elsewhere from reaching a server on localhost by DNS rebinding.
     `start_workers` starts the still worker as the app starts, rather than on the first still.
+    `templates_dir` is the folder of templates offered (manim_verbose/templates by default).
 
     Renders run in processes started with multiprocessing's spawn method, which imports the
     main module afresh in each; a script which calls this has to do so under
@@ -462,7 +466,9 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
     app = FastAPI(title="manimgl editor", version=version(), lifespan=lifespan, docs_url="/api/docs",
                   redoc_url=None, openapi_url="/api/openapi.json")
     app.state.editor = editor
-    app.add_middleware(BodyLimit, max_bytes=limits.max_body_bytes)
+    # An uploaded picture may be bigger than a document
+    app.add_middleware(BodyLimit, max_bytes=limits.max_body_bytes,
+                       overrides={"/api/assets": limits.max_asset_bytes + 64 * 1024})
     if allowed_hosts is not None:
         app.add_middleware(HostCheck, allowed=frozenset(h.lower() for h in allowed_hosts))
 
@@ -521,7 +527,7 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
         prepared = await run_in_threadpool(editor.prepare_still, body)
         if prepared.cached is not None:
             editor.stills.note(seq)
-            return {**prepared.cached, "problems": prepared.checked.problems}
+            return {"coordinate_systems": [], **prepared.cached, "problems": prepared.checked.problems}
         future = editor.stills.submit(editor.still_task(body, prepared, seq))
         try:
             result = await asyncio.shield(asyncio.wrap_future(future))
@@ -563,6 +569,9 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
     @app.delete("/api/jobs/{job_id}")
     def cancel_job(job_id: str):
         return editor.cancel(job_id)
+
+    asset_routes.install_routes(app, editor)
+    template_routes.install_routes(app, editor, template_routes.Templates(templates_dir))
 
     @app.get("/files/{kind}/{name}")
     def files(kind: str, name: str):
@@ -641,23 +650,28 @@ def request_problem(error: dict[str, Any]) -> dict[str, Any]:
 # Middleware
 
 class BodyLimit:
-    """Refuse request bodies over `max_bytes` with 413, whether or not they say their length up front."""
+    """
+    Refuse request bodies over `max_bytes` with 413, whether or not they say their length up
+    front. `overrides` gives other limits for particular paths (uploads).
+    """
 
-    def __init__(self, app, max_bytes: int):
+    def __init__(self, app, max_bytes: int, overrides: dict[str, int] | None = None):
         self.app = app
         self.max_bytes = max_bytes
+        self.overrides = overrides or {}
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope["method"] in ("GET", "HEAD", "OPTIONS"):
             return await self.app(scope, receive, send)
+        limit = self.overrides.get(scope.get("path", ""), self.max_bytes)
         for name, value in scope.get("headers", []):
             if name == b"content-length":
                 try:
-                    too_big = int(value) > self.max_bytes
+                    too_big = int(value) > limit
                 except ValueError:
                     too_big = False
                 if too_big:
-                    return await self._too_large(scope, send)
+                    return await self._too_large(scope, send, limit)
         chunks, size = [], 0
         while True:
             message = await receive()
@@ -665,8 +679,8 @@ class BodyLimit:
                 return
             chunk = message.get("body", b"")
             size += len(chunk)
-            if size > self.max_bytes:
-                return await self._too_large(scope, send)
+            if size > limit:
+                return await self._too_large(scope, send, limit)
             chunks.append(chunk)
             if not message.get("more_body", False):
                 break
@@ -682,8 +696,8 @@ class BodyLimit:
 
         await self.app(scope, replay, send)
 
-    async def _too_large(self, scope, send):
-        megabytes = self.max_bytes / (1024 * 1024)
+    async def _too_large(self, scope, send, limit: int):
+        megabytes = limit / (1024 * 1024)
         response = JSONResponse({"problems": [problem(
             f"That's too much to send at once: the editor takes at most {megabytes:g} MB in one request")]},
             status_code=413)

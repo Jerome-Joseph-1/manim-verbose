@@ -127,6 +127,15 @@ export class Validator {
       const given = ['at', 'edge', 'next_to'].filter((n) => value[n] !== undefined && value[n] !== null);
       if (given.length > 1) push(`Give only one of at, edge or next_to, not ${given.join(' and ')}`);
       if (value.on != null && value.at == null) push('`on` says which coordinates `at` is in, so it needs `at`');
+      if (value.next_to == null && ((value.anchor ?? 'center') !== 'center' || value.follow === true)) {
+        push('`anchor` and `follow` say how to stay beside `next_to`, so they need `next_to`');
+      }
+    }
+    if (title === 'BraceObject') {
+      const points = value.start != null || value.end != null;
+      if (value.target == null && !(value.start != null && value.end != null)) push('A brace needs a `target`, or both `start` and `end`');
+      if (value.target != null && points) push('Give a brace either a `target` or `start` and `end`, not both');
+      if (value.part != null && value.target == null) push('`part` picks out a piece of `target`, so it needs `target`');
     }
     if (title === 'MoveStep' && (value.to == null) === (value.by == null)) push('A move needs exactly one of `to` or `by`');
     if (title === 'WaitStep' && value.run_time != null) push('A wait takes `duration`, not `run_time`');
@@ -306,10 +315,36 @@ export function* iterSteps(steps) {
   }
 }
 
+const MATRIX_PART = /^\s*(row|column|entry)\s+(\d+)(?:\s*[, ]\s*(\d+))?\s*$/i;
+
+/** Whether a part names something in its target, as check_part in validate.py has it; the problem if not. */
+function partProblem(target, targetId, part, verb) {
+  if (target.type === 'matrix' && Array.isArray(target.entries)) {
+    const rows = target.entries.length;
+    const columns = Array.isArray(target.entries[0]) ? target.entries[0].length : 0;
+    const match = MATRIX_PART.exec(part);
+    if (!match || (match[1].toLowerCase() === 'entry') !== (match[3] !== undefined)) {
+      const texts = new Set(target.entries.flat().map(String));
+      return texts.has(part) ? null : `'${part}' isn't an entry of '${targetId}': give an entry's text, or "row 2", "column 1" or "entry 2 1"`;
+    }
+    const kind = match[1].toLowerCase();
+    const first = Number(match[2]);
+    const second = match[3] === undefined ? null : Number(match[3]);
+    if (kind === 'row' && !(first >= 1 && first <= rows)) return `'${targetId}' has rows 1 to ${rows}`;
+    if (kind === 'column' && !(first >= 1 && first <= columns)) return `'${targetId}' has columns 1 to ${columns}`;
+    if (kind === 'entry' && !(first >= 1 && first <= rows && second >= 1 && second <= columns)) return `'${targetId}' has ${rows} rows and ${columns} columns, counting from 1`;
+    return null;
+  }
+  const field = PART_FIELDS[target.type];
+  if (!field) return `Only parts of text, formulas, titles, quotes and matrices can be ${verb}, and '${targetId}' is a ${target.type}`;
+  return String(target[field] ?? '').includes(part) ? null : `'${part}' doesn't appear in '${targetId}'`;
+}
+
 function wholeDocument(doc, validator) {
   const out = [];
   const seenScenes = new Set();
   const seenSteps = new Set();
+  let previous = null;
   doc.scenes.forEach((scene, s) => {
     const sloc = ['scenes', s];
     const ids = { sceneId: scene.id, itemId: null };
@@ -317,10 +352,25 @@ function wholeDocument(doc, validator) {
     if (seenScenes.has(scene.id)) add(`Two scenes are called '${scene.id}'`, [...sloc, 'id'], null);
     seenScenes.add(scene.id);
     const objects = new Map();
+    // Objects carried over from the scene before are usable here, and start on screen
+    const carried = new Set();
+    (Array.isArray(scene.carry) ? scene.carry : []).forEach((id, i) => {
+      if (!previous) return add('The first scene has no scene before it to carry objects from', [...sloc, 'carry', i], null);
+      if (!previous.objects.has(id)) return add(`Scene '${previous.id}' has no object called '${id}' to carry${didYouMean(id, previous.objects.keys())}`, [...sloc, 'carry', i], null);
+      if ((scene.objects ?? []).some((o) => o.id === id)) return add(`'${id}' is carried from the scene before, so it can't be declared here as well`, [...sloc, 'carry', i], id);
+      objects.set(id, previous.objects.get(id));
+      carried.add(id);
+    });
+    for (const id of carried) {
+      for (const [, ref] of objectRefs(objects.get(id))) {
+        if (!carried.has(ref)) add(`'${id}' is built on '${ref}', so '${ref}' has to be carried too`, [...sloc, 'carry', scene.carry.indexOf(id)], id);
+      }
+    }
     (scene.objects ?? []).forEach((obj, i) => {
-      if (objects.has(obj.id)) add(`Two objects in this scene are called '${obj.id}'`, [...sloc, 'objects', i, 'id'], obj.id);
+      if (objects.has(obj.id) && !carried.has(obj.id)) add(`Two objects in this scene are called '${obj.id}'`, [...sloc, 'objects', i, 'id'], obj.id);
       objects.set(obj.id, obj);
     });
+    previous = { id: scene.id, objects };
     const checkRef = (ref, types, loc, itemId) => {
       if (!objects.has(ref)) {
         add(`There's no object called '${ref}' in scene '${scene.id}'${didYouMean(ref, objects.keys())}`, loc, itemId);
@@ -333,6 +383,12 @@ function wholeDocument(doc, validator) {
       }
       return true;
     };
+    const checkAnchor = (place, loc, itemId) => {
+      if (!isObj(place) || !place.anchor || place.anchor === 'center' || !objects.has(place.next_to)) return;
+      const wanted = { tip: ['vector'], tail: ['vector'], start: ['line', 'arc'], end: ['line', 'arc'] }[place.anchor] ?? [];
+      const type = objects.get(place.next_to).type;
+      if (!wanted.includes(type)) add(`Only a ${wanted.join(' or ')} has a ${place.anchor}, and '${place.next_to}' is a ${type.replace(/_/g, ' ')}`, [...loc, 'anchor'], itemId);
+    };
     (scene.objects ?? []).forEach((obj, i) => {
       const loc = [...sloc, 'objects', i];
       for (const [where, ref, types] of objectRefs(obj)) {
@@ -342,6 +398,11 @@ function wholeDocument(doc, validator) {
       if ((obj.type === 'image' || obj.type === 'svg') && typeof obj.path === 'string' && (obj.path.startsWith('/') || obj.path.split(/[\\/]/).includes('..'))) {
         add("Files have to be in the scene file's folder or below it, given as a relative path", [...loc, 'path'], obj.id);
       }
+      if ((obj.type === 'brace' || obj.type === 'box') && typeof obj.part === 'string' && objects.has(obj.target)) {
+        const message = partProblem(objects.get(obj.target), obj.target, obj.part, 'picked out');
+        if (message) add(message, [...loc, 'part'], obj.id);
+      }
+      checkAnchor(obj.place, [...loc, 'place'], obj.id);
     });
     const checkStep = (step, loc) => {
       if (step.id) {
@@ -350,11 +411,10 @@ function wholeDocument(doc, validator) {
       }
       for (const [where, ref, types] of stepRefs(step)) checkRef(ref, types ?? null, [...loc, ...where], step.id ?? null);
       if (step.do === 'highlight' && step.part != null && objects.has(step.target)) {
-        const target = objects.get(step.target);
-        const field = PART_FIELDS[target.type];
-        if (!field) add(`Only parts of text, formulas, titles and quotes can be highlighted, and '${step.target}' is a ${target.type}`, [...loc, 'part'], step.id);
-        else if (!String(target[field] ?? '').includes(step.part)) add(`'${step.part}' doesn't appear in '${step.target}'`, [...loc, 'part'], step.id);
+        const message = partProblem(objects.get(step.target), step.target, step.part, 'highlighted');
+        if (message) add(message, [...loc, 'part'], step.id);
       }
+      if (step.do === 'move') checkAnchor(step.to, [...loc, 'to'], step.id ?? null);
       if (step.do === 'change' && objects.has(step.target) && isObj(step.set)) {
         const target = objects.get(step.target);
         const def = validator.objectDefs[target.type];
@@ -397,7 +457,7 @@ function wholeDocument(doc, validator) {
       }
       return out;
     };
-    let onScreen = withGroups(new Set((scene.objects ?? []).filter((o) => o.shown).map((o) => o.id)));
+    let onScreen = withGroups(new Set([...(scene.objects ?? []).filter((o) => o.shown).map((o) => o.id), ...carried]));
     (scene.steps ?? []).forEach((step, i) => {
       const loc = [...sloc, 'steps', i];
       const warnAbsent = (ref) => {

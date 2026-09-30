@@ -15,7 +15,10 @@ import { fileURLToPath } from 'node:url';
 import { FIXTURES, DEFAULT_FIXTURE } from './fixtures.mjs';
 import { Validator, latexProblems, iterSteps } from './validate.mjs';
 import { renderStill } from './layout.mjs';
+import { layoutProblems } from './layoutcheck.mjs';
 import { catalog, documentCode, timeline } from './codegen.mjs';
+import { loadTemplates } from './templates.mjs';
+import { savePicture } from './assets.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.resolve(here, '../../manim_verbose/scenefile/schema.json');
@@ -58,9 +61,30 @@ function newSession(fixture = START_FIXTURE, document = undefined) {
     stills: new Map(),
     stillSeq: 0,
     jobs: new Map(),
-    config: { latency: DEFAULT_LATENCY, exportMs: DEFAULT_EXPORT_MS, failNext: null },
-    stats: { stills: 0, saves: 0, superseded: 0, puts: 0 },
+    /** Pictures uploaded, by the path the document uses: { bytes, type }. */
+    assets: new Map(),
+    config: {
+      latency: DEFAULT_LATENCY,
+      exportMs: DEFAULT_EXPORT_MS,
+      failNext: null,
+      maxAssetBytes: 10 * 1024 * 1024,
+      // Endpoints other work adds to the real server, which the editor has to do without
+      layout: true,
+      templates: true,
+    },
+    stats: { stills: 0, saves: 0, superseded: 0, puts: 0, layouts: 0 },
   };
+}
+
+const TEMPLATES = loadTemplates(path.join(here, 'templates'));
+
+function readRaw(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
 }
 
 function sessionId(req) {
@@ -238,12 +262,33 @@ async function handleApi(req, res, url) {
       if (width < 64 || width > 3840) return send(res, 422, { problems: [requestProblem("'width' has to be from 64 to 3840 pixels", ['width'])] });
       const texProblems = latexProblems(doc, sceneIndex);
       if (texProblems.length) return send(res, 422, { problems: texProblems });
-      const still = renderStill(doc, scene, stepIndex, width);
-      const name = `${hash({ scene, settings: doc.settings, stepIndex, width })}.svg`;
+      const still = renderStill(doc, scene, stepIndex, width, { assets: s.assets });
+      const name = `${hash({ scenes: doc.scenes.slice(0, sceneIndex + 1), settings: doc.settings, stepIndex, width, assets: [...s.assets.keys()] })}.svg`;
       s.stills.set(name, still.svg);
       if (s.stills.size > 300) s.stills.delete(s.stills.keys().next().value);
-      return send(res, 200, { image_url: `/files/stills/${name}`, width: still.width, height: still.height, objects: still.objects, problems });
+      return send(res, 200, {
+        image_url: `/files/stills/${name}`, width: still.width, height: still.height, objects: still.objects, coordinate_systems: still.coordinateSystems, problems,
+      });
     }
+    case 'POST /api/layout': {
+      if (!s.config.layout) return send(res, 404, { problems: [requestProblem(`No such endpoint: ${route}`)] });
+      const body = await readBody(req);
+      s.stats.layouts += 1;
+      await sleep(s.config.latency / 2);
+      const problems = usable(res, body.document, { sceneId: body.scene_id });
+      if (problems === null) return undefined;
+      const sceneIndex = sceneIndexOr422(res, body.document, body.scene_id);
+      if (sceneIndex < 0) return undefined;
+      return send(res, 200, { problems: layoutProblems(body.document, sceneIndex) });
+    }
+    case 'POST /api/assets': {
+      const raw = await readRaw(req);
+      const result = await savePicture(raw, req.headers['content-type'] ?? '', s.assets, s.config.maxAssetBytes);
+      return send(res, result.status, result.body);
+    }
+    case 'GET /api/templates':
+      if (!s.config.templates) return send(res, 404, { problems: [requestProblem(`No such endpoint: ${route}`)] });
+      return send(res, 200, { templates: TEMPLATES.map(({ document: _document, ...summary }) => summary) });
     case 'POST /api/clip': {
       const body = await readBody(req);
       const problems = usable(res, body.document, { sceneId: body.scene_id });
@@ -282,6 +327,29 @@ async function handleApi(req, res, url) {
     }
     default:
       break;
+  }
+  const templateMatch = /^\/api\/templates\/([^/]+)(\/thumbnail\.svg|\/apply)?$/.exec(url.pathname);
+  if (templateMatch && s.config.templates) {
+    const template = TEMPLATES.find((t) => t.name === decodeURIComponent(templateMatch[1]));
+    if (!template) return send(res, 404, { problems: [requestProblem(`There's no template called '${decodeURIComponent(templateMatch[1])}'`, ['name'])] });
+    const [, , rest] = templateMatch;
+    if (!rest && req.method === 'GET') {
+      const { thumbnailSvg: _svg, ...detail } = template;
+      return send(res, 200, { ...detail, document: assignStepIds(structuredClone(template.document)), problems: validator.check(template.document).problems });
+    }
+    if (rest === '/thumbnail.svg' && req.method === 'GET') {
+      return send(res, 200, template.thumbnailSvg, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-cache' });
+    }
+    if (rest === '/apply' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (typeof body.base_revision !== 'number') return send(res, 422, { problems: [requestProblem("'base_revision' has to be a whole number", ['base_revision'])] });
+      if (body.base_revision !== s.revision) return send(res, 409, { problems: [], document: s.doc, revision: s.revision });
+      s.doc = assignStepIds(structuredClone(template.document));
+      s.revision += 1;
+      s.stats.saves += 1;
+      return send(res, 200, { revision: s.revision, problems: validator.check(s.doc).problems, document: s.doc });
+    }
+    return send(res, 405, { problems: [requestProblem(`${req.method} isn't allowed here`)] });
   }
   const jobMatch = /^\/api\/jobs\/([^/]+)$/.exec(url.pathname);
   if (jobMatch) {
@@ -354,7 +422,7 @@ async function handleMock(req, res, url) {
       return send(res, 200, s.config);
     }
     case 'GET /__mock/state':
-      return send(res, 200, { document: s.doc, revision: s.revision, stats: s.stats, problems: s.doc ? validator.check(s.doc).problems : s.loadProblems });
+      return send(res, 200, { document: s.doc, revision: s.revision, stats: s.stats, assets: [...s.assets.keys()], problems: s.doc ? validator.check(s.doc).problems : s.loadProblems });
     default:
       return send(res, 404, { problems: [requestProblem('Unknown mock hook')] });
   }

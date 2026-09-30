@@ -96,6 +96,10 @@ valid object or step.
   "image_url": "/files/stills/5f2c…png",
   "width": 960, "height": 540,
   "objects": [ { "id": "eq", "bbox": [412.5, 40.0, 690.1, 96.3], "frame_bbox": [-1.2, 2.9, 2.1, 3.6] } ],
+  "coordinate_systems": [
+    { "id": "plane", "type": "number_plane", "origin": [480.0, 270.0],
+      "x_unit": [67.5, 0.0], "y_unit": [0.0, -67.5], "z_unit": null }
+  ],
   "problems": [...]
 }
 ```
@@ -106,6 +110,15 @@ resolution. `bbox` is in pixels of the image, origin top left, `[x0, y0, x1, y1]
 order, so the last one containing a click is the one on top. Results are cached by the
 content of the scene and the request (steps after `step_index` don't count, nor do other
 scenes), including across restarts of the server.
+
+`coordinate_systems` has an entry for each number plane, set of axes, 3D axes and number
+line on screen, saying where its coordinates land in the image, so that a drag on the picture
+can be turned into coordinates on it: the point `(x, y)` of the system is at pixel
+`origin + x * x_unit + y * y_unit` (and `+ z * z_unit` for 3D axes, whose `z_unit` is
+otherwise `null`). All are in pixels of the image, measured on the scene as the still left it
+(after any camera move or change). For a number line, `x_unit` runs along the line and
+`y_unit` is one frame unit up, matching how a point `[n, height]` on a number line is read.
+A system which can't be measured is left out; the list is never a reason for a still to fail.
 
 Stills are drawn one at a time. A still request supersedes any still request still waiting
 from before; the superseded one answers `409 {"superseded": true}`. This holds for every
@@ -149,6 +162,59 @@ the newest hundred.
 it. A job which has already finished is left as it is, and its status says so (`done`,
 say). A running export is asked to stop, and killed if it hasn't within a few seconds.
 
+## Pictures
+
+`POST /api/assets`, a `multipart/form-data` body with the file in a part called `file` →
+`200 { "path": "assets/cat.png", "kind": "png" }`
+
+Saves a picture for an image or svg object in the folder `assets/` beside the scene file (made
+if need be), and gives its path relative to the scene file, ready for the object's `path`.
+What is accepted is decided by the file's content, never its name or claimed type: PNG, JPEG,
+GIF and WebP pictures, and SVG drawings (XML with an `<svg>` root and no DTD). Its name is the
+name it was sent with made safe (only the last part of it, in letters, digits, `-` and `_`,
+at most 48 of them), with the extension its content calls for: `../My Cat.JPG` holding a PNG
+is saved as `assets/My-Cat.png`. The same picture sent again gets the same path back; a
+different one of the same name is saved beside it as `cat-2.png`, `cat-3.png`, and so on.
+Nothing is ever written outside `assets/`, and an `assets` which is a link elsewhere is
+refused.
+
+| Answer | When |
+|--------|------|
+| `413` | the file is over 10 MB (the only request allowed a body over 5 MB) |
+| `415` | the content isn't one of those pictures, or the body isn't multipart |
+| `422` | the file is empty, or the upload has no file in it |
+| `500` | the folder can't be written to |
+
+each with `{"problems": [...]}` whose `loc` is `["file"]`.
+
+## Templates
+
+Videos to start from. Every `*.yaml` scene file in `manim_verbose/templates/` is one, named
+by its file name; its title and description are the document's own, and a picture of it is
+`<name>.png` beside it, if there is one. The folder is read on each request, so templates
+added while the editor runs are offered at once; one that can't be read as a scene file is
+left out (and logged).
+
+`GET /api/templates` → `200`
+```json
+{ "templates": [
+  { "name": "vectors", "title": "Vectors on a plane", "description": "…",
+    "thumbnail_url": "/api/templates/vectors/thumbnail.png" }
+] }
+```
+in order of name; `thumbnail_url` is `null` for a template with no picture.
+
+`GET /api/templates/{name}` → `200`, the same fields and `"document": {...}` (in canonical
+form, with step ids) and `"problems": [...]`; `404` for a name that isn't a template.
+
+`GET /api/templates/{name}/thumbnail.png` → the picture, or `404`.
+
+`POST /api/templates/{name}/apply` with `{ "base_revision": 7 }` → saves the template in place
+of the document, exactly as `PUT /api/document` would with the template's document: the same
+answer, a new revision, and `409` with the current version when `base_revision` isn't the
+latest. (The editor applies templates itself, as an edit it can undo, from
+`GET /api/templates/{name}`; this is for tools.)
+
 ## Files
 
 `GET /files/{kind}/{name}` serves rendered stills (`/files/stills/*.png`), clips
@@ -186,6 +252,7 @@ wrong methods `405`, both with problems.
 | Limit | Value | Answer |
 |-------|-------|--------|
 | Request body | 5 MB | `413` |
+| An uploaded picture (`/api/assets`) | 10 MB | `413` |
 | Scenes in a document | 100 | `422`, `loc: ["scenes"]` |
 | Objects in a scene | 500 | `422`, `loc: ["scenes", i, "objects"]` |
 | Steps in a scene, counting those inside `together` | 1000 | `422`, `loc: ["scenes", i, "steps"]` |

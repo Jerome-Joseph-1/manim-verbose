@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "title": "A title card",
+  "description": "A title and a subtitle, to open a video.",
+  "scenes": [
+    {
+      "id": "opening",
+      "objects": [
+        { "id": "title", "type": "title", "text": "My video" },
+        { "id": "subtitle", "type": "text", "text": "What it is about", "font_size": 36, "place": { "next_to": "title", "side": "down", "buff": 0.5 } }
+      ],
+      "steps": [
+        { "do": "show", "target": "title" },
+        { "do": "show", "target": "subtitle" },
+        { "do": "wait", "duration": 2 }
+      ]
+    }
+  ]
+}

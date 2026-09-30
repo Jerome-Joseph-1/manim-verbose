@@ -39,7 +39,7 @@ function follow(step: Step, objects: Map<string, SceneObject>, before: Set<strin
       after.clear();
       break;
     case 'transform':
-      if (step.keep !== true && typeof step.target === 'string') drop(step.target);
+      if (step.keep !== true && step.keep !== 'dim' && typeof step.target === 'string') drop(step.target);
       if (typeof step.into === 'string' && step.into) add(step.into);
       break;
     case 'together':
@@ -86,7 +86,9 @@ function withGroups(objects: Map<string, SceneObject>, onScreen: Set<string>): S
 /** Ids on screen once step `stepIndex` has run (-1: before the first step). */
 export function onScreenAfter(scene: Scene, stepIndex: number): Set<string> {
   const objects = new Map((scene.objects ?? []).map((o) => [o.id, o]));
-  let current = withGroups(objects, new Set((scene.objects ?? []).filter((o) => o.shown === true).map((o) => o.id)));
+  // Carried objects start on screen, as the scene before left them
+  const start = [...(scene.objects ?? []).filter((o) => o.shown === true).map((o) => o.id), ...(scene.carry ?? [])];
+  let current = withGroups(objects, new Set(start));
   const steps = scene.steps ?? [];
   for (let i = 0; i <= Math.min(stepIndex, steps.length - 1); i += 1) {
     current = withGroups(objects, follow(steps[i]!, objects, current));

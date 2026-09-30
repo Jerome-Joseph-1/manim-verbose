@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "Vectors on a plane",
+  "description": "A number plane with two vectors, added tip to tail.",
+  "scenes": [
+    {
+      "id": "plane",
+      "objects": [
+        { "id": "grid", "type": "number_plane" },
+        { "id": "v", "type": "vector", "on": "grid", "tip": [2, 1], "color": "YELLOW" },
+        { "id": "w", "type": "vector", "on": "grid", "tail": [2, 1], "tip": [3, 3], "color": "BLUE" },
+        { "id": "sum", "type": "vector", "on": "grid", "tip": [3, 3], "color": "GREEN" }
+      ],
+      "steps": [
+        { "do": "show", "target": "grid" },
+        { "do": "show", "target": "v", "caption": "One vector" },
+        { "do": "show", "target": "w", "caption": "Another, starting where the first ends" },
+        { "do": "show", "target": "sum", "caption": "Their sum goes straight to the end" }
+      ]
+    }
+  ]
+}

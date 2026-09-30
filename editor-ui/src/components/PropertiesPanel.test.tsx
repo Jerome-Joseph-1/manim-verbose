@@ -5,7 +5,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { PropertiesPanel } from './PropertiesPanel';
+import { PropertiesPanel, applicableFields } from './PropertiesPanel';
 import { objectFields, stepFields, type FieldSpec, type WidgetKind } from '../lib/schema';
 import { catalogFromSchema, fillObjectTemplate, fillStepTemplate } from '../lib/templates';
 import { findObject, findStep } from '../doc/ops';
@@ -80,6 +80,9 @@ const CONTROLS: Record<WidgetKind, (el: HTMLElement) => void> = {
   file: (el) => expect(el.querySelector('input.mono')).not.toBeNull(),
   object: (el) => expect(el.querySelector('.sub-fields')).not.toBeNull(),
   json: (el) => expect(el.querySelector('textarea')).not.toBeNull(),
+  choice: (el) => expect(el.querySelectorAll('[role="radiogroup"] [role="radio"]').length).toBeGreaterThanOrEqual(2),
+  part: (el) => expect(el.querySelector('input[type="text"], select')).not.toBeNull(),
+  carry: (el) => expect(el.querySelector('fieldset, .field-help')).not.toBeNull(),
 };
 
 function fieldEl(container: HTMLElement, name: string): HTMLElement {
@@ -101,7 +104,8 @@ describe('every kind of object', () => {
     setupEditor(docWithObject(type), { selection: { kind: 'object', sceneId: 's', id: 'thing' } });
     const { container } = render(<PropertiesPanel />);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(label);
-    checkFields(container, objectFields(schemaIndex, type));
+    const obj = editorDoc().scenes[0]!.objects!.find((o) => o.id === 'thing')!;
+    checkFields(container, applicableFields(obj, objectFields(schemaIndex, type)));
   });
 });
 

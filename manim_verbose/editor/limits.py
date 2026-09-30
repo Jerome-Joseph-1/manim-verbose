@@ -17,6 +17,7 @@ from manim_verbose.scenefile.validate import Problem
 @dataclass(frozen=True)
 class Limits:
     max_body_bytes: int = 5 * 1024 * 1024
+    max_asset_bytes: int = 10 * 1024 * 1024  # an uploaded picture
     max_scenes: int = 100
     max_objects: int = 500              # per scene
     max_steps: int = 1000               # per scene, counting the steps inside `together`

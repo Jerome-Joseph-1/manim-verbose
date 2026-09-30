@@ -56,6 +56,13 @@ export function fillObjectTemplate(schema: SchemaIndex, template: Template, ctx:
       out[field.name] = filled;
     }
   }
+  // A brace with nothing to go around spans two points instead
+  if (type === 'brace' && (out.target === undefined || out.target === '') && out.start === undefined) {
+    delete out.target;
+    delete out.part;
+    out.start = [-2, -1];
+    out.end = [2, -1];
+  }
   return out;
 }
 
@@ -84,7 +91,8 @@ export function fillStepTemplate(schema: SchemaIndex, template: Template, ctx: A
     if (into) out.into = into;
   }
   if (kind === 'together' && Array.isArray(out.steps)) {
-    const queue = [...offScreen];
+    // Different objects for each: those not on screen yet first, then the rest
+    const queue = [...offScreen, ...(selected && !offScreen.includes(selected) ? [selected] : []), ...all.filter((id) => !offScreen.includes(id) && id !== selected)];
     out.steps = out.steps.map((inner) => {
       if (inner && typeof inner === 'object' && !Array.isArray(inner) && isEmptyRef(inner.target)) {
         const next = queue.shift() ?? selected ?? all[0];

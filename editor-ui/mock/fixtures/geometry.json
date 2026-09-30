@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "title": "Shapes on a plane",
+  "scenes": [
+    {
+      "id": "shapes",
+      "title": "Shapes",
+      "objects": [
+        { "id": "plane", "type": "number_plane" },
+        { "id": "v", "type": "vector", "on": "plane", "tip": [2, 1], "color": "YELLOW" },
+        { "id": "seg", "type": "line", "start": [-6, -2.5], "end": [-3, -2.5], "color": "BLUE" },
+        { "id": "tri", "type": "polygon", "points": [[-6, 1], [-4, 1], [-5, 2.5]], "color": "GREEN" },
+        { "id": "pt", "type": "dot", "point": [5, -2.5], "color": "RED" },
+        { "id": "m", "type": "matrix", "entries": [[1, 2], [3, 4]], "place": { "at": [5, 2] } },
+        { "id": "label", "type": "text", "text": "Area", "place": { "at": [-4.5, -1] } }
+      ],
+      "steps": [
+        { "id": "shapes_1", "do": "show", "target": "plane" },
+        { "id": "shapes_2", "do": "show", "target": ["v", "seg", "tri", "pt", "m", "label"] }
+      ]
+    }
+  ]
+}

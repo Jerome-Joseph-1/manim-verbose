@@ -113,7 +113,7 @@ class OutputDir:
     # Stills
 
     def still(self, key: str) -> dict[str, Any] | None:
-        """A cached still's response (image_url, width, height, objects), or None."""
+        """A cached still's response (image_url, width, height, objects, coordinate_systems), or None."""
         with self._lock:
             entry = self._stills.get(key)
             if entry is not None:
@@ -146,6 +146,7 @@ class OutputDir:
             "width": data["width"],
             "height": data["height"],
             "objects": data["objects"],
+            "coordinate_systems": data.get("coordinate_systems", []),
         }
         meta = self.root / "stills" / f"{key}.json"
         tmp = meta.with_name(f"{PARTIAL_PREFIX}{uuid.uuid4().hex}.json")

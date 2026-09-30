@@ -4,7 +4,7 @@
  * has loaded, so the canvas never flashes blank.
  */
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiError, isAbortError } from '../lib/api';
+import { api, ApiError, isAbortError, type CoordinateSystem } from '../lib/api';
 import { fitMapping, type FrameMapping, type StillObject } from '../lib/geometry';
 import { isRequestProblem } from '../lib/problems';
 import type { Document, Problem } from '../doc/types';
@@ -18,6 +18,8 @@ export interface StillView {
   height: number;
   objects: StillObject[];
   mapping: FrameMapping;
+  /** Where each coordinate system's coordinates are, in pixels of the still. */
+  systems: CoordinateSystem[];
   sceneId: string;
   stepIndex: number;
 }
@@ -62,6 +64,7 @@ export function useStill(doc: Document | null, sceneId: string | null, stepIndex
           height: response.height,
           objects: response.objects ?? [],
           mapping: fitMapping(response.objects ?? [], response.width, response.height),
+          systems: response.coordinate_systems ?? [],
           sceneId,
           stepIndex,
         };

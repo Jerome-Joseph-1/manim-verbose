@@ -24,12 +24,12 @@ export type Doc = {
   [k: string]: unknown;
 };
 
-export type FixtureName = 'demo' | 'empty' | 'eola' | 'broken';
+export type FixtureName = 'demo' | 'empty' | 'eola' | 'geometry' | 'broken';
 
 export function fixtureDocument(name: FixtureName): Doc | null {
   if (name === 'broken') return null;
   if (name === 'empty') return { version: 1, title: 'Untitled', scenes: [{ id: 'scene_1' }] } as unknown as Doc;
-  const file = name === 'eola' ? 'eola_vectors.json' : 'demo.json';
+  const file = name === 'eola' ? 'eola_vectors.json' : name === 'geometry' ? 'geometry.json' : 'demo.json';
   return JSON.parse(fs.readFileSync(path.join(here, '../mock/fixtures', file), 'utf8')) as Doc;
 }
 
@@ -58,6 +58,26 @@ export class EditorDriver {
       await expect(this.page.locator('.app')).toBeVisible();
       await this.waitSaved();
     }
+  }
+
+  /** Start the server's document from a document of the test's own, and open the editor on it. */
+  async openDocument(doc: Doc, options: { latency?: number } = {}): Promise<void> {
+    if (this.real) {
+      await this.putServerDocument(doc);
+    } else {
+      const response = await this.page.request.post('/__mock/reset', { data: { document: doc, ...options }, headers: { 'x-mock-session': this.session } });
+      expect(response.ok()).toBeTruthy();
+    }
+    await this.page.goto('/');
+    await expect(this.page.locator('.app')).toBeVisible();
+    await this.waitSaved();
+  }
+
+  /** Change how the mock server behaves for this test (features on and off, limits). */
+  async mockConfig(config: Record<string, unknown>): Promise<void> {
+    if (this.real) return;
+    const response = await this.page.request.post('/__mock/config', { data: config, headers: { 'x-mock-session': this.session } });
+    expect(response.ok()).toBeTruthy();
   }
 
   private headers(): Record<string, string> {
@@ -172,7 +192,7 @@ export class EditorDriver {
 /** Console messages which are the browser's, not the editor's: expected HTTP statuses. */
 export function isExpectedConsoleNoise(text: string, serverCantRender = false): boolean {
   if (serverCantRender && /status of 50\d/.test(text)) return true;
-  return /Failed to load resource: the server responded with a status of (409|422|404|429)/.test(text);
+  return /Failed to load resource: the server responded with a status of (409|413|415|422|404|405|429)/.test(text);
 }
 
 let realRendering: Promise<boolean> | null = null;
@@ -190,7 +210,9 @@ function realServerRenders(request: APIRequestContext): Promise<boolean> {
   return realRendering;
 }
 
-export const test = base.extend<{ editor: EditorDriver; consoleErrors: string[] }>({
+export const test = base.extend<{ editor: EditorDriver; consoleErrors: string[]; firstRun: boolean }>({
+  /** Whether the browser is new to the editor, so the first-run tour shows (off for most tests). */
+  firstRun: [false, { option: true }],
   consoleErrors: async ({ page, request }, use, testInfo) => {
     const errors: string[] = [];
     const cantRender = testInfo.project.name === 'real' && process.env.E2E_REAL_AVAILABLE === '1' && !(await realServerRenders(request));
@@ -200,11 +222,21 @@ export const test = base.extend<{ editor: EditorDriver; consoleErrors: string[] 
     page.on('pageerror', (error) => errors.push(`page error: ${error.message}`));
     await use(errors);
   },
-  editor: async ({ page, context, baseURL }, use, testInfo) => {
+  editor: async ({ page, context, baseURL, firstRun }, use, testInfo) => {
     const real = testInfo.project.name === 'real';
     test.skip(real && process.env.E2E_REAL_AVAILABLE !== '1', 'manim_verbose.editor is not importable, so there is no real server to test');
     const session = `t${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
     if (!real) await context.addCookies([{ name: 'mock_session', value: session, url: baseURL! }]);
+    if (!firstRun) {
+      // Someone who has been here before: no tour
+      await context.addInitScript(() => {
+        try {
+          localStorage.setItem('manim-editor-tour', 'done');
+        } catch {
+          // no storage: the tour doesn't show then either
+        }
+      });
+    }
     await use(new EditorDriver(page, real, session));
   },
 });

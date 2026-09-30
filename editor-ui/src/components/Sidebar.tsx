@@ -2,7 +2,7 @@
  * The left hand side: the scenes of the video, the steps of the scene in order (the
  * timeline), and the objects the scene declares.
  */
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
@@ -14,12 +14,14 @@ import { catalogFromSchema } from '../lib/templates';
 import { problemsForItem, worstSeverity } from '../lib/problems';
 import { stepTargets } from '../doc/refs';
 import { onScreenAfter } from '../doc/screen';
-import type { Problem, Scene, SceneObject, Step } from '../doc/types';
+import type { Document, Problem, Scene, SceneObject, Step } from '../doc/types';
+import { carriedObjects } from '../doc/carry';
 import {
-  currentSceneId, frameStepIndex, requestFocus, select, selectScene, setFrameStep, useEditor,
+  currentSceneId, frameStepIndex, requestFocus, select, selectScene, setFrameStep, useAllProblems, useEditor,
 } from '../state/store';
 import {
-  addNewScene, addObjectFrom, addStepFrom, duplicateObjectById, duplicateSceneById, duplicateStepById, removeStepById,
+  addNestedStepFrom, addNewScene, addObjectFrom, addStepFrom, duplicateObjectById, duplicateSceneById, duplicateStepById, removeStepById,
+  reorderNestedStep,
   reorderScene, reorderStep, requestRemoveObject, requestRemoveScene, showObjects,
 } from '../state/actions';
 import { Icon, categoryIcon, stepIcon } from './Icon';
@@ -32,12 +34,6 @@ export function useCatalog(): Catalog | null {
     if (catalog && catalog.objects?.length && catalog.steps?.length) return catalog;
     return schema ? catalogFromSchema(schema) : null;
   }, [catalog, schema]);
-}
-
-function useAllProblems(): Problem[] {
-  const saveProblems = useEditor((s) => s.saveProblems);
-  const renderProblems = useEditor((s) => s.renderProblems);
-  return useMemo(() => [...saveProblems, ...Object.values(renderProblems).flat()], [saveProblems, renderProblems]);
 }
 
 function useSortSensors() {
@@ -277,9 +273,12 @@ function StepsSection() {
                     index={index}
                     count={steps.length}
                     selected={selection.kind === 'step' && selection.id === step.id}
+                    selectedInside={selection.kind === 'step' && step.do === 'together' && Array.isArray(step.steps) && (step.steps as unknown as Step[]).some((s) => s.id === selection.id) ? selection.id : null}
                     framed={index === frameIndex}
                     timing={step.id ? timings.get(step.id) : undefined}
                     severity={worstSeverity(problemsForItem(problems, { kind: 'step', sceneId: scene.id, itemId: step.id ?? null }, doc).concat(nestedProblems(problems, scene.id, step, doc)))}
+                    problems={step.do === 'together' ? problems : EMPTY_PROBLEMS}
+                    doc={step.do === 'together' ? doc : null}
                   />
                 ))}
               </ol>
@@ -296,8 +295,10 @@ function nestedProblems(problems: Problem[], sceneId: string, step: Step, doc: i
   return (step.steps as unknown as Step[]).flatMap((inner) => problemsForItem(problems, { kind: 'step', sceneId, itemId: inner.id ?? null }, doc));
 }
 
+const EMPTY_PROBLEMS: Problem[] = [];
+
 const StepCard = memo(function StepCard({
-  id, schema, sceneId, step, index, count, selected, framed, timing, severity,
+  id, schema, sceneId, step, index, count, selected, selectedInside, framed, timing, severity, problems, doc,
 }: {
   id: string;
   schema: SchemaIndex;
@@ -306,9 +307,14 @@ const StepCard = memo(function StepCard({
   index: number;
   count: number;
   selected: boolean;
+  /** The id of the step inside this `together` which is selected, if one is. */
+  selectedInside: string | null;
   framed: boolean;
   timing: TimelineStep | undefined;
   severity: 'error' | 'warning' | null;
+  /** For a `together`: every problem, for the steps inside it. */
+  problems: Problem[];
+  doc: Document | null;
 }) {
   const sortable = useSortable({ id });
   const style = { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition };
@@ -317,11 +323,16 @@ const StepCard = memo(function StepCard({
   const caption = typeof step.caption === 'string' ? step.caption : null;
   const label = `Step ${index + 1}: ${kind?.label ?? step.do} ${summary}`;
   const selectMe = () => step.id && select({ kind: 'step', sceneId, id: step.id });
+  const together = step.do === 'together' && Array.isArray(step.steps);
+  const inner = together ? (step.steps as unknown as Step[]) : [];
+  // Open while it or a step in it is selected, unless opened or closed by hand
+  const [open, setOpen] = useState<boolean | null>(null);
+  const expanded = together && (open ?? (selected || selectedInside !== null));
   return (
     <li
       ref={sortable.setNodeRef}
       style={style}
-      className={`step-card${selected ? ' selected' : ''}${framed ? ' framed' : ''}${sortable.isDragging ? ' dragging' : ''}`}
+      className={`step-card${selected ? ' selected' : ''}${framed ? ' framed' : ''}${sortable.isDragging ? ' dragging' : ''}${together ? ' together' : ''}${expanded ? ' expanded' : ''}`}
       data-step-id={step.id ?? undefined}
       data-testid="step-card"
       onClick={selectMe}
@@ -377,9 +388,167 @@ const StepCard = memo(function StepCard({
           <Icon name="trash" />
         </button>
       </span>
+      {together ? (
+        <button
+          type="button"
+          className="nested-toggle"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Hide' : 'Show'} the ${inner.length} steps inside step ${index + 1}`}
+          data-testid="together-toggle"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(!expanded);
+          }}
+        >
+          <Icon name={expanded ? 'down' : 'right'} />
+          {inner.length} at the same time
+        </button>
+      ) : null}
+      {expanded && step.id && doc ? (
+        <NestedSteps schema={schema} sceneId={sceneId} parent={step} parentIndex={index} selectedId={selectedInside} problems={problems} doc={doc} />
+      ) : null}
     </li>
   );
 });
+
+/** Kinds of step which can't go inside `together`. */
+const NOT_INSIDE_TOGETHER = new Set(['wait', 'together']);
+
+/** The steps inside a `together` step, as cards of their own: reorder, add, remove. */
+function NestedSteps({
+  schema, sceneId, parent, parentIndex, selectedId, problems, doc,
+}: {
+  schema: SchemaIndex;
+  sceneId: string;
+  parent: Step;
+  parentIndex: number;
+  selectedId: string | null;
+  problems: Problem[];
+  doc: Document;
+}) {
+  const catalog = useCatalog();
+  const sensors = useSortSensors();
+  const inner = parent.steps as unknown as Step[];
+  const ids = inner.map((s, i) => `nested:${s.id ?? i}`);
+  const entries: MenuEntry[] = (catalog?.steps ?? [])
+    .filter((entry) => !NOT_INSIDE_TOGETHER.has(String(entry.do)))
+    .map((entry) => ({
+      key: String(entry.do),
+      label: entry.label,
+      description: entry.description,
+      icon: stepIcon(String(entry.do)),
+      onSelect: () => parent.id && addNestedStepFrom(sceneId, parent.id, entry),
+    }));
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id || !parent.id) return;
+    reorderNestedStep(sceneId, parent.id, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
+  };
+  return (
+    // Pointer and clicks inside stay inside: they are not a drag or a click of the step holding them
+    <div className="nested-steps" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} data-testid="nested-steps">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          <ol className="list" aria-label={`Steps inside step ${parentIndex + 1}, all at the same time`}>
+            {inner.map((step, i) => (
+              <NestedStepCard
+                key={ids[i]}
+                id={ids[i]!}
+                schema={schema}
+                sceneId={sceneId}
+                parent={parent}
+                parentIndex={parentIndex}
+                step={step}
+                index={i}
+                count={inner.length}
+                selected={selectedId === step.id}
+                severity={worstSeverity(problemsForItem(problems, { kind: 'step', sceneId, itemId: step.id ?? null }, doc))}
+              />
+            ))}
+          </ol>
+        </SortableContext>
+      </DndContext>
+      <Menu label="Add a step to run at the same time" buttonLabel="Step at the same time" entries={entries} testId="add-nested-step" align="left" />
+    </div>
+  );
+}
+
+function NestedStepCard({
+  id, schema, sceneId, parent, parentIndex, step, index, count, selected, severity,
+}: {
+  id: string;
+  schema: SchemaIndex;
+  sceneId: string;
+  parent: Step;
+  parentIndex: number;
+  step: Step;
+  index: number;
+  count: number;
+  selected: boolean;
+  severity: 'error' | 'warning' | null;
+}) {
+  const sortable = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition };
+  const kind = stepKind(schema, step.do);
+  const summary = stepSummary(schema, step);
+  const number = `${parentIndex + 1}.${index + 1}`;
+  const label = `Step ${number}: ${kind?.label ?? step.do} ${summary}`;
+  const selectMe = () => step.id && select({ kind: 'step', sceneId, id: step.id });
+  const removeLabel = count <= 2 ? 'Delete (the other step is left on its own)' : 'Delete';
+  return (
+    <li
+      ref={sortable.setNodeRef}
+      style={style}
+      className={`step-card nested-card${selected ? ' selected' : ''}${sortable.isDragging ? ' dragging' : ''}`}
+      data-step-id={step.id ?? undefined}
+      data-testid="nested-step-card"
+      onClick={selectMe}
+      onPointerDown={sortable.listeners?.onPointerDown as React.PointerEventHandler | undefined}
+    >
+      <span className="step-index" aria-hidden="true">
+        {number}
+      </span>
+      <button
+        type="button"
+        className="step-title"
+        aria-label={label}
+        aria-pressed={selected}
+        onClick={(e) => {
+          e.stopPropagation();
+          selectMe();
+        }}
+        onKeyDown={(e) => {
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && parent.id) {
+            e.preventDefault();
+            e.stopPropagation();
+            const to = index + (e.key === 'ArrowUp' ? -1 : 1);
+            if (to >= 0 && to < count) {
+              reorderNestedStep(sceneId, parent.id, index, to);
+              requestAnimationFrame(() => {
+                document.querySelector<HTMLElement>(`[data-step-id="${step.id}"] .step-title`)?.focus();
+              });
+            }
+          }
+        }}
+      >
+        <Icon name={stepIcon(step.do)} />
+        <span>{kind?.label ?? step.do}</span>
+        <span className="targets">{summary}</span>
+        {severity ? <span className={`problem-dot ${severity}`} title={severity === 'error' ? 'Has a problem' : 'Has a warning'} /> : null}
+      </button>
+      <span className="step-actions" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="icon-btn drag-handle" aria-label={`Move step ${number}`} {...sortable.attributes} onKeyDown={sortable.listeners?.onKeyDown as React.KeyboardEventHandler | undefined}>
+          <Icon name="grip" />
+        </button>
+        <button type="button" className="icon-btn" aria-label={`Duplicate step ${number}`} title="Duplicate" onClick={() => step.id && duplicateStepById(sceneId, step.id)}>
+          <Icon name="copy" />
+        </button>
+        <button type="button" className="icon-btn danger" aria-label={`Delete step ${number}`} title={removeLabel} onClick={() => step.id && removeStepById(sceneId, step.id)}>
+          <Icon name="trash" />
+        </button>
+      </span>
+    </li>
+  );
+}
 
 // Objects
 
@@ -396,6 +565,7 @@ function ObjectsSection() {
 
   if (!doc || !schema || !scene) return null;
   const objects = scene.objects ?? [];
+  const carried = carriedObjects(doc, scene.id);
   const entries: MenuEntry[] = [];
   let lastCategory: string | null = null;
   const sortedCatalog = [...(catalog?.objects ?? [])].sort(
@@ -430,9 +600,42 @@ function ObjectsSection() {
         </div>
       </div>
       <div className="section-body" data-testid="object-list">
-        {objects.length === 0 ? (
+        {objects.length === 0 && carried.length === 0 ? (
           <div className="empty-hint">
             <strong>Objects are the things in your video:</strong> text, equations, shapes, graphs. Add one with the Object button.
+          </div>
+        ) : null}
+        {carried.length ? (
+          <div>
+            <div className="category-label">Carried over from the scene before</div>
+            <ul className="list" aria-label="Carried over from the scene before">
+              {carried.map(({ object: obj, from }) => {
+                const selected = selection.kind === 'object' && selection.id === obj.id && selection.sceneId === scene.id;
+                const label = objectKind(schema, obj.type)?.label ?? obj.type;
+                return (
+                  <li key={obj.id} className={`row carried${selected ? ' selected' : ''}`} data-object-id={obj.id}>
+                    <button
+                      type="button"
+                      className="row-main"
+                      aria-pressed={selected}
+                      title={`Made in scene '${from}'; this scene starts with it on screen`}
+                      onClick={() => select({ kind: 'object', sceneId: scene.id, id: obj.id })}
+                    >
+                      <span className="kind-badge" aria-hidden="true">
+                        <Icon name="right" />
+                      </span>
+                      <span className="row-label mono">{obj.id}</span>
+                      <span className="row-sub">{label}</span>
+                      {!onScreen.has(obj.id) ? (
+                        <span className="offscreen" title="Not on screen at this point of the scene">
+                          hidden
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         ) : null}
         {categories.map((category) => (

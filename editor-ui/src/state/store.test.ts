@@ -57,6 +57,44 @@ describe('edits and history', () => {
     undo();
     expect(useEditor.getState().selection).toMatchObject({ kind: null, sceneId: 'intro' });
   });
+
+  it('selects again, on undo, what was selected when the edit was made; on redo, what it selected', () => {
+    const recolor = (id: string, color: string) => apply((d) => setItemField(d, { kind: 'object', sceneId: 'intro', id }, ['color'], color));
+    select({ kind: 'object', sceneId: 'intro', id: 'eq' });
+    recolor('eq', 'RED');
+    select({ kind: 'object', sceneId: 'intro', id: 'label' });
+    recolor('label', 'BLUE');
+    select({ kind: 'scene', sceneId: 'second', id: null });
+    undo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id: 'label' });
+    undo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id: 'eq' });
+    select({ kind: null, sceneId: 'intro', id: null });
+    redo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id: 'eq' });
+    redo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id: 'label' });
+  });
+
+  it('selects what an edit made on redo, and what was there before it on undo', () => {
+    select({ kind: 'step', sceneId: 'intro', id: 'intro_3' });
+    const id = addObjectFrom(entry('circle'))!;
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id });
+    undo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'step', sceneId: 'intro', id: 'intro_3' });
+    // Selecting a step shows the frame after it, on undo too
+    expect(frameStepIndex(useEditor.getState(), 'intro')).toBe(2);
+    redo();
+    expect(useEditor.getState().selection).toEqual({ kind: 'object', sceneId: 'intro', id });
+  });
+
+  it('follows a step removed and brought back', () => {
+    select({ kind: 'step', sceneId: 'intro', id: 'intro_2' });
+    removeStepById('intro', 'intro_2');
+    expect(useEditor.getState().selection).toMatchObject({ kind: 'step', id: 'intro_3' });
+    undo();
+    expect(useEditor.getState().selection).toMatchObject({ kind: 'step', id: 'intro_2' });
+  });
 });
 
 describe('selection and the frame shown', () => {
@@ -115,11 +153,11 @@ describe('user actions', () => {
     expect(useEditor.getState().selection).toEqual({ kind: 'step', sceneId: 'intro', id });
   });
 
-  it("won't add what the server couldn't read: a step or a brace with nothing to act on", () => {
+  it("won't add what the server couldn't read: a step or a box with nothing to act on", () => {
     setupEditor({ version: 1, title: 'T', scenes: [{ id: 'empty' }] });
     const before = currentDoc();
     expect(addStepFrom(stepEntry('show'))).toBeNull();
-    expect(addObjectFrom(entry('brace'))).toBeNull();
+    expect(addObjectFrom(entry('box'))).toBeNull();
     expect(addObjectFrom(entry('graph'))).toBeNull();
     expect(currentDoc()).toBe(before);
     expect(useEditor.getState().toasts.at(-1)?.message).toBe('Function graph goes with another object (a set of axes or a number plane); add that first');
@@ -202,13 +240,24 @@ describe('user actions', () => {
     expect(findObject(currentDoc()!, 'intro', 'label')!.place).toEqual({ next_to: 'eq', side: 'down' });
   });
 
-  it('moves objects given by points by moving their points', () => {
+  it('moves objects given by points by moving their points, in their own units', () => {
     apply((d) => setItemField(d, { kind: 'object', sceneId: 'intro', id: 'dot' }, ['on'], undefined));
     expect(translatePoints('intro', 'dot', 1, -0.5)).toBe(true);
     expect(findObject(currentDoc()!, 'intro', 'dot')!.point).toEqual([2, 1.5]);
-    // ...but not while they are on a coordinate system
+    // ...and on a coordinate system, in its coordinates, keeping it on the system
     apply((d) => setItemField(d, { kind: 'object', sceneId: 'intro', id: 'dot' }, ['on'], 'plane'));
-    expect(translatePoints('intro', 'dot', 1, 0)).toBe(false);
+    expect(translatePoints('intro', 'dot', 1, 0)).toBe(true);
+    expect(findObject(currentDoc()!, 'intro', 'dot')).toMatchObject({ point: [3, 1.5], on: 'plane' });
+    // An object placed as a whole has no points to move
+    expect(translatePoints('intro', 'eq', 1, 0)).toBe(false);
+  });
+
+  it('nudges an object placed on a coordinate system in its coordinates', () => {
+    apply((d) => setItemField(d, { kind: 'object', sceneId: 'intro', id: 'label' }, ['place'], { at: [1, 1], on: 'plane' }));
+    select({ kind: 'object', sceneId: 'intro', id: 'label' });
+    nudgeSelection(0.1, 0);
+    nudgeSelection(0, -1);
+    expect(findObject(currentDoc()!, 'intro', 'label')!.place).toEqual({ at: [1.1, 0], on: 'plane' });
   });
 
   it('writes a drag as a point in frame units, dropping any coordinate system', () => {

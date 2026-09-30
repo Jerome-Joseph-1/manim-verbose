@@ -20,6 +20,10 @@ export interface Placement {
   on?: string | null;
   edge?: Edge | null;
   next_to?: string | null;
+  /** Which part of `next_to` to go beside: a vector's tip or tail, a line's or arc's start or end. */
+  anchor?: 'center' | 'tip' | 'tail' | 'start' | 'end';
+  /** Stay beside `next_to` as it moves. */
+  follow?: boolean;
   side?: Side;
   buff?: number;
   shift?: number[] | null;
@@ -42,6 +46,8 @@ export interface Scene {
   id: string;
   title?: string | null;
   background?: string | null;
+  /** Objects carried over from the scene before. */
+  carry?: string[];
   objects?: SceneObject[];
   steps?: Step[];
 }
@@ -49,6 +55,7 @@ export interface Scene {
 export interface Document {
   version?: number;
   title?: string;
+  description?: string | null;
   settings?: JsonObject;
   scenes: Scene[];
 }
