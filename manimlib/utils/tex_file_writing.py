@@ -99,53 +99,57 @@ def full_tex_to_svg(full_tex: str, compiler: str = "latex", message: str = ""):
         raise NotImplementedError(f"Compiler '{compiler}' is not implemented")
 
     # Use the custom LaTeX cache directory from the config
-    temp_dir = Path(manim_config.directories.latex_cache)
-    temp_dir.mkdir(exist_ok=True)  # Create the directory if it does not already exist
+    latex_dir = Path(manim_config.directories.latex_cache)
+    latex_dir.mkdir(exist_ok=True)  # Create the directory if it does not already exist
 
-    # Define paths for the intermediate TeX and DVI files
-    tex_path = temp_dir / "working.tex"
-    dvi_path = tex_path.with_suffix(dvi_ext)
+    # Each compile works in a directory of its own. With one shared working.tex, a DVI left
+    # over from the previous formula would be read in place of one which failed to build,
+    # rendering (and caching) the wrong formula, and two processes compiling at once would
+    # overwrite each other's files.
+    with tempfile.TemporaryDirectory(dir=latex_dir) as temp_dir:
+        tex_path = Path(temp_dir) / "working.tex"
+        dvi_path = tex_path.with_suffix(dvi_ext)
 
-    # Write tex file
-    tex_path.write_text(full_tex)
+        # Write tex file
+        tex_path.write_text(full_tex)
 
-    # Run latex compiler
-    process = subprocess.run(
-        [
-            compiler,
-            *(["-no-pdf"] if compiler == "xelatex" else []),
-            "-interaction=batchmode",
-            "-halt-on-error",
-            f"-output-directory={temp_dir}",
-            tex_path.as_posix(),
-        ],
-        capture_output=True,
-        text=True,
-    )
+        # Run latex compiler
+        process = subprocess.run(
+            [
+                compiler,
+                *(["-no-pdf"] if compiler == "xelatex" else []),
+                "-interaction=batchmode",
+                "-halt-on-error",
+                f"-output-directory={temp_dir}",
+                tex_path.as_posix(),
+            ],
+            capture_output=True,
+            text=True,
+        )
 
-    if process.returncode != 0 and not dvi_path.exists():
-        # Handle error
-        error_str = ""
-        log_path = tex_path.with_suffix(".log")
-        if log_path.exists():
-            content = log_path.read_text()
-            error_match = re.search(r"(?<=\n! ).*\n.*\n", content)
-            if error_match:
-                error_str = error_match.group()
-        raise LatexError(error_str or "LaTeX compilation failed")
+        if process.returncode != 0 and not dvi_path.exists():
+            # Handle error
+            error_str = ""
+            log_path = tex_path.with_suffix(".log")
+            if log_path.exists():
+                content = log_path.read_text()
+                error_match = re.search(r"(?<=\n! ).*\n.*\n", content)
+                if error_match:
+                    error_str = error_match.group()
+            raise LatexError(error_str or "LaTeX compilation failed")
 
-    # Run dvisvgm and capture output directly
-    process = subprocess.run(
-        [
-            "dvisvgm",
-            dvi_path,
-            "-n",  # no fonts
-            "-v",
-            "0",  # quiet
-            "--stdout",  # output to stdout instead of file
-        ],
-        capture_output=True,
-    )
+        # Run dvisvgm and capture output directly
+        process = subprocess.run(
+            [
+                "dvisvgm",
+                dvi_path,
+                "-n",  # no fonts
+                "-v",
+                "0",  # quiet
+                "--stdout",  # output to stdout instead of file
+            ],
+            capture_output=True,
+        )
 
     if process.returncode != 0:
         error_str = process.stderr.decode("utf-8", errors="replace").strip()
