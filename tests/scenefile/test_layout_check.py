@@ -3,8 +3,10 @@ The layout checker (scenefile/layout_check.py): things off the frame, under the 
 colliding, found by building scenes without drawing them. Every rule is tried both ways, and
 every exemption from the collision rule has a case which would be reported without it.
 
-Nothing here draws a pixel, so none of it needs a graphics device. The run over the ten
-minute example is marked slow.
+Nothing here draws a pixel, so none of it needs a graphics device. Tests which typeset
+formulas (tex, labels, braces) need LaTeX, and are marked render as the other tests needing
+it are, since CI's fast job has no LaTeX; the rest use plain text. The run over the ten
+minute example is marked slow as well.
 """
 from __future__ import annotations
 
@@ -106,6 +108,18 @@ def test_a_little_past_the_edge_is_within_tolerance():
     ]
     # A plotted object has no placement to blame
     assert problems[0].loc == ["scenes", 0, "objects", 1]
+
+
+def test_a_portrait_frame_is_narrower():
+    doc = """
+        settings: {{resolution: [1080, 1920], fps: 15}}
+        scenes:
+          - id: s
+            objects:
+              - {{id: t, type: text, text: Hello, place: {place}, shown: true}}
+        """
+    assert messages(doc.format(place="[1.5, 0]")) == []
+    assert messages(doc.format(place="[2, 0]")) == ["At the start of the scene, 't' runs off the right edge of the frame"]
 
 
 def test_number_planes_run_past_the_frame_on_purpose():
@@ -303,6 +317,29 @@ def test_captions_without_a_background_cover_only_their_words():
     ]
 
 
+def test_captions_come_and_go_with_clears():
+    """A clear takes the caption with it; one given to the clear, or a later step, brings the band back."""
+    problems = found("""
+        scenes:
+          - id: s
+            objects:
+              - {id: t, type: text, text: Low down, place: [0, -3.7]}
+              - {id: u, type: text, text: Low again, place: [0, -3.7]}
+            steps:
+              - {id: s1, do: show, target: t, caption: First words}
+              - {id: s2, do: clear}
+              - {id: s3, do: show, target: u}
+              - {id: s4, do: wait, caption: Back again}
+              - {id: s5, do: clear, caption: Kept through the clear}
+              - {id: s6, do: show, target: t}
+        """)
+    assert [p.message for p in problems] == [
+        "After step 1 ('s1'), 't' is under the caption at the bottom of the frame",
+        "After step 4 ('s4'), 'u' is under the caption at the bottom of the frame",
+        "After step 6 ('s6'), 't' is under the caption at the bottom of the frame",
+    ]
+
+
 def test_coordinate_systems_sit_under_captions():
     assert messages("""
         scenes:
@@ -380,7 +417,7 @@ def test_text_apart_or_just_touching_is_fine():
               - {id: a, type: text, text: Hello world, shown: true}
               - {id: b, type: text, text: Above it, place: [0, 1], shown: true}
               - {id: c, type: text, text: Touching, place: {next_to: a, side: right, buff: 0}, shown: true}
-              - {id: d, type: tex, tex: "x^2", place: {next_to: a, side: down, buff: 0.05}, shown: true}
+              - {id: d, type: text, text: just below, font_size: 30, place: {next_to: a, side: down, buff: 0.05}, shown: true}
         """) == []
 
 
@@ -420,6 +457,19 @@ def test_only_the_arrow_counts_not_the_box_around_it():
     assert messages(doc.format(place="[2, 1.5]")) == ["At the start of the scene, 'v' crosses 't'"]
 
 
+def test_a_titles_underline_is_a_line():
+    problems = found("""
+        scenes:
+          - id: s
+            objects:
+              - {id: title, type: title, text: A heading, shown: true}
+              - {id: sub, type: text, text: pushed up into it, font_size: 36, place: {next_to: title, shift: [0, 0.3]}}
+            steps:
+              - {id: s1, do: show, target: sub}
+        """)
+    assert [(p.item_id, p.message) for p in problems] == [("sub", "After step 1 ('s1'), 'title' crosses 'sub'")]
+
+
 def test_a_fill_drawn_over_text_covers_it():
     assert messages("""
         scenes:
@@ -430,6 +480,22 @@ def test_a_fill_drawn_over_text_covers_it():
             steps:
               - {id: s1, do: show, target: sq}
         """) == ["After step 1 ('s1'), 'sq' covers 't'"]
+
+
+def test_a_picture_drawn_over_text_covers_it(tmp_path):
+    from PIL import Image
+    Image.new("RGB", (40, 20), "red").save(tmp_path / "red.png")
+    doc = doc_from("""
+        scenes:
+          - id: s
+            objects:
+              - {id: t, type: text, text: Hidden, shown: true}
+              - {id: pic, type: image, path: red.png, height: 2}
+              - {id: aside, type: image, path: red.png, height: 1, place: [-5, 2]}
+            steps:
+              - {id: s1, do: show, target: [pic, aside]}
+        """)
+    assert [p.message for p in check_scene(doc, "s", tmp_path)] == ["After step 1 ('s1'), 'pic' covers 't'"]
 
 
 def test_text_on_a_shape_drawn_beneath_it_is_fine_when_it_fits():
@@ -501,7 +567,7 @@ def test_backgrounds_are_drawn_on():
               - {id: ax, type: axes, shown: true}
               - {id: nl, type: number_line, place: [0, -2], shown: true}
               - {id: t, type: text, text: On the grid, place: [1, 0], shown: true}
-              - {id: u, type: tex, tex: "x = 3", place: [0, -2], shown: true}
+              - {id: u, type: text, text: "x = 3", place: [0, -2], shown: true}
         """) == []
 
 
@@ -533,33 +599,55 @@ def test_a_group_backdrop_over_something_else_covers_it():
         """) == ["After step 1 ('s1'), 'both' covers 'under'"]
 
 
-def test_boxes_and_braces_go_around_their_targets():
+def test_boxes_go_around_their_targets():
     assert messages("""
         scenes:
           - id: s
             objects:
-              - {id: eq, type: tex, tex: "a^2 + b^2 = c^2", place: [2, 2], shown: true}
+              - {id: eq, type: text, text: "a + b = c", place: [2, 2], shown: true}
               - {id: box, type: box, target: eq, fill_opacity: 0.5, buff: 0}
-              - {id: eq2, type: tex, tex: "a^2 + b^2 = c^2", place: [2, -1], shown: true}
-              - {id: brace, type: brace, target: eq2, part: "c^2", label: "hyp", buff: 0}
               - {id: a, type: text, text: One, place: [-3, 2]}
               - {id: b, type: text, text: Two, place: [-3, 1.4]}
               - {id: pair, type: group, members: [a, b]}
               - {id: around, type: box, target: pair, fill_opacity: 1, buff: 0}
             steps:
-              - {do: show, target: [box, brace, a, b, around]}
+              - {do: show, target: [box, a, b, around]}
         """) == []
     # The same box over text it isn't around covers it
     assert messages("""
         scenes:
           - id: s
             objects:
-              - {id: eq, type: tex, tex: "a^2 + b^2 = c^2", shown: true}
-              - {id: other, type: tex, tex: "e^{i\\\\pi}", place: [0, 0.5], shown: true}
+              - {id: eq, type: text, text: "a + b = c", shown: true}
+              - {id: other, type: text, text: "above", font_size: 30, place: [0, 0.5], shown: true}
               - {id: box, type: box, target: eq, fill_opacity: 1, buff: 0.3}
             steps:
               - {id: s1, do: show, target: box}
         """) == ["After step 1 ('s1'), 'box' covers 'other'"]
+
+
+@pytest.mark.render  # braces and formulas need LaTeX
+def test_braces_go_beside_their_targets():
+    assert messages("""
+        scenes:
+          - id: s
+            objects:
+              - {id: eq, type: tex, tex: "a^2 + b^2 = c^2", shown: true}
+              - {id: brace, type: brace, target: eq, part: "c^2", label: "hyp", buff: 0}
+              - {id: whole, type: brace, target: eq, side: up, label: "\\text{all of it}", buff: 0}
+            steps:
+              - {do: show, target: [brace, whole]}
+        """) == []
+    assert messages("""
+        scenes:
+          - id: s
+            objects:
+              - {id: eq, type: tex, tex: "a^2 + b^2 = c^2", shown: true}
+              - {id: below, type: text, text: in the way, font_size: 30, place: [0, -0.45], shown: true}
+              - {id: brace, type: brace, target: eq, buff: 0}
+            steps:
+              - {id: s1, do: show, target: brace}
+        """) == ["After step 1 ('s1'), 'below' and 'brace' overlap"]
 
 
 def test_a_label_beside_a_shape_is_its_label():
@@ -574,7 +662,11 @@ def test_a_label_beside_a_shape_is_its_label():
     assert messages(doc.format(place="{next_to: v, anchor: tip, side: left, buff: 0}")) == []
     # The same spot, not placed beside it, is a collision
     assert messages(doc.format(place="[1.4, 0]")) == ["At the start of the scene, 'v' crosses 't'"]
-    # Beside it, but over the shape's own label, is one too: a label may touch lines, not text
+
+
+@pytest.mark.render  # a vector's own label is a formula
+def test_a_label_beside_a_shape_still_collides_with_its_text():
+    """Beside a shape, but over the shape's own label: a label may touch lines, not text."""
     assert messages("""
         scenes:
           - id: s
@@ -599,8 +691,8 @@ def test_what_a_transform_turns_into_is_the_same_thing():
         scenes:
           - id: s
             objects:
-              - {{id: a, type: tex, tex: "x + y", shown: true}}
-              - {{id: b, type: tex, tex: "x + y + z", place: [0.1, 0]}}
+              - {{id: a, type: text, text: "x + y", shown: true}}
+              - {{id: b, type: text, text: "x + y + z", place: [0.1, 0]}}
             steps:
               - {{id: s1, do: {step}}}
         """
@@ -620,6 +712,7 @@ def test_layering_with_z_is_on_purpose():
     assert messages(doc.format(z=1)) == ["At the start of the scene, 'panel' crosses 't'"]
 
 
+@pytest.mark.render  # labels and formulas need LaTeX
 def test_an_objects_own_label_is_part_of_it():
     assert messages("""
         scenes:
@@ -632,6 +725,7 @@ def test_an_objects_own_label_is_part_of_it():
         """) == []
 
 
+@pytest.mark.render  # labels and formulas need LaTeX
 def test_an_objects_own_label_still_collides_with_others():
     assert messages("""
         scenes:
@@ -832,6 +926,7 @@ def test_a_changed_scene_is_checked_again_and_a_moved_one_isnt(render_cache, mon
     assert calls == ["first", "second", "first"]
 
 
+@pytest.mark.render  # a formula LaTeX refuses needs LaTeX to refuse it
 def test_a_scene_which_cant_be_built_gives_its_errors_and_the_rest_are_checked(render_cache):
     doc = doc_from("""
         scenes:
@@ -891,6 +986,21 @@ def test_validate_layout_as_json(tmp_path, capsys, render_cache):
     }]
 
 
+def test_validate_layout_keeps_what_latex_prints_off_the_json(tmp_path, capsys, monkeypatch):
+    """LaTeX's progress ("Writing ...") is printed as formulas are first typeset."""
+    path = write(tmp_path, TWO_SCENES)
+
+    def noisy(doc, scene_id=None, base_dir=None):
+        print("Writing a^2 + b^2...", end="\r")
+        return []
+
+    monkeypatch.setattr(layout_check, "check_layout", noisy)
+    assert cli_main(["validate", "--layout", "--json", str(path)]) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == []
+    assert "Writing a^2 + b^2..." in captured.err
+
+
 def test_validate_without_layout_builds_nothing(tmp_path, capsys, monkeypatch):
     path = write(tmp_path, TWO_SCENES)
     monkeypatch.setattr(layout_check, "check_layout", lambda *a, **k: pytest.fail("layout was checked"))
@@ -924,6 +1034,7 @@ def test_validate_layout_skips_only_the_scene_with_errors(tmp_path, capsys, rend
 # The ten minute example
 
 @pytest.mark.slow
+@pytest.mark.render  # the example is full of formulas, which need LaTeX
 def test_the_example_is_checked_in_well_under_a_minute(render_cache):
     if not EXAMPLE.exists():
         pytest.skip("the example scene file isn't in this checkout")
