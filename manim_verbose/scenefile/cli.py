@@ -31,6 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="manimgl-scene", description="Work with manim scene files")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p = sub.add_parser("templates", help="List the templates a new scene file can start from")
+    p.set_defaults(run=cmd_templates)
+
+    p = sub.add_parser("new", help="Start a new scene file from a template")
+    p.add_argument("file", type=Path, help="The file to make, ending in .yaml, .yml or .json")
+    p.add_argument("-t", "--template", default=DEFAULT_TEMPLATE, help=f"Which template (default: {DEFAULT_TEMPLATE})")
+    p.add_argument("--force", action="store_true", help="Replace the file if it already exists")
+    p.set_defaults(run=cmd_new)
+
     p = sub.add_parser("validate", help="Check a scene file")
     p.add_argument("file", type=Path)
     p.add_argument("--json", action="store_true", help="Print problems as json")
@@ -84,6 +93,69 @@ def load_or_report(file: Path):
     if doc is None or has_errors(problems):
         return None
     return doc
+
+
+# Templates: the ready-made scene files in manim_verbose/templates/, each NAME.yaml with a
+# NAME.png thumbnail beside it. Their titles and descriptions are the documents' own.
+#
+#     manimgl-scene templates                      name, title and what each is for
+#     manimgl-scene new lesson.yaml [-t NAME]      a copy of a template (blank unless named)
+#
+# `new` never replaces a file which exists unless given --force (exit 1 if it would have).
+
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+DEFAULT_TEMPLATE = "blank"
+SCENE_FILE_SUFFIXES = (".yaml", ".yml", ".json")
+
+
+def template_names() -> list[str]:
+    """The names of the templates, in alphabetical order."""
+    return sorted(path.stem for path in TEMPLATES_DIR.glob("*.yaml"))
+
+
+def template_path(name: str) -> Path | None:
+    """Where the template called `name` is, or None if there's no such template."""
+    return TEMPLATES_DIR / f"{name}.yaml" if name in template_names() else None
+
+
+def cmd_templates(args) -> int:
+    import textwrap
+    names = template_names()
+    width = max((len(name) for name in names), default=0)
+    for name in names:
+        doc = load_or_report(TEMPLATES_DIR / f"{name}.yaml")
+        if doc is None:
+            continue
+        print(f"{name:<{width}}  {doc.title}")
+        if doc.description:
+            for line in textwrap.wrap(doc.description, width=88):
+                print(f"{'':<{width}}    {line}")
+    return 0
+
+
+def cmd_new(args) -> int:
+    file: Path = args.file
+    path = template_path(args.template)
+    if path is None:
+        import difflib
+        close = difflib.get_close_matches(args.template, template_names(), n=1)
+        hint = f" (did you mean '{close[0]}'?)" if close else ""
+        print(f"There's no template called '{args.template}'{hint}. Templates are: {', '.join(template_names())}",
+              file=sys.stderr)
+        return 2
+    if file.suffix.lower() not in SCENE_FILE_SUFFIXES:
+        print(f"{file}: a scene file's name ends in .yaml, .yml or .json", file=sys.stderr)
+        return 2
+    if file.exists() and not args.force:
+        print(f"{file} already exists, so it was left alone. Use --force to replace it", file=sys.stderr)
+        return 1
+    doc = load_or_report(path)
+    if doc is None:
+        return 1
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(dump_text(doc, format_of(file)), encoding="utf-8")
+    print(f"Wrote {file}, from the '{args.template}' template ({doc.title})")
+    return 0
 
 
 def cmd_validate(args) -> int:

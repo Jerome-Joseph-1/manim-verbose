@@ -1,0 +1,140 @@
+version: 1
+title: My first video
+description: 'A short tour of what a scene file can do: text, an equation, shapes, a transform, a highlight and captions. Start by changing the words in the first scene, then click anything in the picture to see what it is made of.'
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: hello
+  title: Hello
+  objects:
+  - {id: greeting, type: text, text: Hello!, font_size: 96, color: BLUE, place: [0, 0.7]}
+  - id: subtitle
+    type: text
+    text: This whole video is a scene file you can change
+    font_size: 36
+    color: GREY_A
+    place: {next_to: greeting, buff: 0.5}
+  steps:
+  - id: hello_1
+    do: show
+    target: greeting
+    style: write
+    run_time: 1.5
+    caption: A video is a list of scenes, and a scene is a list of steps.
+  - {id: hello_2, do: show, target: subtitle, style: fade_up, run_time: 1}
+  - {id: hello_3, do: wait, duration: 3}
+  - id: hello_4
+    do: highlight
+    target: greeting
+    style: wiggle
+    run_time: 1.5
+    caption: 'Each step does one thing: show, move, change or highlight.'
+  - {id: hello_5, do: wait, duration: 3}
+  - {id: hello_6, do: clear, run_time: 1}
+- id: equation
+  title: An equation
+  objects:
+  - {id: equation, type: text, text: a² + b² = c², font_size: 80, place: [0, 0.6]}
+  - id: turned_around
+    type: text
+    text: c² = a² + b²
+    font_size: 80
+    colors: {c²: YELLOW}
+    place: [0, 0.6]
+  - id: note
+    type: text
+    text: the same equation, turned around
+    font_size: 32
+    color: GREY_A
+    place: {next_to: turned_around, buff: 0.6}
+  steps:
+  - id: equation_1
+    do: show
+    target: equation
+    style: write
+    run_time: 2
+    caption: Words and equations are written on, one letter at a time.
+  - {id: equation_2, do: wait, duration: 2}
+  - id: equation_3
+    do: highlight
+    target: equation
+    part: c²
+    style: recolor
+    color: YELLOW
+    run_time: 1
+    caption: 'A highlight picks out part of one: here, c squared.'
+  - {id: equation_4, do: wait, duration: 2.5}
+  - id: equation_5
+    do: transform
+    target: equation
+    into: turned_around
+    style: match
+    run_time: 2
+    caption: A transform turns one thing into another, and matching pieces glide across.
+  - {id: equation_6, do: show, target: note, style: fade, run_time: 1}
+  - {id: equation_7, do: wait, duration: 3}
+  - {id: equation_8, do: clear, run_time: 1}
+- id: shapes
+  title: Shapes that move
+  objects:
+  - id: circle
+    type: circle
+    radius: 1.2
+    fill: BLUE
+    fill_opacity: 0.8
+    color: BLUE
+    place: [-4, 0.3]
+  - id: square
+    type: square
+    side: 2.2
+    fill: YELLOW
+    fill_opacity: 0.8
+    color: YELLOW
+    place: [4, 0.3]
+  - {id: arrow, type: line, start: [-2.3, 0.3], end: [2.3, 0.3], arrow: true, color: GREY_B}
+  steps:
+  - id: shapes_1
+    do: show
+    target: circle
+    style: draw
+    run_time: 1.5
+    caption: Shapes are drawn on, and one shape can turn into another.
+  - {id: shapes_2, do: show, target: arrow, style: grow, run_time: 1}
+  - {id: shapes_3, do: transform, target: circle, into: square, keep: true, run_time: 2}
+  - {id: shapes_4, do: wait, duration: 1.5}
+  - id: shapes_5
+    do: change
+    target: square
+    set: {fill: GREEN, color: GREEN, rotate: 45}
+    run_time: 1.5
+    caption: 'A change step alters anything about an object: its color, size or angle.'
+  - {id: shapes_6, do: wait, duration: 3}
+  - id: shapes_7
+    do: together
+    steps:
+    - {id: shapes_8, do: hide, target: arrow, style: fade, run_time: 1.5}
+    - {id: shapes_9, do: move, target: circle, by: [2.5, 0], run_time: 1.5}
+    - {id: shapes_10, do: move, target: square, by: [-2.5, 0], run_time: 1.5}
+    caption: Several steps can run at the same time.
+  - {id: shapes_11, do: wait, duration: 2.5}
+  - {id: shapes_12, do: clear, run_time: 1}
+- id: your_turn
+  title: Your turn
+  objects:
+  - {id: heading, type: text, text: Now make it yours, font_size: 60, place: [0, 1.9]}
+  - id: tips
+    type: bullets
+    items:
+    - Click anything in the picture to change it
+    - Add things with the Object and Step buttons
+    - Press Preview to watch a step play
+    buff: 0.4
+    place: [0, -0.2]
+  steps:
+  - id: your_turn_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: Everything you just saw can be changed.
+  - {id: your_turn_2, do: show, target: tips, style: write, run_time: 3}
+  - {id: your_turn_3, do: wait, duration: 4}

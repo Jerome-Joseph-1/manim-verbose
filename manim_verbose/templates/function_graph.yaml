@@ -1,0 +1,72 @@
+version: 1
+title: Graphing a function
+description: Axes, the graph of f(x) = x², a point read off the curve, and a second function, the line g(x) = x + 2, which crosses it twice. Change the function of curve (and the formula rule_f beside it) first, then the point and the line.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: graph
+  title: A function and its graph
+  objects:
+  - id: axes
+    type: axes
+    x_range: [-3, 3, 1]
+    y_range: [0, 8, 2]
+    width: 7.5
+    height: 5.2
+    x_label: x
+    y_label: y
+    place: [-2.6, 0.1]
+  - {id: curve, type: graph, on: axes, function: x**2, x_range: [-2.85, 2.85], color: BLUE}
+  - {id: line_g, type: graph, on: axes, function: x + 2, x_range: [-2, 3], color: GREEN}
+  - {id: rule_f, type: tex, tex: f(x) = x^2, color: BLUE, place: [4.3, 2.2]}
+  - {id: rule_g, type: tex, tex: g(x) = x + 2, color: GREEN, place: [4.3, 1.2]}
+  - {id: point, type: dot, on: axes, point: [2, 4], radius: 0.1, color: YELLOW}
+  - {id: drop, type: line, on: axes, start: [2, 0], end: [2, 4], dashed: true, color: YELLOW}
+  - {id: across, type: line, on: axes, start: [0, 4], end: [2, 4], dashed: true, color: YELLOW}
+  - {id: reading, type: tex, tex: f(2) = 4, color: YELLOW, place: [4.3, -0.4]}
+  steps:
+  - id: graph_1
+    do: show
+    target: axes
+    style: draw
+    run_time: 2
+    caption: 'Axes first: x runs across and y runs up.'
+  - {id: graph_2, do: wait, duration: 1.5}
+  - id: graph_3
+    do: together
+    steps:
+    - {id: graph_4, do: show, target: curve, style: draw, run_time: 2}
+    - {id: graph_5, do: show, target: rule_f, style: write, run_time: 1.5}
+    caption: The graph of f(x) = x² is every point whose height is x squared.
+  - {id: graph_6, do: wait, duration: 2.5}
+  - id: graph_7
+    do: together
+    steps:
+    - {id: graph_8, do: show, target: point, style: grow, run_time: 1}
+    - {id: graph_9, do: show, target: drop, style: draw, run_time: 1}
+    - {id: graph_10, do: show, target: across, style: draw, run_time: 1}
+    caption: At x = 2 the curve is at height 4, because 2 squared is 4.
+  - {id: graph_11, do: show, target: reading, style: write, run_time: 1}
+  - {id: graph_12, do: wait, duration: 3}
+  - id: graph_13
+    do: together
+    steps:
+    - {id: graph_14, do: show, target: line_g, style: draw, run_time: 2}
+    - {id: graph_15, do: show, target: rule_g, style: write, run_time: 1.5}
+    caption: A second function, g(x) = x + 2, draws a straight line.
+  - {id: graph_16, do: wait, duration: 2}
+  - id: graph_17
+    do: together
+    steps:
+    - {id: graph_18, do: highlight, target: point, style: flash, run_time: 1}
+    - {id: graph_19, do: change, target: reading, set: {tex: f(2) = g(2) = 4}, run_time: 1}
+    caption: Where the two graphs cross, f and g give the same value.
+  - {id: graph_20, do: wait, duration: 3.5}
+  - id: graph_21
+    do: together
+    steps:
+    - {id: graph_22, do: change, target: point, set: {point: [-1, 1]}, run_time: 2}
+    - {id: graph_23, do: change, target: drop, set: {start: [-1, 0], end: [-1, 1]}, run_time: 2}
+    - {id: graph_24, do: change, target: across, set: {start: [0, 1], end: [-1, 1]}, run_time: 2}
+    - {id: graph_25, do: change, target: reading, set: {tex: f(-1) = g(-1) = 1}, run_time: 2}
+    caption: They cross twice, at x = 2 and again at x = −1.
+  - {id: graph_26, do: wait, duration: 3.5}

@@ -1,0 +1,84 @@
+version: 1
+title: Lesson opener
+description: A title card, a list of what the lesson covers, and a closing card to lead into the lesson. Change the lesson's title and subtitle first, then the items of the list and what to have ready.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: title_card
+  title: Title card
+  objects:
+  - id: lesson_title
+    type: text
+    text: An introduction to probability
+    font_size: 64
+    place: [0, 0.8]
+  - {id: accent, type: line, start: [-4, 0], end: [4, 0], color: BLUE}
+  - {id: subtitle, type: text, text: Lesson 1 of 6, font_size: 40, color: BLUE_B, place: [0, -0.7]}
+  - id: presenter
+    type: text
+    text: Presented by Your Name
+    font_size: 30
+    color: GREY_B
+    place: [0, -1.6]
+  steps:
+  - {id: title_card_1, do: show, target: lesson_title, style: write, run_time: 2}
+  - {id: title_card_2, do: show, target: accent, style: draw, run_time: 1}
+  - id: title_card_3
+    do: show
+    target: [subtitle, presenter]
+    style: fade_up
+    lag: 0.4
+    run_time: 1.5
+  - {id: title_card_4, do: wait, duration: 3.5}
+  - {id: title_card_5, do: clear, run_time: 1}
+- id: overview
+  title: What the lesson covers
+  objects:
+  - {id: heading, type: title, text: In this lesson}
+  - id: topics
+    type: bullets
+    items:
+    - What a probability measures
+    - Counting outcomes with coins and dice
+    - Writing probabilities as fractions
+    - Why they always add up to 1
+    font_size: 40
+    buff: 0.45
+    place: [0, -0.1]
+  - {id: topics_box, type: box, target: topics, buff: 0.4, corner_radius: 0.15, color: BLUE}
+  steps:
+  - id: overview_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: Here's what we'll cover, one idea at a time.
+  - {id: overview_2, do: show, target: topics, style: write, run_time: 4}
+  - {id: overview_3, do: show, target: topics_box, style: draw, run_time: 1.5}
+  - {id: overview_4, do: wait, duration: 3}
+  - id: overview_5
+    do: highlight
+    target: topics
+    run_time: 1
+    caption: By the end, you'll be able to work out simple chances yourself.
+  - {id: overview_6, do: wait, duration: 3}
+  - {id: overview_7, do: clear, run_time: 1}
+- id: closing
+  title: Closing card
+  objects:
+  - {id: ready, type: text, text: 'Ready? Let''s begin.', font_size: 64, place: [0, 0.9]}
+  - id: materials
+    type: text
+    text: You'll need a coin, a six-sided die and something to write with
+    font_size: 36
+    color: GREY_A
+    place: {next_to: ready, buff: 0.8}
+  steps:
+  - {id: closing_1, do: show, target: ready, style: write, run_time: 1.5}
+  - id: closing_2
+    do: show
+    target: materials
+    style: fade_up
+    run_time: 1
+    caption: Pause here if you need to fetch anything.
+  - {id: closing_3, do: wait, duration: 3.5}
+  - {id: closing_4, do: clear, run_time: 1.5}
