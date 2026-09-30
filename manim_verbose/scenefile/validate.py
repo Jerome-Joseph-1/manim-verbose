@@ -402,9 +402,26 @@ class SceneChecker:
         on something that isn't there. These are warnings rather than errors, since manim
         mostly copes, just not the way the author meant.
         """
-        on_screen = {obj.id for obj in self.scene.objects if obj.shown}
+        on_screen = self.with_groups({obj.id for obj in self.scene.objects if obj.shown})
         for index, step in enumerate(self.scene.steps):
-            on_screen = self.follow(step, self.loc + ["steps", index], on_screen)
+            on_screen = self.with_groups(self.follow(step, self.loc + ["steps", index], on_screen))
+
+    def with_groups(self, on_screen: set[str]) -> set[str]:
+        """A group is on screen when all its members are, however they got there."""
+        out = set(on_screen)
+        groups = [obj for obj in self.scene.objects if isinstance(obj, GroupObject)]
+        changed = True
+        while changed:
+            changed = False
+            for group in groups:
+                shown = all(m in out for m in group.members)
+                if shown and group.id not in out:
+                    out.add(group.id)
+                    changed = True
+                elif not shown and group.id in out:
+                    out.discard(group.id)
+                    changed = True
+        return out
 
     def follow(self, step: StepBase, loc: Loc, on_screen: set[str]) -> set[str]:
         def members(ref: str) -> set[str]:
@@ -464,6 +481,8 @@ def object_refs(obj: ObjectBase) -> list[tuple[Loc, str, list[str] | None]]:
     place = getattr(obj, "place", None)
     if place is not None and place.next_to is not None:
         refs.append((["place", "next_to"], place.next_to, None))
+    if place is not None and place.on is not None:
+        refs.append((["place", "on"], place.on, _ref_types(Placement, "on")))
     on = getattr(obj, "on", None)
     if on is not None:
         refs.append((["on"], on, _ref_types(type(obj), "on")))
@@ -487,6 +506,8 @@ def step_refs(step: StepBase) -> list[tuple[Loc, str, list[str] | None]]:
         refs.append((["focus"], step.focus, None))
     if isinstance(step, MoveStep) and step.to is not None and step.to.next_to is not None:
         refs.append((["to", "next_to"], step.to.next_to, None))
+    if isinstance(step, MoveStep) and step.to is not None and step.to.on is not None:
+        refs.append((["to", "on"], step.to.on, _ref_types(Placement, "on")))
     return refs
 
 

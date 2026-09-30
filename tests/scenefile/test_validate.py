@@ -144,3 +144,53 @@ def test_schema_file_is_up_to_date():
     assert SCHEMA_PATH.read_text(encoding="utf-8") == schema_text(), (
         "schema.json is out of date: run `manimgl-scene schema --write`"
     )
+
+
+def test_canonical_form_reads_like_hand_written():
+    doc, _ = load("""
+        scenes:
+          - id: a
+            objects:
+              - {id: t, type: text, text: Hello, place: {edge: top}}
+              - {id: u, type: text, text: There, place: {at: [1, 2]}, color: RED}
+              - {id: q, type: quote, text: "one\\ntwo", author: Someone}
+            steps:
+              - {caption: "Say hello", run_time: 2, target: t, do: show}
+    """)
+    lines = dump_text(doc).splitlines()
+    assert "  - {id: t, type: text, text: Hello, place: top}" in lines
+    assert "  - {id: u, type: text, text: There, color: RED, place: [1, 2]}" in lines
+    assert "  - {id: a_1, do: show, target: t, run_time: 2, caption: Say hello}" in lines
+    assert "    text: |-" in lines
+
+
+def test_group_counts_as_shown_once_all_members_are():
+    _, problems = load("""
+        scenes:
+          - id: a
+            objects:
+              - {id: x, type: text, text: x}
+              - {id: y, type: text, text: y}
+              - {id: both, type: group, members: [x, y], arrange: row}
+              - {id: z, type: text, text: z}
+            steps:
+              - {do: show, target: x}
+              - {do: show, target: y}
+              - {do: transform, target: both, into: z}
+              - {do: show, target: x}
+    """)
+    assert [p.message for p in problems] == []
+
+
+def test_placement_on_a_coordinate_system():
+    doc, problems = load("""
+        scenes:
+          - id: a
+            objects:
+              - {id: plane, type: number_plane}
+              - {id: t, type: text, text: here, place: {at: [2, 1], on: plane}}
+              - {id: bad, type: text, text: there, place: {at: [2, 1], on: t}}
+              - {id: lone, type: text, text: where, place: {on: plane}}
+    """)
+    found = [f"{p.path}: {p.message}" for p in problems]
+    assert any(f.startswith("scenes[0].objects[3].place: `on` says which coordinates") for f in found), found
