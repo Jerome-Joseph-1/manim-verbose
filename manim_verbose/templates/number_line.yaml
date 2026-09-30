@@ -1,0 +1,123 @@
+version: 1
+title: Adding on a number line
+description: Works out 3/4 + 1/2 by jumping along a number line cut into quarters. Change the question and answer at the top first, then the ends of the two jumps and the labels where they land. Points on the line are [number, height above the line].
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: fractions
+  title: Adding fractions
+  objects:
+  - {id: heading, type: title, text: Adding fractions on a number line}
+  - id: question
+    type: tex
+    tex: \frac{3}{4} + \frac{1}{2} = \;?
+    font_size: 60
+    colors: {'\frac{3}{4}': BLUE, '\frac{1}{2}': GREEN}
+    place: [0, 1.9]
+  - id: answer
+    type: tex
+    tex: \frac{3}{4} + \frac{1}{2} = \frac{5}{4}
+    font_size: 60
+    colors: {'\frac{3}{4}': BLUE, '\frac{1}{2}': GREEN, '\frac{5}{4}': YELLOW}
+    place: [0, 1.9]
+  - {id: line, type: number_line, x_range: [0, 2, 0.25], length: 12, numbers: false, place: [0, -1]}
+  - {id: zero, type: tex, tex: '0', place: {at: [0, -0.55], on: line}}
+  - {id: one, type: tex, tex: '1', place: {at: [1, -0.55], on: line}}
+  - {id: two, type: tex, tex: '2', place: {at: [2, -0.55], on: line}}
+  - {id: marker, type: dot, on: line, point: [0, 0], radius: 0.12, color: YELLOW}
+  - id: first_jump
+    type: line
+    on: line
+    start: [0, 0.45]
+    end: [0.75, 0.45]
+    arrow: true
+    color: BLUE
+  - id: first_jump_label
+    type: tex
+    tex: \frac{3}{4}
+    color: BLUE
+    place: {at: [0.375, 1.05], on: line}
+  - id: second_jump
+    type: line
+    on: line
+    start: [0.75, 0.45]
+    end: [1.25, 0.45]
+    arrow: true
+    color: GREEN
+  - id: second_jump_label
+    type: tex
+    tex: \frac{1}{2} = \frac{2}{4}
+    color: GREEN
+    place: {at: [1, 1.05], on: line}
+  - id: three_quarters
+    type: tex
+    tex: \frac{3}{4}
+    color: BLUE
+    place: {at: [0.75, -0.8], on: line}
+  - id: five_quarters
+    type: tex
+    tex: \frac{5}{4}
+    color: YELLOW
+    place: {at: [1.25, -0.8], on: line}
+  steps:
+  - id: fractions_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: What is three quarters plus one half? Let's find out on a number line.
+  - {id: fractions_2, do: show, target: question, style: write, run_time: 1.5}
+  - {id: fractions_3, do: wait, duration: 2}
+  - id: fractions_4
+    do: together
+    steps:
+    - {id: fractions_5, do: show, target: line, style: draw, run_time: 1.5}
+    - {id: fractions_6, do: show, target: [zero, one, two], style: write, run_time: 1.5}
+    caption: A number line from 0 to 2, with every whole cut into quarters.
+  - {id: fractions_7, do: wait, duration: 3}
+  - id: fractions_8
+    do: show
+    target: marker
+    style: grow
+    run_time: 1
+    caption: Start at zero, and jump three quarters.
+  - id: fractions_9
+    do: together
+    steps:
+    - {id: fractions_10, do: show, target: first_jump, style: grow, run_time: 1.5}
+    - {id: fractions_11, do: change, target: marker, set: {point: [0.75, 0]}, run_time: 1.5}
+  - id: fractions_12
+    do: show
+    target: [first_jump_label, three_quarters]
+    style: write
+    run_time: 1
+  - {id: fractions_13, do: wait, duration: 2}
+  - id: fractions_14
+    do: together
+    steps:
+    - {id: fractions_15, do: show, target: second_jump, style: grow, run_time: 1.5}
+    - {id: fractions_16, do: change, target: marker, set: {point: [1.25, 0]}, run_time: 1.5}
+    caption: Then jump one half more. A half is two quarters.
+  - {id: fractions_17, do: show, target: second_jump_label, style: write, run_time: 1.5}
+  - {id: fractions_18, do: wait, duration: 2}
+  - id: fractions_19
+    do: show
+    target: five_quarters
+    style: write
+    run_time: 1
+    caption: We land on five quarters, which is one and a quarter.
+  - {id: fractions_20, do: highlight, target: five_quarters, run_time: 1}
+  - {id: fractions_21, do: wait, duration: 2}
+  - id: fractions_22
+    do: transform
+    target: question
+    into: answer
+    style: match
+    run_time: 1.5
+    caption: So three quarters plus one half makes five quarters.
+  - id: fractions_23
+    do: highlight
+    target: answer
+    part: \frac{5}{4}
+    style: box
+    run_time: 1.5
+  - {id: fractions_24, do: wait, duration: 3}

@@ -164,6 +164,8 @@ jobs:
         with:
           name: render
           path: .ci-artifacts/
+          # The folder's name starts with a dot, which upload-artifact skips unless told not to
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
 

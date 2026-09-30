@@ -1,0 +1,17 @@
+version: 1
+title: Blank video
+description: One scene with a title and nothing else, for when you know what you want to make. Change the title's words first, then add your own objects and steps.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: opening
+  title: Opening
+  objects:
+  - {id: heading, type: title, text: Your title here}
+  steps:
+  - id: opening_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: Your first caption goes here
+  - {id: opening_2, do: wait, duration: 3}

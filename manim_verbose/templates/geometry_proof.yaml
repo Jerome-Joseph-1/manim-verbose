@@ -1,0 +1,138 @@
+version: 1
+title: A proof by rearranging shapes
+description: Proves Pythagoras' theorem by sliding four copies of a right triangle around inside a square. To change the triangle, change the corners of the four triangles and the squares together (the short sides here are 1.8 and 3); to reuse the layout for another proof, replace the shapes and the lines of working on the right.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: proof
+  title: Pythagoras by rearrangement
+  objects:
+  - {id: heading, type: title, text: Pythagoras by rearrangement}
+  - {id: outline, type: square, side: 4.8, color: GREY_B, place: [-3.2, -0.1]}
+  - id: first_triangle
+    type: polygon
+    points: [[-5.6, -2.5], [-3.8, -2.5], [-5.6, 0.5]]
+    fill: BLUE_D
+    fill_opacity: 0.85
+    color: BLUE_B
+  - id: second_triangle
+    type: polygon
+    points: [[-3.8, -2.5], [-0.8, -2.5], [-0.8, -0.7]]
+    fill: BLUE_D
+    fill_opacity: 0.85
+    color: BLUE_B
+  - id: third_triangle
+    type: polygon
+    points: [[-0.8, -0.7], [-0.8, 2.3], [-2.6, 2.3]]
+    fill: BLUE_D
+    fill_opacity: 0.85
+    color: BLUE_B
+  - id: fourth_triangle
+    type: polygon
+    points: [[-2.6, 2.3], [-5.6, 2.3], [-5.6, 0.5]]
+    fill: BLUE_D
+    fill_opacity: 0.85
+    color: BLUE_B
+  - {id: side_a, type: tex, tex: a, place: [-4.7, -2.85]}
+  - {id: side_b, type: tex, tex: b, place: [-5.95, -1]}
+  - {id: side_c, type: tex, tex: c, place: [-4.4, -0.8]}
+  - id: c_square
+    type: polygon
+    points: [[-3.8, -2.5], [-0.8, -0.7], [-2.6, 2.3], [-5.6, 0.5]]
+    fill: YELLOW
+    fill_opacity: 0.45
+    color: YELLOW
+  - {id: c_label, type: tex, tex: c^2, color: YELLOW, place: [-3.2, -0.1]}
+  - id: a_square
+    type: square
+    side: 1.8
+    fill: GREEN
+    fill_opacity: 0.45
+    color: GREEN
+    place: [-4.7, -1.6]
+  - {id: a_label, type: tex, tex: a^2, color: GREEN, place: [-4.7, -1.6]}
+  - id: b_square
+    type: square
+    side: 3
+    fill: RED
+    fill_opacity: 0.45
+    color: RED
+    place: [-2.3, 0.8]
+  - {id: b_label, type: tex, tex: b^2, color: RED, place: [-2.3, 0.8]}
+  - id: first_arrangement
+    type: tex
+    tex: \text{left over} = c^2
+    colors: {c^2: YELLOW}
+    place: [3.5, 1.4]
+  - id: second_arrangement
+    type: tex
+    tex: \text{left over} = a^2 + b^2
+    colors: {a^2: GREEN, b^2: RED}
+    place: [3.5, 0.2]
+  - id: theorem
+    type: tex
+    tex: a^2 + b^2 = c^2
+    font_size: 60
+    colors: {a^2: GREEN, b^2: RED, c^2: YELLOW}
+    place: [3.5, -1.4]
+  - {id: theorem_box, type: box, target: theorem, buff: 0.25, color: WHITE}
+  steps:
+  - id: proof_1
+    do: show
+    target: heading
+    style: write
+    run_time: 1.5
+    caption: Here is a proof you can see, made from four copies of one triangle.
+  - {id: proof_2, do: wait, duration: 3}
+  - id: proof_3
+    do: show
+    target: first_triangle
+    style: draw
+    run_time: 1.5
+    caption: 'A right triangle: its short sides are a and b, its long side c.'
+  - {id: proof_4, do: show, target: [side_a, side_b, side_c], style: write, run_time: 1.5}
+  - {id: proof_5, do: wait, duration: 2.5}
+  - id: proof_6
+    do: show
+    target: [outline, second_triangle, third_triangle, fourth_triangle]
+    style: draw
+    lag: 0.3
+    run_time: 3
+    caption: Four copies fit inside a square whose sides are a + b long.
+  - {id: proof_7, do: wait, duration: 2.5}
+  - id: proof_8
+    do: together
+    steps:
+    - {id: proof_9, do: show, target: c_square, style: fade, run_time: 1}
+    - {id: proof_10, do: show, target: c_label, style: write, run_time: 1}
+    caption: The space left over is a square on the long side, with area c².
+  - {id: proof_11, do: show, target: first_arrangement, style: write, run_time: 1.5}
+  - {id: proof_12, do: wait, duration: 2.5}
+  - id: proof_13
+    do: hide
+    target: [c_square, c_label, side_a, side_b, side_c]
+    style: fade
+    run_time: 1
+    caption: Now slide three of the triangles to new places.
+  - id: proof_14
+    do: together
+    steps:
+    - {id: proof_15, do: move, target: fourth_triangle, by: [1.8, -3], run_time: 2.5}
+    - {id: proof_16, do: move, target: first_triangle, by: [0, 1.8], run_time: 2.5}
+    - {id: proof_17, do: move, target: third_triangle, by: [-3, 0], run_time: 2.5}
+  - {id: proof_18, do: wait, duration: 1.5}
+  - id: proof_19
+    do: together
+    steps:
+    - {id: proof_20, do: show, target: [a_square, b_square], style: fade, run_time: 1}
+    - {id: proof_21, do: show, target: [a_label, b_label], style: write, run_time: 1}
+    caption: What is left over now is two squares, a² and b².
+  - {id: proof_22, do: show, target: second_arrangement, style: write, run_time: 1.5}
+  - {id: proof_23, do: wait, duration: 2.5}
+  - id: proof_24
+    do: show
+    target: theorem
+    style: write
+    run_time: 2
+    caption: 'Same square, same four triangles, same space left over: a² + b² = c².'
+  - {id: proof_25, do: show, target: theorem_box, style: draw, run_time: 1.5}
+  - {id: proof_26, do: wait, duration: 3.5}

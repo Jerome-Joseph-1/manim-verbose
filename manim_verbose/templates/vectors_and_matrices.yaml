@@ -1,0 +1,101 @@
+version: 1
+title: Vectors and a linear transformation
+description: A grid with the basis vectors i-hat and j-hat and a vector v, then a matrix applied to all of them, showing that its columns are where i-hat and j-hat land. Change the matrix in the apply_matrix step and in the matrix object first, then v and the labels of where things land.
+settings: {background: BLACK, font: CMU Serif}
+scenes:
+- id: transformation
+  title: Where the basis vectors land
+  objects:
+  - {id: background_grid, type: number_plane, faded: true}
+  - {id: plane, type: number_plane}
+  - {id: i_hat, type: vector, on: plane, tip: [1, 0], color: GREEN}
+  - {id: j_hat, type: vector, on: plane, tip: [0, 1], color: RED}
+  - {id: v, type: vector, on: plane, tip: [-1, 2], color: YELLOW}
+  - {id: i_label, type: tex, tex: '\hat{\imath}', color: GREEN, place: [0.55, -0.4]}
+  - {id: j_label, type: tex, tex: '\hat{\jmath}', color: RED, place: [0.4, 0.6]}
+  - {id: v_label, type: tex, tex: '\vec{v}', color: YELLOW, place: [-1.45, 2.2]}
+  - id: v_recipe
+    type: tex
+    tex: \vec{v} = -1\,\hat{\imath} + 2\,\hat{\jmath}
+    colors: {'\vec{v}': YELLOW, '\hat{\imath}': GREEN, '\hat{\jmath}': RED}
+    place: [-4, -2.3]
+    backdrop: true
+  - id: matrix
+    type: matrix
+    entries: [[1, 3], [-2, 0]]
+    column_colors: [GREEN, RED]
+    place: [-5.3, 2.5]
+    backdrop: true
+  - id: i_landed
+    type: tex
+    tex: \hat{\imath}
+    color: GREEN
+    place: [1.45, -2.25]
+    backdrop: true
+  - {id: j_landed, type: tex, tex: '\hat{\jmath}', color: RED, place: [3.25, 0.45], backdrop: true}
+  - {id: v_landed, type: tex, tex: '\vec{v}', color: YELLOW, place: [5.35, 2.4], backdrop: true}
+  - id: v_result
+    type: tex
+    tex: \vec{v} \mapsto -1 \begin{bmatrix} 1 \\ -2 \end{bmatrix} + 2 \begin{bmatrix} 3 \\ 0 \end{bmatrix} = \begin{bmatrix} 5 \\ 2 \end{bmatrix}
+    font_size: 40
+    colors: {'\vec{v}': YELLOW}
+    place: [-3.6, -2.1]
+    backdrop: true
+  steps:
+  - id: transformation_1
+    do: together
+    steps:
+    - {id: transformation_2, do: show, target: [background_grid, plane], style: draw, run_time: 2}
+    - {id: transformation_3, do: show, target: [i_hat, j_hat], style: grow, run_time: 1.5}
+    caption: A grid, and the two basis vectors, i-hat and j-hat, one step along each axis.
+  - {id: transformation_4, do: show, target: [i_label, j_label], style: write, run_time: 1}
+  - {id: transformation_5, do: wait, duration: 2.5}
+  - id: transformation_6
+    do: show
+    target: v
+    style: grow
+    run_time: 1
+    caption: 'Every vector is a mix of them: v is −1 of i-hat plus 2 of j-hat.'
+  - {id: transformation_7, do: show, target: v_label, style: write, run_time: 0.5}
+  - {id: transformation_8, do: show, target: v_recipe, style: write, run_time: 1.5}
+  - {id: transformation_9, do: wait, duration: 3}
+  - id: transformation_10
+    do: show
+    target: matrix
+    style: write
+    run_time: 1.5
+    caption: A matrix moves the whole grid. Its columns say where i-hat and j-hat go.
+  - {id: transformation_11, do: wait, duration: 3}
+  - id: transformation_12
+    do: hide
+    target: [i_label, j_label, v_label]
+    style: fade
+    run_time: 0.5
+  - id: transformation_13
+    do: apply_matrix
+    target: [plane, i_hat, j_hat, v]
+    matrix: [[1, 3], [-2, 0]]
+    run_time: 3
+    caption: Grid lines stay straight and evenly spaced, and the origin stays put.
+  - {id: transformation_14, do: wait, duration: 1.5}
+  - id: transformation_15
+    do: show
+    target: [i_landed, j_landed]
+    style: write
+    run_time: 1
+    caption: i-hat lands on the first column, (1, −2), and j-hat on the second, (3, 0).
+  - {id: transformation_16, do: highlight, target: matrix, run_time: 1}
+  - {id: transformation_17, do: wait, duration: 3}
+  - id: transformation_18
+    do: show
+    target: v_landed
+    style: write
+    run_time: 0.5
+    caption: v is still −1 of the first plus 2 of the second, so it lands on (5, 2).
+  - id: transformation_19
+    do: transform
+    target: v_recipe
+    into: v_result
+    style: fade
+    run_time: 1.5
+  - {id: transformation_20, do: wait, duration: 4.5}
