@@ -48,6 +48,11 @@ what gets built, for code which acts on objects afterwards:
     svg                      an SVGMobject
     group                    a VGroup of its members, or a Group if any member is an image
 
+With `backdrop`, number planes, axes, 3D axes and matrices keep their type, the panel being
+their first submobject; anything else becomes VGroup(panel, object) (Group for an image), the
+object itself being [1]. part_selector and points on a number line look past the panel. With
+`fixed`, the whole object is fixed in the frame (fix_in_frame), so it ignores camera moves.
+
 Text a user typed is written into the code with repr (or as a raw string where that reads
 better and round-trips exactly), so nothing typed can become code. Characters which can't be
 drawn at all (control characters other than tab and line breaks, lone surrogates) are left
@@ -59,6 +64,7 @@ import ast
 import heapq
 import math
 import re
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
@@ -120,14 +126,17 @@ def _literal(text: str, prefix: str = "") -> str:
     """
     text as a string literal in double quotes, with an R prefix when asked, provided that
     reads back as exactly text; repr of it otherwise. repr always round-trips, so whatever
-    text holds, the code it lands in keeps its shape.
+    text holds, the code it lands in keeps its shape. Without the R, a backslash would start
+    an escape (or, as in "\\s", an invalid one Python warns about), so such text gets repr.
     """
-    if text.isprintable():
+    if text.isprintable() and (prefix or "\\" not in text):
         candidate = f'{prefix}"{text}"'
-        try:
-            node = ast.parse(candidate, mode="eval").body
-        except SyntaxError:
-            node = None
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            try:
+                node = ast.parse(candidate, mode="eval").body
+            except (SyntaxError, Warning):
+                node = None
         if isinstance(node, ast.Constant) and node.value == text:
             return candidate
     return repr(text)
@@ -208,6 +217,20 @@ def _var(ctx: CodegenContext, obj_id: str) -> str:
     return name
 
 
+def _wrapped(obj: ObjectBase) -> bool:
+    """
+    Whether the object is built as VGroup(backdrop, object) by with_backdrop, so that the
+    object itself is [1]. Coordinate systems and matrices keep their own type instead.
+    """
+    return bool(getattr(obj, "backdrop", False)) and obj.type not in ("number_plane", "axes", "axes_3d", "matrix")
+
+
+def _system(ctx: CodegenContext, obj_id: str) -> str:
+    """The coordinate system called obj_id, as code, looking past a backdrop around a number line."""
+    var = _var(ctx, obj_id)
+    return f"{var}[1]" if _wrapped(_spec(ctx, obj_id)) else var
+
+
 def _point(values: Sequence[float], on: str | None, ctx: CodegenContext) -> str:
     """
     A point given in the coordinates of the system `on`, or in frame units when there is
@@ -217,10 +240,10 @@ def _point(values: Sequence[float], on: str | None, ctx: CodegenContext) -> str:
         coords = list(values) + [0] * (3 - len(values))
         return _list(coords)
     system = _spec(ctx, on)
-    var = _var(ctx, on)
+    var = _system(ctx, on)
     if system.type == "number_line":
+        # [n, height]: n along the line, then height above it (and z out of the frame) in frame units
         expr = f"{var}.n2p({_num(values[0])})"
-        # Off the line: y (and z) move away from it in frame units
         for value, direction in zip(values[1:], ("UP", "OUT")):
             if float(value) != 0:
                 sign = "+" if value > 0 else "-"
@@ -307,7 +330,8 @@ def _quote(obj: QuoteObject, ctx: CodegenContext) -> Built:
     if not words or words[0] not in QUOTE_MARKS:
         words = f"“{words}”"
     quote = _call("Text", _literal(words), _kw("font_size", _num(obj.font_size)), "slant=ITALIC")
-    if not obj.author:
+    # An author which comes to nothing once what can't be drawn is left out is no author
+    if not displayable(obj.author or ""):
         return f"VGroup({quote})", set()
     author = _call("Text", _str(f"— {obj.author}"), _kw("font_size", _num(round(obj.font_size * 0.75, 2))))
     return f"VGroup({quote}, {author}).arrange(DOWN, aligned_edge=RIGHT, buff=0.3)", set()
@@ -577,10 +601,15 @@ def object_expression(obj: ObjectBase, ctx: CodegenContext) -> str:
     if obj.color is not None and "color" not in handled:
         expr += f".set_color({_color(obj.color)})"
     if obj.opacity is not None and "opacity" not in handled:
-        if obj.type in FADED_BY_OPACITY:
+        # Only VMobject.fade returns the mobject; a Group's (one holding an image) returns None
+        if obj.type in FADED_BY_OPACITY and _is_vectorized(obj.id, ctx):
             expr += f".fade({_num(round(1 - obj.opacity, 6))})"
         else:
             expr += f".set_opacity({_num(obj.opacity)})"
+    # After color and opacity, which would otherwise repaint the panel, and before scale and
+    # rotation, so the panel turns with what it is behind
+    if isinstance(obj, FreeObject) and obj.backdrop:
+        expr = f"with_backdrop({expr})"
     if obj.z:
         expr += f".set_z_index({int(obj.z)})"
     if isinstance(obj, FreeObject):
@@ -588,6 +617,9 @@ def object_expression(obj: ObjectBase, ctx: CodegenContext) -> str:
             expr += f".scale({_num(obj.scale)})"
         if obj.rotate:
             expr += f".rotate({_num(obj.rotate)} * DEGREES)"
+    if obj.fixed:
+        expr += ".fix_in_frame()"
+    if isinstance(obj, FreeObject):
         expr = _placed(expr, obj, ctx)
     return expr
 
@@ -602,6 +634,8 @@ def _placed(expr: str, obj: FreeObject, ctx: CodegenContext) -> str:
     args = [expr]
     if placement.at is not None:
         args.append(_kw("at", _list(placement.at)))
+        if placement.on is not None:
+            args.append(_kw("on", _system(ctx, placement.on)))
     elif placement.edge is not None:
         args.append(_kw("edge", _literal(placement.edge)))
     elif placement.next_to is not None:
@@ -685,7 +719,7 @@ def part_selector(obj: ObjectBase, part: str, ctx: CodegenContext) -> str:
     Formulas isolate the parts their highlights name (see _tex_object), which is what
     makes this exact for them; plain text is exact without that.
     """
-    var = _var(ctx, obj.id)
+    var = _var(ctx, obj.id) + ("[1]" if _wrapped(obj) else "")
     if isinstance(obj, TexObject):
         return f"{var}[{_tex(part)}]"
     if isinstance(obj, TextObject) or (isinstance(obj, TitleObject) and not obj.underline):

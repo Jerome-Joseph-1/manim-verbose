@@ -18,14 +18,15 @@ from manim_verbose.manim_import import import_manim
 import_manim()
 
 from manimlib import (  # noqa: E402
-    DOWN, FRAME_HEIGHT, FRAME_WIDTH, LEFT, RIGHT, UP, Arrow, Axes, Brace, Dot, Matrix, NumberPlane,
-    Rectangle, Tex, Text, VGroup, VMobject,
+    DOWN, FRAME_HEIGHT, FRAME_WIDTH, LEFT, RIGHT, UP, Arrow, Axes, BackgroundRectangle, Brace, Dot, Group,
+    ImageMobject, Matrix, NumberLine, NumberPlane, Rectangle, Tex, Text, VGroup, VMobject,
 )
+from PIL import Image  # noqa: E402
 
 from manim_verbose.scenefile import layout  # noqa: E402
 from manim_verbose.scenefile.expressions import ExpressionError  # noqa: E402
 from manim_verbose.scenefile.layout import (  # noqa: E402
-    EDGES, function_graph, place, set_frame_shape, frame_shape, with_axis_labels, with_brace_label,
+    EDGES, function_graph, place, set_frame_shape, frame_shape, with_axis_labels, with_backdrop, with_brace_label,
     with_coordinates, with_label, with_numbers, with_round_brackets, with_row_colors, with_tip_label,
     with_underline,
 )
@@ -143,6 +144,80 @@ def test_edges_pull_in_something_already_off_screen(start, edge):
     assert_inside_frame(mob, 0.25)
 
 
+@pytest.mark.parametrize("edge", [e for e in EDGES if e != "center"])
+@pytest.mark.parametrize("start", [(5, -3), (-6, 2.5), (0.5, 0.5), (40, -40)])
+def test_edges_centre_along_the_edge_wherever_the_object_was(edge, start):
+    """As a move to an edge needs: top is top centre whatever came before, a corner sets both."""
+    mob = place(rect(2, 1, at=start), edge=edge)
+    x0, y0, x1, y1 = box(mob)
+    direction = EDGES[edge]
+    expected_x = {1: HALF_W - 0.25 - 1, -1: -HALF_W + 0.25 + 1, 0: 0}[int(direction[0])]
+    expected_y = {1: HALF_H - 0.25 - 0.5, -1: -HALF_H + 0.25 + 0.5, 0: 0}[int(direction[1])]
+    assert mob.get_center()[:2] == pytest.approx([expected_x, expected_y], abs=TOL)
+
+
+def test_at_on_a_coordinate_system():
+    plane = NumberPlane(x_range=[-4, 4, 1], y_range=[-2, 2, 1], width=6, height=3).shift(RIGHT)
+    mob = place(rect(0.5, 0.5), at=[2, 1], on=plane)
+    assert np.allclose(mob.get_center(), plane.c2p(2, 1), atol=TOL)
+    axes = Axes(x_range=[0, 10, 1], y_range=[0, 100, 10], width=5, height=4)
+    mob = place(Dot(), at=[5, 50], on=axes, shift=[0, 0.5])
+    assert np.allclose(mob.get_center(), axes.c2p(5, 50) + 0.5 * UP, atol=TOL)
+
+
+def test_at_on_a_number_line_is_along_it_then_above_it():
+    line = NumberLine(x_range=[0, 4, 1], width=8).shift(DOWN)
+    mob = place(Dot(), at=[1.5, 0.75], on=line)
+    assert np.allclose(mob.get_center(), line.n2p(1.5) + 0.75 * UP, atol=TOL)
+    assert np.allclose(layout.point_on(line, [3]), line.n2p(3), atol=TOL)
+
+
+def test_on_needs_at_and_a_coordinate_system():
+    with pytest.raises(ValueError, match="needs `at`"):
+        place(Dot(), edge="top", on=NumberPlane())
+    with pytest.raises(TypeError, match="isn't a coordinate system"):
+        place(Dot(), at=[1, 1], on=rect(1, 1))
+
+
+@pytest.mark.parametrize("make, keeps_type", [
+    (lambda: NumberPlane(x_range=[-3, 3, 1], y_range=[-2, 2, 1]), True),
+    (lambda: Axes(x_range=[-3, 3, 1], y_range=[-2, 2, 1]), True),
+    pytest.param(lambda: Matrix([["1"], ["2"]]), True, marks=pytest.mark.render),
+    (lambda: Text("over a grid"), False),
+    pytest.param(lambda: Tex("x^2"), False, marks=pytest.mark.render),
+    (lambda: rect(2, 1), False),
+    (lambda: VGroup(Text("a"), Text("b")).arrange(DOWN), False),
+])
+def test_with_backdrop_puts_a_panel_behind(make, keeps_type):
+    mob = make()
+    x0, y0, x1, y1 = box(mob)
+    result = with_backdrop(mob)
+    if keeps_type:
+        assert result is mob
+        panel = mob.submobjects[0]
+    else:
+        assert isinstance(result, VGroup) and result[1] is mob
+        panel = result[0]
+    assert isinstance(panel, BackgroundRectangle)
+    # Drawn first, around the whole of it, and dark
+    family = [m for m in result.get_family() if m.has_points()]
+    assert family[0] is panel
+    px0, py0, px1, py1 = box(panel)
+    assert px0 <= x0 - 0.15 + TOL and py0 <= y0 - 0.15 + TOL and px1 >= x1 + 0.15 - TOL and py1 >= y1 + 0.15 - TOL
+    assert panel.get_fill_opacity() == pytest.approx(0.75)
+    assert panel.get_stroke_width() == 0
+
+
+def test_with_backdrop_keeps_coordinate_systems_working(tmp_path):
+    plane = with_backdrop(NumberPlane(x_range=[-3, 3, 1], y_range=[-2, 2, 1]))
+    assert np.allclose(plane.c2p(1, 1), [1, 1, 0], atol=TOL)
+    path = tmp_path / "pic.png"
+    Image.new("RGB", (4, 3), (255, 0, 0)).save(path)
+    image = ImageMobject(str(path), height=1)
+    group = with_backdrop(image)
+    assert isinstance(group, Group) and group[1] is image
+
+
 @pytest.mark.parametrize("side", SIDES)
 @pytest.mark.parametrize("ref_at", [(0, 0), (-5.5, 0), (5.5, 0), (0, 3), (0, -3), (-6, -3.3)])
 @pytest.mark.parametrize("buff", [0, 0.25, 0.8])
@@ -244,6 +319,7 @@ def test_with_underline():
     assert line.get_width() == pytest.approx(title.get_width() * 1.2, rel=1e-3)
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("side", SIDES)
 def test_with_label_puts_it_on_that_side(side):
     dot = Dot([1, 1, 0])
@@ -254,6 +330,7 @@ def test_with_label_puts_it_on_that_side(side):
     assert_on_side(label, alone, side, 0.15)
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("side", SIDES)
 @pytest.mark.parametrize("tip", [(2, 1), (-1, 2), (0, -2), (-3, 0)])
 def test_with_tip_label_is_beside_the_tip(side, tip):
@@ -280,6 +357,7 @@ def arrow_points_inside(arrow, mob) -> bool:
     return bool(((points[:, 0] > x0) & (points[:, 0] < x1) & (points[:, 1] > y0) & (points[:, 1] < y1)).any())
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("tip", [(2, 1), (-1, 2), (3, -2), (0, 3), (-2, 0), (-2, -2), (0, -1), (0.1, 0.1)])
 def test_with_coordinates_sits_past_the_tip(tip):
     arrow = Arrow([0, 0, 0], [*tip, 0], buff=0)
@@ -291,6 +369,7 @@ def test_with_coordinates_sits_past_the_tip(tip):
     assert along > 0
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("side", SIDES)
 @pytest.mark.parametrize("tip", [(2, 1), (-1, 2), (1, -2)])
 def test_with_coordinates_keeps_clear_of_a_label(side, tip):
@@ -301,6 +380,7 @@ def test_with_coordinates_keeps_clear_of_a_label(side, tip):
     assert not arrow_points_inside(arrow, coordinates)
 
 
+@pytest.mark.render
 def test_with_coordinates_writes_numbers_as_people_do():
     arrow = with_coordinates(Arrow([0, 0, 0], [1, 1, 0], buff=0), [2.0, -1.5])
     matrix = arrow.submobjects[-1]
@@ -309,6 +389,7 @@ def test_with_coordinates_writes_numbers_as_people_do():
     assert isinstance(arrow.submobjects[-1], Tex)
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("side", SIDES)
 def test_with_brace_label(side):
     target = rect(2, 1)
@@ -322,6 +403,7 @@ def test_with_brace_label(side):
     assert np.dot(offset, SIDES[side]) > np.dot(brace.get_center() - target.get_center(), SIDES[side])
 
 
+@pytest.mark.render
 def test_with_round_brackets():
     matrix = Matrix([["a", "b"], ["c", "d"]])
     old = list(matrix.brackets)
@@ -340,6 +422,7 @@ def test_with_round_brackets():
     assert matrix.get_center() == pytest.approx(entries.get_center(), abs=1e-3)
 
 
+@pytest.mark.render
 def test_with_row_colors():
     matrix = with_row_colors(Matrix([["1", "2"], ["3", "4"], ["5", "6"]]), "#FF0000", "#00FF00")
     rows = matrix.get_rows()
@@ -358,6 +441,7 @@ def test_with_numbers():
     assert all(number in family for numbers in plane.coordinate_labels for number in numbers)
 
 
+@pytest.mark.render
 def test_with_axis_labels():
     axes = Axes(x_range=[-3, 3, 1], y_range=[-2, 2, 1])
     before = len(axes.submobjects)
@@ -458,6 +542,7 @@ def test_graph_keeps_manim_attributes_and_takes_callables():
     assert np.allclose(axes.i2gp(0.5, graph), axes.c2p(0.5, 0.25))
 
 
+@pytest.mark.render
 def test_graph_label_is_near_the_end_and_on_screen():
     axes = Axes(**AXES_KW)
     label = Tex(R"\sin x")

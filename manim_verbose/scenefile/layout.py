@@ -5,12 +5,13 @@ so that generated code reads as one expression per object.
 
 OWNER: objects agent. Re-exported by runtime.py, so generated code can call these unqualified.
 
-    place(mob, at=None, edge=None, next_to=None, side="down", buff=0.25, shift=None) -> mob
+    place(mob, at=None, edge=None, next_to=None, side="down", buff=0.25, shift=None, on=None) -> mob
 
 Alongside place are the few builders generated code needs where manimlib has no way of making
 something in one expression: a label added to a dot or beside a vector's tip, a matrix with
-round brackets, axes with their numbers, the graph of a typed formula. Each takes the mobject
-it works on first and returns it (or the group it made), so they nest like the rest.
+round brackets, axes with their numbers, the graph of a typed formula, a dark panel behind
+an object. Each takes the mobject it works on first and returns it (or the group it made), so
+they nest like the rest.
 
 Everything is measured against the frame the scene starts with: frame_shape() is manim's
 default frame unless the scene has said otherwise with set_frame_shape, which a scene of an
@@ -27,10 +28,11 @@ from manim_verbose.manim_import import import_manim
 
 import_manim()
 
-from manimlib.constants import DL, DOWN, DR, FRAME_HEIGHT, FRAME_WIDTH, LEFT, ORIGIN, RIGHT, UL, UP, UR, YELLOW
+from manimlib.constants import DL, DOWN, DR, FRAME_HEIGHT, FRAME_WIDTH, LEFT, ORIGIN, OUT, RIGHT, UL, UP, UR, YELLOW
+from manimlib.mobject.coordinate_systems import CoordinateSystem
 from manimlib.mobject.matrix import Matrix
-from manimlib.mobject.mobject import Mobject
-from manimlib.mobject.shape_matchers import Underline
+from manimlib.mobject.mobject import Group, Mobject
+from manimlib.mobject.shape_matchers import BackgroundRectangle, Underline
 from manimlib.mobject.svg.tex_mobject import Tex
 from manimlib.mobject.types.vectorized_mobject import VGroup, VMobject
 
@@ -39,8 +41,8 @@ from manim_verbose.scenefile.expressions import SafeFunction, safe_function
 __all__ = [
     "place", "frame_shape", "set_frame_shape", "SIDES", "EDGES",
     "with_underline", "with_label", "with_tip_label", "with_coordinates", "with_brace_label",
-    "with_round_brackets", "with_row_colors", "with_numbers", "with_axis_labels",
-    "function_graph",
+    "with_round_brackets", "with_row_colors", "with_numbers", "with_axis_labels", "with_backdrop",
+    "point_on", "function_graph",
 ]
 
 SIDES: dict[str, np.ndarray] = {"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
@@ -80,6 +82,21 @@ def _point(value: Sequence[float]) -> np.ndarray:
     return point
 
 
+def point_on(system: Mobject, coords: Sequence[float]) -> np.ndarray:
+    """
+    Where coordinates on a coordinate system are in the frame: c2p for axes and planes, and
+    for a number line [n, height], n along the line and height above it in frame units.
+    """
+    if hasattr(system, "c2p"):
+        return system.c2p(*coords)
+    if hasattr(system, "n2p"):
+        point = system.n2p(coords[0])
+        for value, direction in zip(coords[1:], (UP, OUT)):
+            point = point + value * direction
+        return point
+    raise TypeError(f"{type(system).__name__} isn't a coordinate system")
+
+
 # Placement
 
 def place(
@@ -90,19 +107,25 @@ def place(
     side: str = "down",
     buff: float = 0.25,
     shift: Sequence[float] | None = None,
+    on: Mobject | None = None,
 ) -> Mobject:
     """
     Put mob where a scene file's `place` says, and return it. With none of at, edge and
-    next_to it is centred. An edge keeps the whole of mob inside the frame, `buff` in from
-    the border, shrinking it if it wouldn't otherwise fit; along the edge it stays where it
-    was, which for something just made is the middle. Beside another object, it keeps clear
-    of that object and is only slid along that side if it would stick out of the frame.
+    next_to it is centred.
+
+    `at` is the centre, in frame units, or in the coordinates of `on` when it is given.
+    An edge puts mob against that edge and centred along it (top centre, middle left, and a
+    corner both ways), keeping the whole of it inside the frame, `buff` in from the border,
+    and shrinking it if it wouldn't otherwise fit. Beside another object, mob keeps clear of
+    that object and is only slid along that side if it would stick out of the frame.
     """
     anchors = [name for name, value in (("at", at), ("edge", edge), ("next_to", next_to)) if value is not None]
     if len(anchors) > 1:
         raise ValueError(f"Give only one of at, edge or next_to, not {' and '.join(anchors)}")
+    if on is not None and at is None:
+        raise ValueError("`on` says which coordinates `at` is in, so it needs `at`")
     if at is not None:
-        mob.move_to(_point(at))
+        mob.move_to(point_on(on, at) if on is not None else _point(at))
     elif edge is not None:
         if edge not in EDGES:
             raise ValueError(f"'{edge}' isn't an edge: use one of {', '.join(EDGES)}")
@@ -135,7 +158,8 @@ def _against_edge(mob: Mobject, direction: np.ndarray, buff: float):
             mob.shift((limit - high) * _unit(dim))
         elif direction[dim] < 0:
             mob.shift((-limit - low) * _unit(dim))
-    _slide_inside(mob, axes=[dim for dim in (0, 1) if direction[dim] == 0], buff=buff)
+        else:
+            mob.shift(-(low + high) / 2 * _unit(dim))
 
 
 def _slide_inside(mob: Mobject, axes: Sequence[int], buff: float):
@@ -247,6 +271,22 @@ def with_round_brackets(matrix: VMobject) -> VMobject:
     matrix.brackets = new
     matrix.draw_fills_together_if_disjoint()
     return matrix
+
+
+def with_backdrop(mob: Mobject, buff: float = 0.15, opacity: float = 0.75) -> Mobject:
+    """
+    mob with a panel of the background color behind it, so it reads over a grid, as part of
+    it so that it moves and fades along. Coordinate systems and matrices take the panel as
+    their first submobject and stay what they were, so c2p and get_rows still work; anything
+    else becomes a group of the two, the panel [0] and mob [1], since a panel added inside a
+    text would throw out the indices its parts are found by, and one added inside a shape
+    with an outline of its own would be drawn over that outline.
+    """
+    backdrop = BackgroundRectangle(mob, buff=buff, fill_opacity=opacity)
+    if isinstance(mob, (CoordinateSystem, Matrix)):
+        mob.add_to_back(backdrop)
+        return mob
+    return (VGroup if isinstance(mob, VMobject) else Group)(backdrop, mob)
 
 
 def with_row_colors(matrix: VMobject, *colors) -> VMobject:
