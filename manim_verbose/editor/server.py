@@ -41,6 +41,7 @@ from manim_verbose.editor.documents import (
     Conflict, DocumentStore, SaveFailed, Unreadable, problems_json, read_document,
 )
 from manim_verbose.editor.jobs import Job, JobPool, JobRegistry, StillQueue, Superseded, Task
+from manim_verbose.editor.layout_checks import add_layout_route
 from manim_verbose.editor.limits import Limits, size_problems
 from manim_verbose.editor.outputs import OutputDir, cache_key, default_output_dir, file_stamps
 from manim_verbose.editor.workers import (
@@ -458,6 +459,7 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
             yield
         finally:
             await run_in_threadpool(editor.close)
+            await run_in_threadpool(layout_checks.close)
 
     app = FastAPI(title="manimgl editor", version=version(), lifespan=lifespan, docs_url="/api/docs",
                   redoc_url=None, openapi_url="/api/openapi.json")
@@ -550,6 +552,8 @@ def create_app(path: str | Path, *, output_dir: str | Path | None = None, backen
     @app.get("/api/timeline")
     def timeline(scene_id: str):
         return editor.timeline(scene_id)
+
+    layout_checks = add_layout_route(app, editor)  # POST /api/layout
 
     @app.post("/api/export", status_code=202)
     def export(body: ExportBody):
