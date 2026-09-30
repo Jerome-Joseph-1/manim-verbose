@@ -42,7 +42,7 @@ def tiny(doc):
 
 # Timings
 
-def test_timeline_of_the_fixture(fake_blocks):
+def test_timeline_of_the_fixture(blocks_impl):
     doc = fixture_doc("every_step.yaml")
     timings = render.timeline(doc, "basics")
     assert [(t.step_id, t.index, t.start, t.duration) for t in timings] == [
@@ -57,7 +57,7 @@ def test_timeline_of_the_fixture(fake_blocks):
     assert render.document_duration(doc) == 20.25
 
 
-def test_timeline_of_a_scene_which_isnt_there(fake_blocks):
+def test_timeline_of_a_scene_which_isnt_there(blocks_impl):
     with pytest.raises(RenderError) as caught:
         render.timeline(fixture_doc("every_step.yaml"), "nowhere")
     assert caught.value.problems[0].message == "There's no scene called 'nowhere'"
@@ -177,7 +177,7 @@ def test_something_which_cant_be_turned_into_code_is_named_before_anything_rende
     assert not (tmp_path / "x.mp4").exists()
 
 
-def test_unexpected_failures_are_problems_too(fake_blocks, monkeypatch):
+def test_unexpected_failures_are_problems_too(blocks_impl, monkeypatch):
     def broken(code):
         raise MemoryError("out of memory, say")
 
@@ -196,7 +196,7 @@ def test_unexpected_failures_are_problems_too(fake_blocks, monkeypatch):
     (lambda doc, out: render.render_video(doc, out / "x.mp4", scene_ids=["t"]), "There's no scene called 't'"),
     (lambda doc, out: render.render_video(doc, out / "x.mp4", quality="best"), "'best' isn't a quality; use one of low, medium, hd, uhd"),
 ])
-def test_asking_for_what_isnt_there(call, message, fake_blocks, tmp_path):
+def test_asking_for_what_isnt_there(call, message, blocks_impl, tmp_path):
     doc = doc_from("scenes: [{id: s, objects: [{id: c, type: circle}], steps: [{do: show, target: c}, {do: wait}]}]")
     with pytest.raises(RenderError) as caught:
         call(doc, tmp_path)
@@ -216,7 +216,7 @@ def unique_formula() -> str:
 
 
 @pytest.mark.render
-def test_a_formula_latex_cannot_typeset_is_a_problem_on_its_tex(fake_blocks, tmp_path, render_cache):
+def test_a_formula_latex_cannot_typeset_is_a_problem_on_its_tex(blocks_impl, tmp_path, render_cache):
     good, bad = unique_formula(), unique_formula() + r" \nosuchcommand"
     doc = doc_from(f"""
         scenes:
@@ -235,7 +235,7 @@ def test_a_formula_latex_cannot_typeset_is_a_problem_on_its_tex(fake_blocks, tmp
 
 
 @pytest.mark.render
-def test_a_formula_changed_into_one_latex_cannot_typeset_is_a_problem_on_the_change(fake_blocks, tmp_path, render_cache):
+def test_a_formula_changed_into_one_latex_cannot_typeset_is_a_problem_on_the_change(blocks_impl, tmp_path, render_cache):
     bad = unique_formula() + r" \frac{1}{"
     doc = doc_from(f"""
         scenes:
@@ -255,7 +255,7 @@ def test_a_formula_changed_into_one_latex_cannot_typeset_is_a_problem_on_the_cha
 # Stills
 
 @pytest.mark.render
-def test_a_still_is_a_picture_with_boxes(fake_blocks, tmp_path, render_cache):
+def test_a_still_is_a_picture_with_boxes(blocks_impl, tmp_path, render_cache):
     doc = fixture_doc("every_step.yaml")
     result = render.render_still(doc, "basics", 1, tmp_path / "deeper" / "one.png", width=320)
     assert (result.path, result.width, result.height) == (tmp_path / "deeper" / "one.png", 320, 180)
@@ -269,7 +269,7 @@ def test_a_still_is_a_picture_with_boxes(fake_blocks, tmp_path, render_cache):
 
 
 @pytest.mark.render
-def test_a_still_before_the_first_step_and_after_the_last(fake_blocks, tmp_path, render_cache):
+def test_a_still_before_the_first_step_and_after_the_last(blocks_impl, tmp_path, render_cache):
     doc = fixture_doc("every_step.yaml")
     first = render.render_still(doc, "basics", -1, tmp_path / "first.png", width=320)
     assert [box.id for box in first.objects] == ["dot"]
@@ -280,7 +280,7 @@ def test_a_still_before_the_first_step_and_after_the_last(fake_blocks, tmp_path,
 
 
 @pytest.mark.render
-def test_captions_are_drawn_but_never_boxed(fake_blocks, tmp_path, render_cache):
+def test_captions_are_drawn_but_never_boxed(blocks_impl, tmp_path, render_cache):
     doc = fixture_doc("every_step.yaml")
     result = render.render_still(doc, "basics", 0, tmp_path / "c.png", width=320)
     assert [box.id for box in result.objects] == ["dot", "title"]
@@ -294,7 +294,7 @@ def test_captions_are_drawn_but_never_boxed(fake_blocks, tmp_path, render_cache)
 
 @pytest.mark.render
 @pytest.mark.parametrize("first, last", [(0, 0), (1, 3), (5, 8), (9, 12), (12, 12)])
-def test_a_clip_is_the_same_frames_as_that_stretch_of_the_whole(first, last, fake_blocks, tmp_path, render_cache,
+def test_a_clip_is_the_same_frames_as_that_stretch_of_the_whole(first, last, blocks_impl, tmp_path, render_cache,
                                                                  lossless):
     doc = tiny(fixture_doc("every_step.yaml"))
     whole = video_frames(render.render_clip(doc, "basics", tmp_path / "whole.mp4", quality="hd"))
@@ -311,14 +311,14 @@ def test_a_clip_is_the_same_frames_as_that_stretch_of_the_whole(first, last, fak
 
 
 @pytest.mark.render
-def test_a_clip_of_steps_taking_no_time_is_the_frame_they_leave(fake_blocks, tmp_path, render_cache):
+def test_a_clip_of_steps_taking_no_time_is_the_frame_they_leave(blocks_impl, tmp_path, render_cache):
     doc = tiny(fixture_doc("every_step.yaml"))
     clip = render.render_clip(doc, "basics", tmp_path / "add.mp4", 2, 2, quality="hd")
     assert frame_count(clip) == 1
 
 
 @pytest.mark.render
-def test_a_low_quality_clip(fake_blocks, tmp_path, render_cache):
+def test_a_low_quality_clip(blocks_impl, tmp_path, render_cache):
     import av
     doc = doc_from("scenes: [{id: s, objects: [{id: c, type: circle}], steps: [{do: show, target: c, run_time: 0.5}]}]",
                    tiny=False)
@@ -346,7 +346,7 @@ TWO_SCENES = """
 
 
 @pytest.mark.render
-def test_scenes_are_joined_in_order_to_their_summed_length(fake_blocks, tmp_path, render_cache):
+def test_scenes_are_joined_in_order_to_their_summed_length(blocks_impl, tmp_path, render_cache):
     doc = doc_from(TWO_SCENES)
     seen: list[tuple[float, str]] = []
     path = render.render_video(doc, tmp_path / "out" / "video.mp4", quality="hd",
@@ -374,7 +374,7 @@ def test_scenes_are_joined_in_order_to_their_summed_length(fake_blocks, tmp_path
 
 
 @pytest.mark.render
-def test_rendering_again_uses_what_was_rendered_and_only_redoes_what_changed(fake_blocks, tmp_path, render_cache):
+def test_rendering_again_uses_what_was_rendered_and_only_redoes_what_changed(blocks_impl, tmp_path, render_cache):
     doc = doc_from(TWO_SCENES)
     first = render.render_video(doc, tmp_path / "a.mp4", quality="hd")
     started = time.monotonic()
@@ -390,7 +390,7 @@ def test_rendering_again_uses_what_was_rendered_and_only_redoes_what_changed(fak
 
 
 @pytest.mark.render
-def test_rendering_scenes_side_by_side_gives_the_same_video_as_one_at_a_time(fake_blocks, tmp_path, monkeypatch):
+def test_rendering_scenes_side_by_side_gives_the_same_video_as_one_at_a_time(blocks_impl, tmp_path, monkeypatch):
     doc = doc_from(TWO_SCENES)
     monkeypatch.setenv("MANIM_VERBOSE_CACHE", str(tmp_path / "one"))
     serial = render.render_video(doc, tmp_path / "serial.mp4", quality="hd", jobs=1)
@@ -403,7 +403,7 @@ def test_rendering_scenes_side_by_side_gives_the_same_video_as_one_at_a_time(fak
 
 
 @pytest.mark.render
-def test_just_some_scenes(fake_blocks, tmp_path, render_cache):
+def test_just_some_scenes(blocks_impl, tmp_path, render_cache):
     doc = doc_from(TWO_SCENES)
     path = render.render_video(doc, tmp_path / "second.mp4", quality="hd", scene_ids=["second"])
     assert frame_count(path) == _frame_at(1.4, 15)
@@ -428,7 +428,7 @@ def worker_processes() -> list[int]:
 
 @pytest.mark.render
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="looks for leftover processes in /proc")
-def test_cancelling_stops_promptly_and_leaves_nothing_behind(fake_blocks, tmp_path, render_cache):
+def test_cancelling_stops_promptly_and_leaves_nothing_behind(blocks_impl, tmp_path, render_cache):
     long = "\n".join(
         f"  - {{id: s{i}, objects: [{{id: c, type: circle}}], steps: [{{do: show, target: c, run_time: 6}}]}}"
         for i in range(3)
@@ -451,7 +451,7 @@ def test_cancelling_stops_promptly_and_leaves_nothing_behind(fake_blocks, tmp_pa
 
 
 @pytest.mark.render
-def test_a_problem_in_one_scene_of_a_video_is_reported_from_its_worker(fake_blocks, tmp_path, render_cache):
+def test_a_problem_in_one_scene_of_a_video_is_reported_from_its_worker(blocks_impl, tmp_path, render_cache):
     bad = unique_formula() + r" \nosuchcommand"
     doc = doc_from(TWO_SCENES.replace("{id: t, type: text, text: two}", f"{{id: t, type: tex, tex: '{bad}'}}"))
     with pytest.raises(RenderError) as caught:
@@ -512,7 +512,7 @@ def write_fixture(tmp_path: Path, tiny_copy: bool = False) -> Path:
     return path
 
 
-def test_cli_info(fake_blocks, tmp_path, capsys):
+def test_cli_info(blocks_impl, tmp_path, capsys):
     from manim_verbose.scenefile.cli import main
     assert main(["info", str(write_fixture(tmp_path))]) == 0
     out = capsys.readouterr().out
@@ -521,7 +521,7 @@ def test_cli_info(fake_blocks, tmp_path, capsys):
     assert out.rstrip().endswith("total   0:20.2")
 
 
-def test_cli_code(fake_blocks, tmp_path, capsys):
+def test_cli_code(blocks_impl, tmp_path, capsys):
     from manim_verbose.scenefile.cli import main
     path = write_fixture(tmp_path)
     assert main(["code", str(path), "-s", "plane_view"]) == 0
@@ -546,7 +546,7 @@ def test_cli_code_reports_what_cant_be_turned_into_code(fake_blocks, tmp_path, c
 
 
 @pytest.mark.render
-def test_cli_still_and_render(fake_blocks, tmp_path, capsys, render_cache):
+def test_cli_still_and_render(blocks_impl, tmp_path, capsys, render_cache):
     from manim_verbose.scenefile.cli import main
     path = write_fixture(tmp_path, tiny_copy=True)
     assert main(["still", str(path), "-s", "basics", "--step", "1", "-o", str(tmp_path / "s.png"), "--width", "320"]) == 0

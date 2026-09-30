@@ -44,15 +44,16 @@ from manimlib.animation.indication import Flash
 from manimlib.animation.transform import ReplacementTransform, Transform
 from manimlib.animation.transform_matching_parts import TransformMatchingParts
 from manimlib.camera.camera import Camera
+from manimlib.camera.camera_frame import CameraFrame
 from manimlib.constants import BLACK, DOWN, FRAME_HEIGHT, FRAME_WIDTH, OUT, UP, WHITE, YELLOW
 from manimlib.mobject.geometry import Arrow, Line, Rectangle
 from manimlib.mobject.mobject import Group, Mobject
 from manimlib.mobject.svg.text_mobject import Text
-from manimlib.mobject.types.vectorized_mobject import VGroup
 from manimlib.scene.scene import EndScene, Scene
 from manimlib.utils.family_ops import extract_mobject_family_members, recursive_mobject_remove
 
 from manim_verbose.scenefile.layout import *  # noqa: F401,F403  (placement helpers, objects agent)
+from manim_verbose.scenefile.layout import set_frame_shape
 from manim_verbose.scenefile.expressions import *  # noqa: F401,F403  (safe functions, objects agent)
 
 
@@ -112,15 +113,19 @@ class DocScene(Scene):
     and each step of the file runs inside `with self.step(...)`, which is what lets a render
     stop after any step, start from any step, and show captions.
 
-    Three things differ from a plain Scene, all so that the file means what it says:
+    Where it differs from a plain Scene, it does so that the file means what it says:
 
     - Time runs on a grid of frames, see the module's docstring.
-    - An object taken off screen during a step is put back, once the step is over, as it was
-      when the step first animated it. Uncreate, a shrink or a transform into something else
+    - An object taken off screen during a step (hidden, cleared, or transformed into another)
+      is put back, once the step is over, as it was before. Uncreate, a shrink or a transform
       leave the mobject they worked on emptied, shrunk or reshaped, and without this showing
       it again later would show that rather than the object.
+    - Only steps which show things put them on screen. Manim adds whatever is animated to
+      the scene, so a change, move or highlight of a hidden object would otherwise show it.
     - Adding a group whose members are already on screen draws them through the group from
-      then on, rather than twice.
+      then on, rather than twice, and the camera's frame is never taken into a group.
+    - Once the camera turns away from looking straight at the frame, arrows turn to face it.
+    - The frame takes the shape of the picture, so that one which isn't 16:9 isn't stretched.
     """
     scene_id: str = ""
     caption_style: CaptionStyle = CaptionStyle()
@@ -142,6 +147,7 @@ class DocScene(Scene):
                 scene_module.Camera = real
         else:
             super().__init__(**kwargs)
+        self._fit_frame_to_picture()
         self.objects: dict[str, Mobject] = {}
         self.step_records: list[StepRecord] = []
         # Nominal seconds since the scene began, advanced by exactly each play's run_time
@@ -155,6 +161,35 @@ class DocScene(Scene):
         self._caption_parts: set[Mobject] = set()
         self._next_caption: str | None = None
         self._snapshots: dict[str, Mobject] = {}
+
+    def _fit_frame_to_picture(self) -> None:
+        """
+        Makes the frame the shape of the picture. Manim's frame is 16:9 whatever size a
+        picture is drawn at, and its projection is fixed to that too, so a picture of any
+        other shape (a portrait video, say) would come out stretched. The frame keeps its
+        height of 8 units and takes the picture's width, and layout places objects in it.
+        """
+        width, height = self.camera.default_pixel_shape
+        self.frame_width = FRAME_HEIGHT * width / height
+        set_frame_shape(self.frame_width, FRAME_HEIGHT)
+        if abs(self.frame_width - FRAME_WIDTH) < 1e-6:
+            return
+        frame = self.frame
+        frame.set_width(self.frame_width, stretch=True)
+        frame.__class__ = _FittedFrame
+        frame.default_shape = (self.frame_width, FRAME_HEIGHT)
+        camera = self.camera
+        refresh = camera.refresh_uniforms
+        frame_width = self.frame_width
+
+        def refresh_uniforms() -> None:
+            refresh()
+            if camera.gpu is not None:
+                camera.gpu.frame_uniforms.update(frame_rescale_factors=(
+                    2.0 / frame_width, 2.0 / FRAME_HEIGHT, frame.get_scale() / frame.get_focal_distance(),
+                ))
+
+        camera.refresh_uniforms = refresh_uniforms
 
     # Objects and steps, which is what generated code calls
 
@@ -272,7 +307,7 @@ class DocScene(Scene):
         homogeneous = np.hstack([points, np.ones((len(points), 1))])
         viewed = homogeneous if fixed else homogeneous @ frame.get_view_matrix().T
         rescale = np.array([
-            2.0 / FRAME_WIDTH, 2.0 / FRAME_HEIGHT,
+            2.0 / self.frame_width, 2.0 / FRAME_HEIGHT,
             frame.get_scale() / frame.get_focal_distance(),
         ])
         scaled = viewed[:, :3] * rescale
@@ -296,6 +331,24 @@ class DocScene(Scene):
         if held:
             self.mobjects, _ = recursive_mobject_remove(self.mobjects, held)
         return super().add(*new_mobjects)
+
+    def draw_frame(self, dt: float = 0, force_draw: bool = False) -> None:
+        if force_draw or not self.skip_animations:
+            self._turn_arrows_to_camera()
+        super().draw_frame(dt, force_draw)
+
+    def _turn_arrows_to_camera(self) -> None:
+        """
+        An arrow is a flat shape, which seen edge on from a turned camera all but vanishes; so
+        once the camera has turned away from looking straight down at the frame, every arrow
+        is turned about its own length to face it before a frame is drawn, as 3D scenes of
+        vectors do. A camera which hasn't turned leaves arrows as they are.
+        """
+        if np.allclose(self.frame.get_orientation().as_quat(), [0, 0, 0, 1]):
+            return
+        for mob in self.get_mobject_family_members():
+            if isinstance(mob, Arrow) and mob.has_points() and not mob.is_fixed_in_frame():
+                mob.set_perpendicular_to_camera(self.frame)
 
     def _without_frame(self, mobject: Mobject) -> list[Mobject]:
         """A mobject, or where it holds the camera's frame, what it holds besides."""
@@ -376,15 +429,16 @@ class DocScene(Scene):
     def make_caption(self, text: str) -> tuple[Mobject, ...]:
         """The pieces of a caption: its words, and the band behind them if there is one."""
         style = self.caption_style
-        words = Text(text, font_size=style.font_size, alignment="CENTER", line_width=FRAME_WIDTH - 1.5)
+        frame_width = self.frame_width
+        words = Text(text, font_size=style.font_size, alignment="CENTER", line_width=frame_width - 1.5)
         words.set_color(style.color)
-        if words.get_width() > FRAME_WIDTH - 1:
-            words.set_width(FRAME_WIDTH - 1)
+        if words.get_width() > frame_width - 1:
+            words.set_width(frame_width - 1)
         direction = DOWN if style.edge == "bottom" else UP
         pieces: tuple[Mobject, ...]
         if style.background:
             pad = 0.18
-            band = Rectangle(width=FRAME_WIDTH + 0.2, height=words.get_height() + 2 * pad)
+            band = Rectangle(width=frame_width + 0.2, height=words.get_height() + 2 * pad)
             band.set_fill(BLACK, opacity=0.65).set_stroke(width=0)
             band.move_to((FRAME_HEIGHT / 2 - band.get_height() / 2) * direction)
             words.move_to(band)
@@ -481,6 +535,17 @@ class DocScene(Scene):
             self.file_writer.write_frame()
             self.frames_emitted += 1
         super().tear_down()
+
+
+class _FittedFrame(CameraFrame):
+    """A camera frame whose normal view is the shape of the picture, rather than manim's 16:9."""
+    default_shape: tuple[float, float] = (FRAME_WIDTH, FRAME_HEIGHT)
+
+    def to_default_state(self):
+        self.set_shape(*self.default_shape)
+        self.center()
+        self.set_orientation(self.default_orientation)
+        return self
 
 
 class HeadlessCamera(Camera):

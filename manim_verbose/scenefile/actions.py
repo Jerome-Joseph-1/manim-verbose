@@ -319,13 +319,15 @@ def _change(step: ChangeStep, ctx: CodegenContext) -> StepCode:
     var = ctx.var(step.target)
     new = changed_spec(obj, step.set)
     build_ctx = ctx
+    before = []
     if isinstance(new, GroupObject):
         # A group is built from its members, and building one moves them (arranging them,
         # for one), so the new look is built from copies, which the members then become
-        copies = {member: f"{ctx.var(member)}.copy()" for member in new.members}
+        copies = {member: ctx.temp(f"{ctx.var(member)}_copy") for member in dict.fromkeys(new.members)}
+        before.append(f"{', '.join(copies.values())} = {', '.join(f'{ctx.var(m)}.copy()' for m in copies)}")
         build_ctx = dataclasses.replace(ctx, names={**ctx.names, **copies})
     temp = ctx.temp(f"{var}_new")
-    before = [f"{temp} = {blocks.object_expression(new, build_ctx)}"]
+    before.append(f"{temp} = {blocks.object_expression(new, build_ctx)}")
     if step.target in ctx.displaced and not (set(step.set) & POSITION_FIELDS):
         # Moved since it was placed, so the new look goes where the object now is
         before.append(f"{temp}.move_to({var})")

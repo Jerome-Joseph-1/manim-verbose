@@ -193,7 +193,10 @@ def render_still(
         image = scene_obj.get_image().convert("RGB")
         out_png = Path(out_png)
         out_png.parent.mkdir(parents=True, exist_ok=True)
-        image.save(out_png)
+        # Written aside and moved into place, so that nobody serving it finds half a picture
+        partial = out_png.with_name(f".{out_png.stem}.{os.getpid()}.png")
+        image.save(partial)
+        partial.replace(out_png)
         boxes = [ObjectBox(obj_id, pixels, frame) for obj_id, frame, pixels in scene_obj.object_boxes()]
     except RenderError:
         raise

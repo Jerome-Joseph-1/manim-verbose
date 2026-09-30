@@ -471,7 +471,7 @@ def test_small_pieces():
     assert StepCode().lines() == []
 
 
-def test_every_play_says_how_long_it_takes(fake_blocks):
+def test_every_play_says_how_long_it_takes(blocks_impl):
     from manim_verbose.scenefile.codegen import document_to_python
     for name in STEP_CASES:
         for line in document_to_python(case_doc(name)).splitlines():
@@ -479,7 +479,7 @@ def test_every_play_says_how_long_it_takes(fake_blocks):
                 assert line.rstrip().endswith(")") and ", run_time=" in line.rsplit(")", 2)[-2] + ")", line
 
 
-def test_a_show_of_something_missing_still_has_a_time(fake_blocks):
+def test_a_show_of_something_missing_still_has_a_time(blocks_impl):
     """A saved document may have errors in it, and still wants timings."""
     from manim_verbose.scenefile.model import Document
     doc = Document.model_validate({"scenes": [{"id": "s", "steps": [{"id": "x", "do": "show", "target": "nothing"}]}]})
@@ -661,7 +661,7 @@ def expected_after(doc) -> set[str]:
 @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture,
                                                                    HealthCheck.too_slow, HealthCheck.filter_too_much])
 @given(data=random_documents())
-def test_random_documents_compile_run_and_leave_what_the_format_says(data, fake_blocks):
+def test_random_documents_compile_run_and_leave_what_the_format_says(data, blocks_impl):
     from manim_verbose.scenefile.codegen import document_to_python
     from manim_verbose.scenefile.validate import has_errors, validate_data, assign_step_ids
     doc, problems = validate_data(data)
@@ -678,7 +678,7 @@ def test_random_documents_compile_run_and_leave_what_the_format_says(data, fake_
 @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture,
                                                                    HealthCheck.too_slow, HealthCheck.filter_too_much])
 @given(data=random_documents())
-def test_random_documents_come_to_as_many_frames_as_their_timeline(data, fake_blocks):
+def test_random_documents_come_to_as_many_frames_as_their_timeline(data, blocks_impl):
     from manim_verbose.scenefile.runtime import RenderPlan, _frame_at
     from manim_verbose.scenefile.validate import has_errors, validate_data, assign_step_ids
     doc, problems = validate_data(data)

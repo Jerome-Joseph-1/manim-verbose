@@ -36,7 +36,7 @@ def test_scene_class_names(scene_id, expected):
     assert scene_class_name(SceneSpec(id=scene_id)) == expected
 
 
-def test_scene_classes_are_unique_within_a_document(fake_blocks):
+def test_scene_classes_are_unique_within_a_document(blocks_impl):
     doc = doc_from("""
         scenes:
           - {id: a_b}
@@ -61,7 +61,7 @@ def test_every_step_fixture_matches_the_code_checked_by_eye(fake_blocks):
     assert code == expected.read_text(encoding="utf-8")
 
 
-def test_generated_code_starts_with_the_imports_and_ends_with_the_scene_order(fake_blocks):
+def test_generated_code_starts_with_the_imports_and_ends_with_the_scene_order(blocks_impl):
     code = document_to_python(fixture_doc("every_step.yaml"))
     lines = code.splitlines()
     assert "from manimlib import *" in lines[:10]
@@ -70,14 +70,14 @@ def test_generated_code_starts_with_the_imports_and_ends_with_the_scene_order(fa
     compile(code, "every_step.py", "exec")
 
 
-def test_only_the_scenes_asked_for(fake_blocks):
+def test_only_the_scenes_asked_for(blocks_impl):
     doc = fixture_doc("every_step.yaml")
     code = document_to_python(doc, scene_ids=["plane_view"])
     assert "class PlaneView(DocScene):" in code
     assert "class Basics" not in code
 
 
-def test_objects_are_built_in_order_and_shown_ones_added_first(fake_blocks):
+def test_objects_are_built_in_order_and_shown_ones_added_first(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -112,7 +112,7 @@ def test_ids_which_would_hide_something_get_a_variable_of_their_own(obj_id, vari
     assert object_names([obj_id]).get(obj_id, obj_id) == variable
 
 
-def test_awkward_ids_generate_code_which_runs(fake_blocks):
+def test_awkward_ids_generate_code_which_runs(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -135,7 +135,7 @@ def test_awkward_ids_generate_code_which_runs(fake_blocks):
     assert set(scene.registered_on_screen()) == {"for", "Circle", "Circle_", "self"}
 
 
-def test_temporaries_steer_clear_of_object_names(fake_blocks):
+def test_temporaries_steer_clear_of_object_names(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -151,7 +151,7 @@ def test_temporaries_steer_clear_of_object_names(fake_blocks):
     run_scene(doc)
 
 
-def test_every_line_maps_back_to_what_it_came_from(fake_blocks):
+def test_every_line_maps_back_to_what_it_came_from(blocks_impl):
     doc = fixture_doc("every_step.yaml")
     module = generate_module(doc)
     lines = module.code.splitlines()
@@ -204,7 +204,7 @@ def test_every_step_kind_and_option_compiles(name, blocks_impl):
     assert code.count("with self.step(") == len(case_doc(name).scenes[0].steps)
 
 
-def test_captions_in_code(fake_blocks):
+def test_captions_in_code(blocks_impl):
     doc = doc_from("""
         settings: {captions: {font_size: 36, color: YELLOW, edge: top, background: false}}
         scenes:
@@ -275,7 +275,7 @@ def test_example_video_generates_code_for_every_scene(blocks_impl, monkeypatch):
 
 
 @pytest.mark.render
-def test_generated_module_runs_under_plain_manimgl(fake_blocks, tmp_path):
+def test_generated_module_runs_under_plain_manimgl(blocks_impl, tmp_path):
     """Exported code needs nothing but manimgl: render a frame of it the way a user would."""
     doc = fixture_doc("every_step.yaml")
     source = tmp_path / "exported.py"

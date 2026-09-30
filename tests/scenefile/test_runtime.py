@@ -56,7 +56,7 @@ ODD_TIMES = """
 """
 
 
-def test_a_scene_comes_to_its_length_in_frames_whatever_its_steps_add_up_to(fake_blocks):
+def test_a_scene_comes_to_its_length_in_frames_whatever_its_steps_add_up_to(blocks_impl):
     doc = doc_from(ODD_TIMES)
     total = render.scene_duration(doc, "s")
     scene = run_with(doc, RenderPlan())
@@ -68,7 +68,7 @@ def test_a_scene_comes_to_its_length_in_frames_whatever_its_steps_add_up_to(fake
 
 
 @pytest.mark.parametrize("first, last", [(0, 6), (1, 1), (2, 4), (3, 3), (4, 6), (6, 6), (0, 0)])
-def test_a_clip_holds_the_frames_of_its_steps(first, last, fake_blocks):
+def test_a_clip_holds_the_frames_of_its_steps(first, last, blocks_impl):
     doc = doc_from(ODD_TIMES)
     timings = render.timeline(doc, "s")
     scene = run_with(doc, RenderPlan(first_step=first, last_step=last))
@@ -77,7 +77,7 @@ def test_a_clip_holds_the_frames_of_its_steps(first, last, fake_blocks):
     assert [r.index for r in scene.step_records] == list(range(last + 1))
 
 
-def test_the_last_frame_of_a_play_shows_where_it_ends(fake_blocks):
+def test_the_last_frame_of_a_play_shows_where_it_ends(blocks_impl):
     doc = doc_from(ODD_TIMES)
     scene = run_with(doc, RenderPlan(last_step=-1))
     scene.skip_animations = False
@@ -88,7 +88,7 @@ def test_the_last_frame_of_a_play_shows_where_it_ends(fake_blocks):
     assert len(times) == expected_frames(0.78) - expected_frames(0.37)
 
 
-def test_progress_goes_up_to_the_end(fake_blocks):
+def test_progress_goes_up_to_the_end(blocks_impl):
     doc = doc_from(ODD_TIMES)
     seen = []
     run_with(doc, RenderPlan(progress=lambda seconds, step: seen.append((seconds, step))))
@@ -99,7 +99,7 @@ def test_progress_goes_up_to_the_end(fake_blocks):
 
 # Stopping and starting
 
-def test_stopping_before_the_first_step_leaves_only_what_is_shown_from_the_start(fake_blocks):
+def test_stopping_before_the_first_step_leaves_only_what_is_shown_from_the_start(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -113,12 +113,12 @@ def test_stopping_before_the_first_step_leaves_only_what_is_shown_from_the_start
     assert run_scene(doc).registered_on_screen() == ["b"]
 
 
-def test_a_scene_with_no_steps_runs_to_its_objects(fake_blocks):
+def test_a_scene_with_no_steps_runs_to_its_objects(blocks_impl):
     doc = doc_from("scenes: [{id: s, objects: [{id: a, type: circle, shown: true}]}]")
     assert run_scene(doc).registered_on_screen() == ["a"]
 
 
-def test_headless_needs_no_graphics_device(fake_blocks, monkeypatch):
+def test_headless_needs_no_graphics_device(blocks_impl, monkeypatch):
     from manimlib.renderer import gpu
 
     def no_device(self):
@@ -160,7 +160,7 @@ def caption_text(scene) -> str | None:
     (-1, None), (0, "First words"), (1, "First words"), (2, "Second words"), (3, "Said at once"),
     (4, None), (5, "Back again"), (6, None), (7, None), (8, "After the clear"),
 ])
-def test_captions_last_until_changed_and_an_empty_one_or_a_clear_takes_them_away(last, expected, fake_blocks):
+def test_captions_last_until_changed_and_an_empty_one_or_a_clear_takes_them_away(last, expected, blocks_impl):
     scene = run_scene(doc_from(CAPTIONED, tiny=False), last_step=last)
     assert caption_text(scene) == expected
     pieces = [m for m in scene.mobjects if scene._is_caption(m)]
@@ -171,14 +171,14 @@ def test_captions_last_until_changed_and_an_empty_one_or_a_clear_takes_them_away
         assert all(piece.is_fixed_in_frame() for piece in pieces)
 
 
-def test_captions_are_never_objects_and_keep_out_of_the_way_of_steps(fake_blocks):
+def test_captions_are_never_objects_and_keep_out_of_the_way_of_steps(blocks_impl):
     scene = run_scene(doc_from(CAPTIONED, tiny=False), last_step=2)
     assert scene.registered_on_screen() == ["a", "b"]
     assert [obj_id for obj_id, _, _ in scene.object_boxes()] == ["a", "b"]
     assert all(not scene._is_caption(m) for m in scene.everything_on_screen())
 
 
-def test_captions_do_not_change_how_long_steps_take(fake_blocks):
+def test_captions_do_not_change_how_long_steps_take(blocks_impl):
     doc = doc_from(CAPTIONED, tiny=False)
     plain = doc.model_copy(deep=True)
     for step in plain.scenes[0].steps:
@@ -188,7 +188,7 @@ def test_captions_do_not_change_how_long_steps_take(fake_blocks):
     assert scene.frames_emitted == expected_frames(render.scene_duration(doc, "s"))
 
 
-def test_the_band_sits_at_the_edge_asked_for_with_the_words_on_top(fake_blocks):
+def test_the_band_sits_at_the_edge_asked_for_with_the_words_on_top(blocks_impl):
     doc = doc_from(CAPTIONED, tiny=False)
     band, words = run_scene(doc, last_step=0)._caption
     assert band.get_bottom()[1] == pytest.approx(-4, abs=1e-6)
@@ -201,7 +201,7 @@ def test_the_band_sits_at_the_edge_asked_for_with_the_words_on_top(fake_blocks):
     assert len(pieces) == 1 and pieces[0].get_top()[1] > 3
 
 
-def test_a_long_caption_fits_the_frame(fake_blocks):
+def test_a_long_caption_fits_the_frame(blocks_impl):
     long = "words " * 60
     doc = doc_from(f"scenes: [{{id: s, steps: [{{do: wait, caption: '{long}'}}]}}]")
     band, words = run_scene(doc)._caption
@@ -209,7 +209,7 @@ def test_a_long_caption_fits_the_frame(fake_blocks):
     assert band.get_height() > 0.5, "wrapped onto more than one line"
 
 
-def test_captions_stay_put_when_the_camera_moves(fake_blocks):
+def test_captions_stay_put_when_the_camera_moves(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -227,7 +227,7 @@ def test_captions_stay_put_when_the_camera_moves(fake_blocks):
 
 # What is on screen
 
-def test_a_step_which_shows_nothing_leaves_hidden_objects_hidden_but_changed(fake_blocks):
+def test_a_step_which_shows_nothing_leaves_hidden_objects_hidden_but_changed(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -248,7 +248,7 @@ def test_a_step_which_shows_nothing_leaves_hidden_objects_hidden_but_changed(fak
     assert scene.objects["c"].get_width() == pytest.approx(4)
 
 
-def test_adding_a_group_draws_its_members_through_it_once(fake_blocks):
+def test_adding_a_group_draws_its_members_through_it_once(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -261,7 +261,7 @@ def test_adding_a_group_draws_its_members_through_it_once(fake_blocks):
     assert scene.registered_on_screen() == ["g", "a", "b"]
 
 
-def test_everything_on_screen_leaves_out_the_camera_and_captions(fake_blocks):
+def test_everything_on_screen_leaves_out_the_camera_and_captions(blocks_impl):
     doc = doc_from("""
         scenes:
           - id: s
@@ -296,7 +296,7 @@ def boxes(scene) -> dict[str, tuple]:
     return {obj_id: (frame, pixels) for obj_id, frame, pixels in scene.object_boxes()}
 
 
-def test_boxes_of_known_objects_at_known_places(fake_blocks):
+def test_boxes_of_known_objects_at_known_places(blocks_impl):
     scene = run_scene(doc_from(BOXES, tiny=False), last_step=0, width=640)
     found = boxes(scene)
     # 45 pixels to a unit at 640 wide, the origin in the middle, y downwards
@@ -308,14 +308,14 @@ def test_boxes_of_known_objects_at_known_places(fake_blocks):
     assert found["g"][0] == pytest.approx((-3.1, -2.1, 1, 1))
 
 
-def test_boxes_come_in_drawing_order_groups_before_their_members(fake_blocks):
+def test_boxes_come_in_drawing_order_groups_before_their_members(blocks_impl):
     scene = run_scene(doc_from(BOXES, tiny=False), last_step=0, width=640)
     order = [obj_id for obj_id, _, _ in scene.object_boxes()]
     # c is added first but drawn last, being higher up
     assert order == ["g", "sq", "d", "label", "c"]
 
 
-def test_boxes_follow_the_camera_but_fixed_objects_stay(fake_blocks):
+def test_boxes_follow_the_camera_but_fixed_objects_stay(blocks_impl):
     before = boxes(run_scene(doc_from(BOXES, tiny=False), last_step=0, width=640))
     after = boxes(run_scene(doc_from(BOXES, tiny=False), last_step=1, width=640))
     # Twice as close, looking at (1, 0): 90 pixels to a unit, (1, 0) in the middle
@@ -324,7 +324,7 @@ def test_boxes_follow_the_camera_but_fixed_objects_stay(fake_blocks):
     assert after["label"][1] == pytest.approx(before["label"][1])
 
 
-def test_boxes_under_a_turned_camera_still_contain_the_object(fake_blocks):
+def test_boxes_under_a_turned_camera_still_contain_the_object(blocks_impl):
     found = boxes(run_scene(doc_from(BOXES, tiny=False), width=640))
     x0, y0, x1, y1 = found["sq"][1]
     assert x0 < 320 < x1 and y0 < 180 < y1
@@ -333,7 +333,7 @@ def test_boxes_under_a_turned_camera_still_contain_the_object(fake_blocks):
 
 
 @pytest.mark.render
-def test_boxes_match_the_pixels(fake_blocks, tmp_path, render_cache):
+def test_boxes_match_the_pixels(blocks_impl, tmp_path, render_cache):
     """Where a box says an object is, there is something drawn, and outside it (nearby) there isn't."""
     from steps_helpers import image
     doc = doc_from(BOXES.replace("{id: label, type: text, text: fixed, place: [4, 3], fixed: true}",
@@ -360,9 +360,76 @@ def test_boxes_match_the_pixels(fake_blocks, tmp_path, render_cache):
             assert (picture[outer & ~near] == background).all(), f"{box.id} draws outside its box at step {step}"
 
 
+# Pictures which aren't 16:9, and cameras which turn
+
+PORTRAIT = """
+    settings: {resolution: [144, 256], fps: 15}
+    scenes:
+      - id: s
+        objects:
+          - {id: sq, type: square, side: 2, shown: true}
+          - {id: t, type: text, text: top, place: top}
+        steps:
+          - {do: show, target: t, caption: "A caption across a narrow frame"}
+          - {do: camera, zoom: 2}
+          - {do: camera, reset: true}
+"""
+
+
+def test_a_portrait_picture_has_a_portrait_frame(blocks_impl):
+    doc = doc_from(PORTRAIT, tiny=False)
+    scene = run_scene(doc, last_step=0, width=144)
+    assert scene.frame.get_width() == pytest.approx(4.5)
+    assert scene.frame.get_height() == pytest.approx(8)
+    found = boxes(scene)
+    # 32 pixels to a unit both ways, the origin in the middle
+    assert found["sq"][1] == pytest.approx((40, 96, 104, 160))
+    assert scene.objects["t"].get_top()[1] == pytest.approx(4 - 0.25, abs=1e-3)
+    assert scene._caption[0].get_width() == pytest.approx(4.7)
+    assert scene._caption[1].get_width() <= 4.5
+    assert run_scene(doc, width=144).frame.get_width() == pytest.approx(4.5), "a reset goes back to the picture's shape"
+
+
+@pytest.mark.render
+def test_a_portrait_picture_is_not_stretched(blocks_impl, tmp_path, render_cache):
+    from steps_helpers import image
+    doc = doc_from(PORTRAIT, tiny=False)
+    result = render.render_still(doc, "s", -1, tmp_path / "portrait.png", width=144)
+    assert (result.width, result.height) == (144, 256)
+    picture = image(result.path).sum(axis=2)
+    drawn = np.argwhere(picture != picture[0, 0])
+    height = drawn[:, 0].max() - drawn[:, 0].min()
+    width = drawn[:, 1].max() - drawn[:, 1].min()
+    assert abs(width - height) <= 2, (width, height)
+    assert 62 <= width <= 70
+
+
+def test_arrows_turn_to_face_a_turned_camera(blocks_impl):
+    doc = doc_from("""
+        scenes:
+          - id: s
+            objects: [{id: v, type: vector, tip: [2, 1]}, {id: w, type: vector, tip: [1, 1]}]
+            steps:
+              - {do: show, target: [v, w]}
+              - {do: camera, orientation: [-30, 70]}
+    """)
+    flat = run_scene(doc, last_step=0)
+    flat.update_frame(force_draw=True)
+    assert flat.objects["v"].get_unit_normal() == pytest.approx([0, 0, 1], abs=1e-6)
+    turned = run_scene(doc)
+    turned.update_frame(force_draw=True)
+    arrow = turned.objects["v"]
+    to_camera = turned.frame.get_implied_camera_location() - arrow.get_center()
+    along = arrow.get_unit_vector()
+    facing = to_camera - np.dot(to_camera, along) * along
+    facing /= np.linalg.norm(facing)
+    assert abs(np.dot(arrow.get_unit_normal(), facing)) == pytest.approx(1, abs=1e-3)
+    assert arrow.get_end()[:2] == pytest.approx([2, 1], abs=1e-3), "turned about its length, so its ends stay"
+
+
 # Helpers
 
-def test_grow_picks_how_to_grow(fake_blocks):
+def test_grow_picks_how_to_grow(blocks_impl):
     from manimlib import AnimationGroup, Arrow, GrowArrow, GrowFromCenter, Square, Text, VGroup
     assert isinstance(Grow(Arrow([0, 0, 0], [1, 1, 0], buff=0)), GrowArrow)
     labelled = VGroup(Arrow([0, 0, 0], [1, 1, 0], buff=0), Text("v"))
