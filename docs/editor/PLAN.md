@@ -48,16 +48,16 @@ Decisions that everything else rests on:
 
 ## Milestones
 
-| # | Milestone | Done when |
-|---|-----------|-----------|
-| 1 | Scene file core | every object and step kind renders; `manimgl-scene render` makes an MP4; test layers 1–3 green |
-| 2 | Server | every endpoint in `server-api.md` works against real renders; layer 4 green |
-| 3 | Browser editor | a new user can build, preview and export a scene without touching a file; layers 5–6 green |
-| 4 | Install and templates | `pip install manimgl[editor]` then `manimgl-editor` works on Linux, macOS, Windows; layer 7 green |
-| 5 | Real users | five people new to manim finish the set tasks unaided; every place they got stuck is fixed and has a test |
-| ✓ | Final test | the ten minute video renders from a scene file, and holds up next to the original |
+| # | Milestone | Done when | Status |
+|---|-----------|-----------|--------|
+| 1 | Scene file core | every object and step kind renders; `manimgl-scene render` makes an MP4; test layers 1–3 green | Done |
+| 2 | Server | every endpoint in `server-api.md` works against real renders; layer 4 green | Done |
+| 3 | Browser editor | a new user can build, preview and export a scene without touching a file; layers 5–6 green | Built and tested; waits on layer 8 to prove "a new user can" |
+| 4 | Install and templates | `pip install manimgl[editor]` then `manimgl-editor` works on Linux, macOS, Windows; layer 7 green | Workflows written, Linux install verified locally; not yet run on GitHub; no template gallery yet |
+| 5 | Real users | five people new to manim finish the set tasks unaided; every place they got stuck is fixed and has a test | Not started |
+| ✓ | Final test | the ten minute video renders from a scene file, and holds up next to the original | Passed, see below |
 
-Milestones 1–3 are being built in parallel against the contract in `model.py`,
+Milestones 1–3 were built in parallel against the contract in `model.py`,
 `codegen.py`/`blocks.py`/`render.py` (interfaces in their docstrings) and `server-api.md`.
 
 ## Workstreams
@@ -110,6 +110,20 @@ explanatory video of that length. It passes when:
 - `manimgl-scene info` totals between 9:30 and 10:30;
 - `manimgl-scene render -q hd` produces the video with no manual steps;
 - the scene file opens in the editor, and a scene can be changed and re-previewed there.
+
+### Result
+
+Passed, on a 4 core container with no GPU (Mesa's software Vulkan):
+
+- `validate`: ok, no errors or warnings. `format --check`: already formatted.
+- `info`: 11 scenes, 247 steps, 9:57.5.
+- `render -q hd -j 3`: 1920x1080, 30 fps, 17,925 frames (exactly 597.5 s), 14.8 MB, in
+  7 min 36 s from an empty cache. At low quality the same video takes about 3 minutes.
+- Every step's last frame was reviewed on contact sheets; the one systematic problem found,
+  manim's monospace default font, led to `settings.font`, and the video now uses CMU Serif.
+- In the editor (real server, real Chromium), the file opens with its first picture in about
+  a second; recolouring the sum vector and rewriting a caption saved to the file and redrew
+  the preview.
 
 ## Before any hosted version
 
