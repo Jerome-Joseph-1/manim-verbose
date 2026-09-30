@@ -37,7 +37,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from manim_verbose.scenefile.model import (
-    CaptionSettings, Document, ObjectBase, SceneSpec, StepBase, TogetherStep,
+    CaptionSettings, ClearStep, Document, ObjectBase, SceneSpec, StepBase, TogetherStep,
 )
 
 # Part of the key rendered scenes are cached under, so that a change to what code is generated
@@ -229,13 +229,20 @@ def _write_scene(writer: _Writer, doc: Document, scene: SceneSpec, index: int, c
 
 def step_caption(step: StepBase) -> str | None:
     """
-    The caption a step brings. A together without one of its own takes the last one given by
-    a step inside it, those being shown together and so needing the one caption between them.
+    The caption a step brings, None where it leaves the caption as it is. A clear takes the
+    caption with everything else unless it brings one of its own. A together without one of
+    its own takes the last one brought by a step inside it, those being shown together and so
+    needing the one caption between them.
     """
-    if step.caption is not None or not isinstance(step, TogetherStep):
+    if step.caption is not None:
         return step.caption
-    captions = [inner.caption for inner in step.steps if inner.caption is not None]
-    return captions[-1] if captions else None
+    if isinstance(step, ClearStep):
+        return ""
+    if isinstance(step, TogetherStep):
+        captions = [step_caption(inner) for inner in step.steps]
+        captions = [caption for caption in captions if caption is not None]
+        return captions[-1] if captions else None
+    return None
 
 
 def _caption_style(settings: CaptionSettings) -> str | None:
@@ -277,7 +284,8 @@ def reserved_names() -> frozenset[str]:
     from manim_verbose.manim_import import import_manim
     manimlib = import_manim()
     from manim_verbose.scenefile import runtime
-    names = set(keyword.kwlist) | set(keyword.softkwlist) | set(dir(builtins)) | {"self"}
+    # place is named whether or not layout has it yet, since move steps call it
+    names = set(keyword.kwlist) | set(keyword.softkwlist) | set(dir(builtins)) | {"self", "place"}
     for module in (manimlib, runtime):
         exported = getattr(module, "__all__", None)
         names |= set(exported) if exported is not None else {n for n in dir(module) if not n.startswith("_")}

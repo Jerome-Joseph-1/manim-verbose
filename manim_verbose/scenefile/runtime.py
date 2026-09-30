@@ -186,12 +186,13 @@ class DocScene(Scene):
 
     # What is on screen
 
-    def is_on_screen(self, mobject: Mobject) -> bool:
+    def is_on_screen(self, mobject: Mobject, in_scene: set[Mobject] | None = None) -> bool:
         """Whether everything this mobject draws is in the scene."""
         drawn = [mob for mob in mobject.get_family() if mob.has_points()]
         if not drawn:
             return False
-        in_scene = set(self.get_mobject_family_members())
+        if in_scene is None:
+            in_scene = set(self.get_mobject_family_members())
         return all(mob in in_scene for mob in drawn)
 
     def registered_on_screen(self) -> list[str]:
@@ -233,7 +234,7 @@ class DocScene(Scene):
                 [x, y, z]
                 for x in (mins[0], maxs[0]) for y in (mins[1], maxs[1]) for z in (mins[2], maxs[2])
             ])
-            pixels = self.frame_to_pixels(corners)
+            pixels = self.frame_to_pixels(corners, fixed=self.objects[obj_id].is_fixed_in_frame())
             frame_box = (float(mins[0]), float(mins[1]), float(maxs[0]), float(maxs[1]))
             pixel_box = (
                 float(pixels[:, 0].min()), float(pixels[:, 1].min()),
@@ -242,16 +243,18 @@ class DocScene(Scene):
             boxes.append((obj_id, frame_box, pixel_box))
         return boxes
 
-    def frame_to_pixels(self, points: np.ndarray) -> np.ndarray:
+    def frame_to_pixels(self, points: np.ndarray, fixed: bool = False) -> np.ndarray:
         """
         Where points of the scene land in the picture, in pixels from its top left. This is
         the projection the shaders make (see shaders/inserts/project_point.wgsl), done here
-        for points the editor needs to know the place of.
+        for points the editor needs to know the place of. Points of an object fixed in the
+        frame are where they would be with the camera where it started, whatever it has done
+        since, as the shaders take them.
         """
         frame = self.frame
         points = np.asarray(points, dtype=float).reshape(-1, 3)
         homogeneous = np.hstack([points, np.ones((len(points), 1))])
-        viewed = homogeneous @ frame.get_view_matrix().T
+        viewed = homogeneous if fixed else homogeneous @ frame.get_view_matrix().T
         rescale = np.array([
             2.0 / FRAME_WIDTH, 2.0 / FRAME_HEIGHT,
             frame.get_scale() / frame.get_focal_distance(),
@@ -301,18 +304,21 @@ class DocScene(Scene):
     def _snapshot_animated(self, animations: list[Animation]) -> None:
         """Copies of registered objects about to be animated, taken before anything moves them."""
         animated = set(extract_mobject_family_members([anim.mobject for anim in animations]))
+        in_scene = set(self.get_mobject_family_members())
         for obj_id, mob in self.objects.items():
             if obj_id in self._snapshots:
                 continue
             family = mob.get_family()
-            if any(m in animated for m in family) and self.is_on_screen(mob):
+            if any(m in animated for m in family) and self.is_on_screen(mob, in_scene):
                 self._snapshots[obj_id] = mob.copy()
 
     def _restore_departed(self) -> None:
-        for obj_id, snapshot in self._snapshots.items():
-            mob = self.objects[obj_id]
-            if not self.is_on_screen(mob):
-                mob.become(snapshot)
+        if self._snapshots:
+            in_scene = set(self.get_mobject_family_members())
+            for obj_id, snapshot in self._snapshots.items():
+                mob = self.objects[obj_id]
+                if not self.is_on_screen(mob, in_scene):
+                    mob.become(snapshot)
         self._snapshots = {}
 
     # Captions

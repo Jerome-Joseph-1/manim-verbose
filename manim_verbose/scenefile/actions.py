@@ -109,15 +109,14 @@ class StepCode:
         pieces = ", ".join(anim.text(run_time="1") for anim in self.anims)
         return f"LaggedStart({pieces}, lag_ratio={num(self.lag)})"
 
-    def as_one(self) -> str:
-        """All of this step's animations as one, lasting the step's duration, for a together."""
-        run_time = num(self.duration)
+    def as_anim(self) -> Anim:
+        """All of this step's animations as one, which takes a run_time, for a together."""
         if len(self.anims) == 1:
-            return self.anims[0].text(run_time=run_time)
-        if self.lag > 0:
-            return self.lagged()[:-1] + f", run_time={run_time})"
+            return self.anims[0]
         pieces = ", ".join(anim.text(run_time="1") for anim in self.anims)
-        return f"AnimationGroup({pieces}, run_time={run_time})"
+        if self.lag > 0:
+            return Anim.call("LaggedStart", pieces, f"lag_ratio={num(self.lag)}")
+        return Anim.call("AnimationGroup", pieces)
 
     def lines(self) -> list[str]:
         play = self.play_line()
@@ -132,7 +131,12 @@ def step_lines(step: StepBase, ctx: CodegenContext) -> list[str]:
 
 def default_run_time(step: StepBase, ctx: CodegenContext) -> float:
     if isinstance(step, ShowStep):
-        styles = [_show_style(ctx.spec(obj_id), step.style) for obj_id in targets_of(step)]
+        # A target which doesn't exist (in a document with errors, which can still be saved)
+        # is timed as a fade, so that timings are there to show whatever state it is in
+        styles = [
+            _show_style(ctx.objects[obj_id], step.style) if obj_id in ctx.objects else "fade"
+            for obj_id in targets_of(step)
+        ]
         return _staggered(max(SHOW_TIMES[style] for style in styles), len(styles), step.lag)
     if isinstance(step, HideStep):
         return _staggered(HIDE_TIME, len(targets_of(step)), step.lag)
@@ -442,6 +446,11 @@ def _apply_matrix(step: ApplyMatrixStep, ctx: CodegenContext) -> StepCode:
 
 
 def _together(step: TogetherStep, ctx: CodegenContext) -> StepCode:
+    """
+    One play for all the steps inside. Each step's animations are kept to that step's own
+    length within it; where every piece lasts equally long they are simply played side by
+    side, which is how a person would have written it.
+    """
     parts = [step_code(inner, ctx) for inner in step.steps]
     for inner, part in zip(step.steps, parts):
         part.duration = _inner_duration(inner, ctx)
@@ -450,15 +459,26 @@ def _together(step: TogetherStep, ctx: CodegenContext) -> StepCode:
     moving = [part for part in parts if part.anims and part.duration > 0]
     duration = step.run_time if step.run_time is not None else _together_time([p.duration for p in parts], step.lag)
     code = StepCode(before=before, after=after, duration=duration)
+    if not moving:
+        return code
     if len(moving) == 1 and step.run_time is None:
-        code.anims, code.lag = moving[0].anims, moving[0].lag
-        code.duration = moving[0].duration
-    elif moving:
-        pieces = ", ".join(part.as_one() for part in moving)
-        if step.lag > 0:
-            code.anims = [Anim.call("LaggedStart", pieces, f"lag_ratio={num(step.lag)}")]
+        code.anims, code.lag, code.duration = moving[0].anims, moving[0].lag, moving[0].duration
+        return code
+    pieces: list[tuple[Anim, float]] = []
+    for part in moving:
+        if step.lag > 0 or (part.lag > 0 and len(part.anims) > 1):
+            pieces.append((part.as_anim(), part.duration))
         else:
-            code.anims = [Anim.call("AnimationGroup", pieces)]
+            # Starting together inside something starting together, so they start together
+            pieces.extend((anim, part.duration) for anim in part.anims)
+    if step.lag == 0 and len({length for _, length in pieces}) == 1:
+        code.anims = [anim for anim, _ in pieces]
+        return code
+    inner = ", ".join(anim.text(run_time=num(length)) for anim, length in pieces)
+    if step.lag > 0:
+        code.anims = [Anim.call("LaggedStart", inner, f"lag_ratio={num(step.lag)}")]
+    else:
+        code.anims = [Anim.call("AnimationGroup", inner)]
     return code
 
 
@@ -509,6 +529,8 @@ def placement_args(place: Placement, ctx: CodegenContext) -> str:
     args = []
     if place.at is not None:
         args.append(f"at={point_list(place.at)}")
+        if place.on is not None:
+            args.append(f"on={ctx.var(place.on)}")
     if place.edge is not None:
         args.append(f'edge="{place.edge}"')
     if place.next_to is not None:

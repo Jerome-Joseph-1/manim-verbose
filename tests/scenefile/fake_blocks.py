@@ -102,18 +102,24 @@ def object_expression(obj: ObjectBase, ctx: CodegenContext) -> str:
             chain += f".rotate({num(obj.rotate)} * DEG)"
         place = obj.place
         if place is not None:
-            if place.at is not None:
+            if place.at is not None and place.on is not None:
+                chain += f".move_to({ctx.var(place.on)}.c2p({num(place.at[0])}, {num(place.at[1])}))"
+            elif place.at is not None:
                 chain += f".move_to([{num(place.at[0])}, {num(place.at[1])}, 0])"
             elif place.edge == "center":
                 chain += ".center()"
-            elif place.edge in ("top", "bottom", "left", "right"):
-                chain += f".to_edge({EDGES[place.edge]}, buff={num(place.buff)})"
+            elif place.edge in ("top", "bottom"):
+                chain += f".set_x(0).to_edge({EDGES[place.edge]}, buff={num(place.buff)})"
+            elif place.edge in ("left", "right"):
+                chain += f".set_y(0).to_edge({EDGES[place.edge]}, buff={num(place.buff)})"
             elif place.edge is not None:
                 chain += f".to_corner({EDGES[place.edge]}, buff={num(place.buff)})"
             elif place.next_to is not None:
                 chain += f".next_to({ctx.var(place.next_to)}, {SIDES[place.side]}, buff={num(place.buff)})"
             if place.shift is not None:
                 chain += f".shift([{num(place.shift[0])}, {num(place.shift[1])}, 0])"
+    if obj.fixed:
+        chain += ".fix_in_frame()"
     return base + chain
 
 
@@ -152,7 +158,7 @@ def part_selector(obj: ObjectBase, part: str, ctx: CodegenContext) -> str:
     return f"{ctx.var(obj.id)}[{py_str(part)}]"
 
 
-def place(mob, at=None, edge=None, next_to=None, side="down", buff=0.25, shift=None):
+def place(mob, at=None, on=None, edge=None, next_to=None, side="down", buff=0.25, shift=None):
     """layout.place as far as the stand-in needs it: the move step's `to` calls it at runtime."""
     from manimlib import DL, DOWN, DR, LEFT, RIGHT, UL, UP, UR
     directions = {
@@ -160,12 +166,16 @@ def place(mob, at=None, edge=None, next_to=None, side="down", buff=0.25, shift=N
         "top_left": UL, "top_right": UR, "bottom_left": DL, "bottom_right": DR,
         "up": UP, "down": DOWN,
     }
-    if at is not None:
+    if at is not None and on is not None:
+        mob.move_to(on.c2p(*at))
+    elif at is not None:
         mob.move_to([at[0], at[1], 0])
     elif edge == "center":
         mob.center()
-    elif edge in ("top", "bottom", "left", "right"):
-        mob.to_edge(directions[edge], buff=buff)
+    elif edge in ("top", "bottom"):
+        mob.set_x(0).to_edge(directions[edge], buff=buff)
+    elif edge in ("left", "right"):
+        mob.set_y(0).to_edge(directions[edge], buff=buff)
     elif edge is not None:
         mob.to_corner(directions[edge], buff=buff)
     elif next_to is not None:

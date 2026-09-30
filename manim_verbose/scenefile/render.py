@@ -426,7 +426,7 @@ def prepare_process() -> None:
     - A formula which fails to compile is reported as failing, see _guard_stale_dvi.
     """
     global _prepared_pid
-    if _prepared_pid == os.getpid():
+    if _prepared_pid == os.getpid() and Path(tempfile.gettempdir()).is_dir():
         return
     from manim_verbose.manim_import import import_manim
     import_manim()
